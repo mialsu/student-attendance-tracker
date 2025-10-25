@@ -31,6 +31,16 @@ export const getStudentAttendanceCount = (firstName: string, lastName: string): 
   ).length;
 };
 
+export const getStudentLogs = (firstName: string, lastName: string): AttendanceRecord[] => {
+  const records = getAttendanceRecords();
+  return records
+    .filter(
+      r => r.firstName.toLowerCase() === firstName.toLowerCase() && 
+           r.lastName.toLowerCase() === lastName.toLowerCase()
+    )
+    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+};
+
 export const getAttendanceSummary = () => {
   const records = getAttendanceRecords();
   const summary = new Map<string, { firstName: string; lastName: string; count: number }>();
