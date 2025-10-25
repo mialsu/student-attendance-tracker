@@ -1,73 +1,154 @@
-# Welcome to your Lovable project
+# Student Attendance Tracker
 
-## Project info
+A modern, class-based attendance tracking system built for teachers to manage student attendance across multiple courses.
 
-**URL**: https://lovable.dev/projects/bae98469-9174-4630-9183-eb3a62454c5f
+## Features
 
-## How can I edit this code?
+### Teacher Dashboard
+- **Class Management**: Create and manage multiple classes (courses)
+- **Attendance Tracking**: Mark student attendance with timestamp logging
+- **Student Logs**: View detailed attendance history for each student per class
+- **Account Settings**: Update email and password with secure validation
 
-There are several ways of editing your application.
+### Key Functionality
+- **Teacher-only authentication** - Secure login for educators
+- **Class-based organization** - Each course has its own attendance records
+- **Two-tab interface per class**:
+  - Attendance tracking tab - Quick student check-in
+  - Student logs tab - Comprehensive attendance history
+- **Finnish locale support** - All dates and text in Finnish
+- **Responsive design** - Works seamlessly on desktop and mobile
 
-**Use Lovable**
-
-Simply visit the [Lovable Project](https://lovable.dev/projects/bae98469-9174-4630-9183-eb3a62454c5f) and start prompting.
-
-Changes made via Lovable will be committed automatically to this repo.
-
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
-```
-
-**Edit a file directly in GitHub**
-
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
-
-**Use GitHub Codespaces**
-
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
-
-## What technologies are used for this project?
+## Technology Stack
 
 This project is built with:
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+- **React 18** - Modern UI framework
+- **TypeScript** - Type-safe development
+- **Vite** - Fast build tool and dev server
+- **shadcn/ui** - Beautiful UI components built on Radix UI
+- **Tailwind CSS** - Utility-first styling
+- **React Router v6** - Client-side routing
+- **TanStack Query** - Server state management
+- **date-fns** - Date formatting with Finnish locale
+- **Zod** - Schema validation
 
-## How can I deploy this project?
+## Getting Started
 
-Simply open [Lovable](https://lovable.dev/projects/bae98469-9174-4630-9183-eb3a62454c5f) and click on Share -> Publish.
+### Prerequisites
 
-## Can I connect a custom domain to my Lovable project?
+- Node.js (v18 or higher)
+- npm or bun
 
-Yes, you can!
+### Installation
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+```sh
+# Clone the repository
+git clone <YOUR_GIT_URL>
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+# Navigate to the project directory
+cd client-app
+
+# Install dependencies
+npm install
+
+# Start the development server
+npm run dev
+```
+
+The application will be available at `http://localhost:5173`
+
+## Available Scripts
+
+```sh
+# Start development server
+npm run dev
+
+# Build for production
+npm run build
+
+# Build for development
+npm run build:dev
+
+# Preview production build
+npm run preview
+
+# Run linter
+npm run lint
+```
+
+## Project Structure
+
+```
+client-app/
+├── src/
+│   ├── components/        # Reusable UI components
+│   │   ├── ui/           # shadcn/ui components
+│   │   ├── AttendanceTracking.tsx
+│   │   ├── StudentLogs.tsx
+│   │   └── PublicNav.tsx
+│   ├── contexts/         # React contexts
+│   │   └── AuthContext.tsx
+│   ├── hooks/            # Custom React hooks
+│   ├── lib/              # Utilities and business logic
+│   │   ├── classes.ts    # Class management functions
+│   │   ├── attendance.ts # Legacy attendance functions
+│   │   └── utils.ts      # Helper utilities
+│   ├── pages/            # Route pages
+│   │   ├── Auth.tsx      # Login/Signup page
+│   │   ├── TeacherDashboard.tsx
+│   │   ├── ClassView.tsx
+│   │   ├── Settings.tsx
+│   │   ├── Index.tsx
+│   │   └── NotFound.tsx
+│   ├── App.tsx           # Main app component
+│   └── main.tsx          # Entry point
+├── public/               # Static assets
+└── Configuration files
+```
+
+## Routes
+
+- `/` - Redirects to dashboard or auth
+- `/auth` - Teacher login/signup
+- `/dashboard` - Teacher dashboard with class list
+- `/class/:classId` - Class view with attendance tracking
+- `/settings` - Account settings (email/password)
+
+## Data Storage
+
+The application uses browser localStorage for data persistence:
+- User accounts and authentication
+- Class information
+- Attendance records
+
+## Security
+
+- Teacher-only authentication required
+- Password minimum length: 8 characters
+- Password verification required for account changes
+- Email uniqueness validation
+
+## Development
+
+### Adding New UI Components
+
+This project uses shadcn/ui components. To add new components:
+
+```sh
+npx shadcn-ui@latest add <component-name>
+```
+
+### Code Style
+
+- ESLint configuration included
+- TypeScript strict mode enabled
+- React hooks linting enabled
+
+## License
+
+This project is private and proprietary.
+
+## Support
+
+For issues or questions, please contact the development team.

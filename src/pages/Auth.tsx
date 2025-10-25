@@ -5,7 +5,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import PublicNav from '@/components/PublicNav';
 
@@ -13,23 +12,22 @@ const Auth = () => {
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [isTeacher, setIsTeacher] = useState(false);
   const { login, signup } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    const success = isLogin 
+
+    const success = isLogin
       ? await login(email, password)
-      : await signup(email, password, isTeacher);
-    
+      : await signup(email, password, true); // Always teacher
+
     if (success) {
       toast({
         title: isLogin ? 'Kirjautunut sisään' : 'Rekisteröity onnistuneesti',
       });
-      navigate(isTeacher ? '/teacher' : '/');
+      navigate('/dashboard');
     } else {
       toast({
         title: 'Virhe',
@@ -72,18 +70,6 @@ const Auth = () => {
                 required
               />
             </div>
-            {!isLogin && (
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="teacher"
-                  checked={isTeacher}
-                  onCheckedChange={(checked) => setIsTeacher(checked as boolean)}
-                />
-                <Label htmlFor="teacher" className="font-normal">
-                  Olen opettaja
-                </Label>
-              </div>
-            )}
             <Button type="submit" className="w-full">
               {isLogin ? 'Kirjaudu' : 'Rekisteröidy'}
             </Button>
@@ -93,7 +79,7 @@ const Auth = () => {
               className="w-full"
               onClick={() => setIsLogin(!isLogin)}
             >
-              {isLogin ? 'Ei tiliä? Rekisteröidy' : 'On jo tili? Kirjaudu'}
+              {isLogin ? 'Ei tiliä? Rekisteröidy' : 'Takaisin kirjautumiseen'}
             </Button>
           </form>
         </CardContent>

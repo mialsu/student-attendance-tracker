@@ -1,6 +1,5 @@
 import { Link } from 'react-router-dom';
 import { Home } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 
 const PublicNav = () => {
   return (
@@ -10,15 +9,6 @@ const PublicNav = () => {
           <Home className="w-5 h-5" />
           <span>Läsnäolojen kirjaus</span>
         </Link>
-        
-        <nav className="flex items-center gap-2">
-          <Button variant="ghost" asChild>
-            <Link to="/attendance">Kirjaa läsnäolo</Link>
-          </Button>
-          <Button variant="ghost" asChild>
-            <Link to="/auth">Opettaja</Link>
-          </Button>
-        </nav>
       </div>
     </header>
   );
