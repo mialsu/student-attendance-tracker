@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { logAttendance, getStudentAttendanceCount } from '@/lib/attendance';
 import { useToast } from '@/hooks/use-toast';
 import { CheckCircle } from 'lucide-react';
+import PublicNav from '@/components/PublicNav';
 
 const StudentAttendance = () => {
   const [firstName, setFirstName] = useState('');
@@ -36,8 +37,10 @@ const StudentAttendance = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background px-4">
-      <Card className="w-full max-w-md">
+    <div className="min-h-screen bg-background">
+      <PublicNav />
+      <div className="flex items-center justify-center px-4 py-12">
+        <Card className="w-full max-w-md">
         <CardHeader>
           <CardTitle className="text-2xl">Kirjaa läsnäolo</CardTitle>
           <CardDescription>
@@ -91,6 +94,7 @@ const StudentAttendance = () => {
           )}
         </CardContent>
       </Card>
+      </div>
     </div>
   );
 };

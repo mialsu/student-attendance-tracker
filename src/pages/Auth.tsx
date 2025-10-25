@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
+import PublicNav from '@/components/PublicNav';
 
 const Auth = () => {
   const [isLogin, setIsLogin] = useState(true);
@@ -39,8 +40,10 @@ const Auth = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background px-4">
-      <Card className="w-full max-w-md">
+    <div className="min-h-screen bg-background">
+      <PublicNav />
+      <div className="flex items-center justify-center px-4 py-12">
+        <Card className="w-full max-w-md">
         <CardHeader>
           <CardTitle>{isLogin ? 'Kirjaudu sisään' : 'Rekisteröidy'}</CardTitle>
           <CardDescription>
@@ -95,6 +98,7 @@ const Auth = () => {
           </form>
         </CardContent>
       </Card>
+      </div>
     </div>
   );
 };
