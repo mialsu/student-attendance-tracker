@@ -28,7 +28,7 @@ class UserResponse(UserBase):
     """Schema for user response."""
 
     id: uuid.UUID
-    is_teacher: bool
+    active: bool
     created_at: datetime
 
     model_config = {"from_attributes": True}

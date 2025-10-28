@@ -60,6 +60,10 @@ async def get_current_user(
 
     if not user:
         raise UnauthorizedException(detail="User not found")
+    
+    # Check if user is active
+    if not user.active:
+        raise UnauthorizedException(detail="Account is inactive")
 
     return user
 

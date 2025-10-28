@@ -44,7 +44,7 @@ class AttendanceRecord(Base):
 
     # Indexes for performance
     __table_args__ = (
-        Index("ix_attendance_class_id", "class_id"),
+        # Note: class_id already has index=True on the column definition above
         Index("ix_attendance_timestamp", "timestamp"),
         Index("ix_attendance_student_name", "student_last_name", "student_first_name"),
     )

@@ -40,8 +40,9 @@ async def health_check():
     return {"status": "healthy"}
 
 
-# TODO: Include routers
-# from app.api import auth, classes, attendance
-# app.include_router(auth.router, prefix=f"{settings.api_prefix}/auth", tags=["auth"])
-# app.include_router(classes.router, prefix=f"{settings.api_prefix}/classes", tags=["classes"])
-# app.include_router(attendance.router, prefix=f"{settings.api_prefix}", tags=["attendance"])
+# Include routers
+from app.api import attendance, auth, classes
+
+app.include_router(auth.router, prefix="/api/auth", tags=["authentication"])
+app.include_router(classes.router, prefix="/api/classes", tags=["classes"])
+app.include_router(attendance.router, prefix="/api", tags=["attendance"])

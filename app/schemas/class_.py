@@ -24,6 +24,7 @@ class ClassUpdate(BaseModel):
 
     name: str | None = Field(None, min_length=1, max_length=255)
     description: str | None = None
+    active: bool | None = None
 
 
 class ClassResponse(ClassBase):
@@ -31,6 +32,7 @@ class ClassResponse(ClassBase):
 
     id: uuid.UUID
     teacher_id: uuid.UUID
+    active: bool
     created_at: datetime
     updated_at: datetime | None
     attendance_count: int | None = None
