@@ -143,7 +143,7 @@ backend/
 │ id (UUID, PK)       │
 │ email (unique)      │
 │ password_hash       │
-│ is_teacher          │
+│ acctive             │
 │ created_at          │
 │ updated_at          │
 └──────────┬──────────┘
@@ -188,7 +188,7 @@ class User(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     email = Column(String(255), unique=True, nullable=False, index=True)
     password_hash = Column(String(255), nullable=False)
-    is_teacher = Column(Boolean, default=True, nullable=False)
+    active = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
@@ -314,7 +314,7 @@ POST   /api/auth/logout          - Logout (invalidate tokens)
 
 GET    /api/auth/me              - Get current user
   Headers: Authorization: Bearer <token>
-  Response: { id, email, is_teacher }
+  Response: { id, email, active }
 
 PUT    /api/auth/email           - Update email
   Request: { new_email, current_password }
