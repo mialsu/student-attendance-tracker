@@ -1,13 +1,14 @@
 """Pytest fixtures and configuration."""
 
 import asyncio
+import os
 from typing import AsyncGenerator
 
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.pool import StaticPool
+from sqlalchemy.pool import NullPool
 
 from app.core.security import hash_password
 from app.database import Base, get_db
@@ -17,8 +18,13 @@ from app.models.class_ import Class
 from app.models.user import User
 
 
-# Test database URL (in-memory SQLite for speed)
-TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
+# Test database URL - PostgreSQL by default
+# For local testing with Docker Compose: postgresql+asyncpg://attendance_user:test_password_123@localhost:5433/attendance_tracker_test
+# Override with TEST_DATABASE_URL environment variable if needed
+TEST_DATABASE_URL = os.getenv(
+    "TEST_DATABASE_URL",
+    "postgresql+asyncpg://attendance_user:test_password_123@localhost:5433/attendance_tracker_test"
+)
 
 
 @pytest.fixture(scope="session")
@@ -31,21 +37,28 @@ def event_loop():
 
 @pytest_asyncio.fixture
 async def db_engine():
-    """Create a test database engine."""
+    """
+    Create a test database engine.
+
+    Uses NullPool to ensure connections are properly closed after each test.
+    Creates all tables before tests and drops them after.
+    """
     engine = create_async_engine(
         TEST_DATABASE_URL,
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
+        poolclass=NullPool,  # Don't pool connections in tests
+        echo=False,  # Set to True for SQL debugging
     )
-    
+
+    # Create all tables
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-    
+
     yield engine
-    
+
+    # Drop all tables after tests
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
-    
+
     await engine.dispose()
 
 

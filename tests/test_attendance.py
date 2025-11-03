@@ -415,3 +415,277 @@ class TestLegacyFilter:
         names = [(r["student_first_name"], r["student_last_name"]) for r in data]
         assert ("Old", "Student") in names
 
+
+@pytest.mark.asyncio
+class TestNameNormalization:
+    """Tests for student name normalization."""
+
+    async def test_normalize_various_name_formats(
+        self, client: AsyncClient, auth_headers: dict, test_class: Class
+    ):
+        """Test normalization of various name formats."""
+        test_cases = [
+            ("JOHN", "John"),
+            ("mary", "Mary"),
+            ("O'BRIEN", "O'brien"),
+            ("jean-paul", "Jean-paul"),
+            ("  spaced  ", "Spaced"),
+        ]
+
+        for input_name, expected_name in test_cases:
+            response = await client.post(
+                f"/api/classes/{test_class.id}/attendance",
+                headers=auth_headers,
+                json={
+                    "student_first_name": input_name,
+                    "student_last_name": "Test",
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                },
+            )
+
+            assert response.status_code == 201
+            data = response.json()
+            assert data["student_first_name"] == expected_name
+
+    async def test_name_filtering_case_insensitive(
+        self, client: AsyncClient, auth_headers: dict, test_class: Class, db
+    ):
+        """Test that name filtering is case-insensitive."""
+        from app.models.attendance import AttendanceRecord
+
+        # Create record with mixed case
+        record = AttendanceRecord(
+            class_id=test_class.id,
+            student_first_name="McDonald",
+            student_last_name="Johnson",
+            timestamp=datetime.now(timezone.utc),
+        )
+        db.add(record)
+        await db.commit()
+
+        # Search with lowercase
+        response = await client.get(
+            f"/api/classes/{test_class.id}/attendance?student_name=mcdonald",
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) >= 1
+        assert any("McDonald" in r["student_first_name"] for r in data)
+
+        # Search with partial name
+        response = await client.get(
+            f"/api/classes/{test_class.id}/attendance?student_name=john",
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) >= 1
+
+
+@pytest.mark.asyncio
+class TestDateFiltering:
+    """Tests for date range filtering."""
+
+    async def test_filter_by_date_from(
+        self, client: AsyncClient, auth_headers: dict, test_class: Class, db
+    ):
+        """Test filtering by start date only."""
+        from urllib.parse import quote
+        from app.models.attendance import AttendanceRecord
+
+        # Create old and new records
+        old_date = datetime.now(timezone.utc) - timedelta(days=10)
+        new_date = datetime.now(timezone.utc)
+
+        old_record = AttendanceRecord(
+            class_id=test_class.id,
+            student_first_name="Old",
+            student_last_name="Record",
+            timestamp=old_date,
+        )
+        new_record = AttendanceRecord(
+            class_id=test_class.id,
+            student_first_name="New",
+            student_last_name="Record",
+            timestamp=new_date,
+        )
+
+        db.add_all([old_record, new_record])
+        await db.commit()
+
+        # Filter from 5 days ago
+        cutoff = datetime.now(timezone.utc) - timedelta(days=5)
+        response = await client.get(
+            f"/api/classes/{test_class.id}/attendance?date_from={quote(cutoff.isoformat())}",
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+
+        # Should only have new record
+        names = [(r["student_first_name"], r["student_last_name"]) for r in data]
+        assert ("New", "Record") in names
+        assert ("Old", "Record") not in names
+
+    async def test_filter_by_date_to(
+        self, client: AsyncClient, auth_headers: dict, test_class: Class, db
+    ):
+        """Test filtering by end date only."""
+        from urllib.parse import quote
+        from app.models.attendance import AttendanceRecord
+
+        # Create records at different times
+        past_date = datetime.now(timezone.utc) - timedelta(days=10)
+        recent_date = datetime.now(timezone.utc) - timedelta(days=3)
+
+        past_record = AttendanceRecord(
+            class_id=test_class.id,
+            student_first_name="Past",
+            student_last_name="Record",
+            timestamp=past_date,
+        )
+        recent_record = AttendanceRecord(
+            class_id=test_class.id,
+            student_first_name="Recent",
+            student_last_name="Record",
+            timestamp=recent_date,
+        )
+
+        db.add_all([past_record, recent_record])
+        await db.commit()
+
+        # Filter up to 5 days ago
+        cutoff = datetime.now(timezone.utc) - timedelta(days=5)
+        response = await client.get(
+            f"/api/classes/{test_class.id}/attendance?date_to={quote(cutoff.isoformat())}",
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+
+        # Should only have past record
+        names = [(r["student_first_name"], r["student_last_name"]) for r in data]
+        assert ("Past", "Record") in names
+        assert ("Recent", "Record") not in names
+
+    async def test_filter_by_both_dates(
+        self, client: AsyncClient, auth_headers: dict, test_class: Class, db
+    ):
+        """Test filtering with both date_from and date_to."""
+        from urllib.parse import quote
+        from app.models.attendance import AttendanceRecord
+
+        # Create records at different times
+        base_date = datetime.now(timezone.utc)
+
+        records = [
+            AttendanceRecord(
+                class_id=test_class.id,
+                student_first_name=f"Student{i}",
+                student_last_name="Test",
+                timestamp=base_date - timedelta(days=i),
+            )
+            for i in range(15)  # 0 to 14 days ago
+        ]
+
+        db.add_all(records)
+        await db.commit()
+
+        # Filter for days 5-10
+        date_from = base_date - timedelta(days=10)
+        date_to = base_date - timedelta(days=5)
+
+        response = await client.get(
+            f"/api/classes/{test_class.id}/attendance"
+            f"?date_from={quote(date_from.isoformat())}"
+            f"&date_to={quote(date_to.isoformat())}",
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+
+        # Should have 6 records (days 5, 6, 7, 8, 9, 10)
+        assert len(data) == 6
+
+
+@pytest.mark.asyncio
+class TestAttendancePermissions:
+    """Tests for attendance access permissions."""
+
+    async def test_cannot_access_other_teacher_class(
+        self, client: AsyncClient, db, test_class: Class
+    ):
+        """Test that a teacher cannot access another teacher's class attendance."""
+        from app.models.user import User
+        from app.core.security import hash_password
+
+        # Create another teacher
+        other_teacher = User(
+            email="other@example.com",
+            password_hash=hash_password("password123"),
+            active=True,
+        )
+        db.add(other_teacher)
+        await db.commit()
+
+        # Login as other teacher
+        response = await client.post(
+            "/api/auth/login",
+            json={"email": "other@example.com", "password": "password123"},
+        )
+        assert response.status_code == 200
+        other_token = response.json()["access_token"]
+        other_headers = {"Authorization": f"Bearer {other_token}"}
+
+        # Try to access test_class attendance
+        response = await client.get(
+            f"/api/classes/{test_class.id}/attendance",
+            headers=other_headers,
+        )
+
+        assert response.status_code == 403
+
+    async def test_cannot_create_attendance_for_other_teacher_class(
+        self, client: AsyncClient, db, test_class: Class
+    ):
+        """Test that a teacher cannot create attendance for another teacher's class."""
+        from app.models.user import User
+        from app.core.security import hash_password
+
+        # Create another teacher
+        other_teacher = User(
+            email="other2@example.com",
+            password_hash=hash_password("password123"),
+            active=True,
+        )
+        db.add(other_teacher)
+        await db.commit()
+
+        # Login as other teacher
+        response = await client.post(
+            "/api/auth/login",
+            json={"email": "other2@example.com", "password": "password123"},
+        )
+        assert response.status_code == 200
+        other_token = response.json()["access_token"]
+        other_headers = {"Authorization": f"Bearer {other_token}"}
+
+        # Try to create attendance for test_class
+        response = await client.post(
+            f"/api/classes/{test_class.id}/attendance",
+            headers=other_headers,
+            json={
+                "student_first_name": "Test",
+                "student_last_name": "Student",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            },
+        )
+
+        assert response.status_code == 403
+

@@ -289,6 +289,159 @@ class TestLogout:
     async def test_logout_no_token(self, client: AsyncClient):
         """Test logout without token."""
         response = await client.post("/api/auth/logout")
-        
+
         assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+class TestAuthEdgeCases:
+    """Tests for authentication edge cases."""
+
+    async def test_update_email_to_same_email(
+        self, client: AsyncClient, auth_headers: dict, test_user: User
+    ):
+        """Test updating email to the same email (should succeed)."""
+        response = await client.put(
+            "/api/auth/email",
+            headers=auth_headers,
+            json={
+                "new_email": test_user.email,
+                "current_password": "testpassword123",
+            },
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["email"] == test_user.email
+
+    async def test_login_then_use_token(
+        self, client: AsyncClient, test_user: User
+    ):
+        """Test login and then use the access token."""
+        # Login
+        login_response = await client.post(
+            "/api/auth/login",
+            json={"email": test_user.email, "password": "testpassword123"},
+        )
+        assert login_response.status_code == 200
+        access_token = login_response.json()["access_token"]
+
+        # Use token to access protected endpoint
+        response = await client.get(
+            "/api/auth/me",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["email"] == test_user.email
+
+    async def test_password_update_then_login_with_new(
+        self, client: AsyncClient, test_user: User
+    ):
+        """Test that after password update, old password doesn't work."""
+        # Login first
+        login_response = await client.post(
+            "/api/auth/login",
+            json={"email": test_user.email, "password": "testpassword123"},
+        )
+        assert login_response.status_code == 200
+        auth_headers = {
+            "Authorization": f"Bearer {login_response.json()['access_token']}"
+        }
+
+        # Update password
+        update_response = await client.put(
+            "/api/auth/password",
+            headers=auth_headers,
+            json={
+                "current_password": "testpassword123",
+                "new_password": "newpassword456",
+            },
+        )
+        assert update_response.status_code == 204
+
+        # Try login with old password (should fail)
+        old_login = await client.post(
+            "/api/auth/login",
+            json={"email": test_user.email, "password": "testpassword123"},
+        )
+        assert old_login.status_code == 401
+
+        # Login with new password (should succeed)
+        new_login = await client.post(
+            "/api/auth/login",
+            json={"email": test_user.email, "password": "newpassword456"},
+        )
+        assert new_login.status_code == 200
+
+    async def test_email_update_then_login_with_new_email(
+        self, client: AsyncClient, test_user: User
+    ):
+        """Test that after email update, new email works for login."""
+        # Login first
+        login_response = await client.post(
+            "/api/auth/login",
+            json={"email": test_user.email, "password": "testpassword123"},
+        )
+        assert login_response.status_code == 200
+        auth_headers = {
+            "Authorization": f"Bearer {login_response.json()['access_token']}"
+        }
+
+        # Update email
+        new_email = "updatedemail@example.com"
+        update_response = await client.put(
+            "/api/auth/email",
+            headers=auth_headers,
+            json={
+                "new_email": new_email,
+                "current_password": "testpassword123",
+            },
+        )
+        assert update_response.status_code == 200
+
+        # Login with new email
+        new_login = await client.post(
+            "/api/auth/login",
+            json={"email": new_email, "password": "testpassword123"},
+        )
+        assert new_login.status_code == 200
+
+    async def test_signup_with_whitespace_in_email(self, client: AsyncClient):
+        """Test signup with email containing whitespace gets trimmed."""
+        response = await client.post(
+            "/api/auth/signup",
+            json={
+                "email": "  whitespace@example.com  ",
+                "password": "password123",
+            },
+        )
+
+        # Pydantic EmailStr trims whitespace, so this should succeed
+        assert response.status_code == 201
+        data = response.json()
+        assert data["user"]["email"] == "whitespace@example.com"
+
+    async def test_refresh_token_for_inactive_user(
+        self, client: AsyncClient, inactive_user: User
+    ):
+        """Test that refresh token fails for inactive users."""
+        # This test verifies that the get_user_by_id path is exercised
+        # when refreshing tokens
+        from app.core.security import create_refresh_token
+
+        # Create a refresh token for the inactive user
+        refresh_token = create_refresh_token(
+            data={"sub": inactive_user.email, "user_id": str(inactive_user.id)}
+        )
+
+        # Try to refresh
+        response = await client.post(
+            "/api/auth/refresh",
+            json={"refresh_token": refresh_token},
+        )
+
+        # Should fail because user is inactive
+        assert response.status_code in [401, 404]
 
