@@ -14,10 +14,12 @@ class AttendanceRecordBase(BaseModel):
     timestamp: datetime
 
 
-class AttendanceRecordCreate(AttendanceRecordBase):
+class AttendanceRecordCreate(BaseModel):
     """Schema for creating a new attendance record."""
 
-    pass
+    student_first_name: str = Field(..., min_length=1, max_length=100)
+    student_last_name: str = Field(..., min_length=1, max_length=100)
+    timestamp: datetime = Field(default_factory=datetime.utcnow)
 
 
 class AttendanceRecordResponse(AttendanceRecordBase):
@@ -26,6 +28,7 @@ class AttendanceRecordResponse(AttendanceRecordBase):
     id: uuid.UUID
     class_id: uuid.UUID
     created_at: datetime
+    total_attendance: int | None = None  # Total attendance count for this student
 
     model_config = {"from_attributes": True}
 

@@ -254,11 +254,24 @@ async def create_attendance_record(
         student_last_name=last_name,
         timestamp=attendance_data.timestamp,
     )
-    
+
     db.add(attendance)
     await db.commit()
     await db.refresh(attendance)
-    
+
+    # Count total attendances for this student (case-insensitive)
+    count_query = select(func.count(AttendanceRecord.id)).where(
+        AttendanceRecord.class_id == class_id,
+        func.lower(AttendanceRecord.student_first_name) == first_name.lower(),
+        func.lower(AttendanceRecord.student_last_name) == last_name.lower()
+    )
+    count_result = await db.execute(count_query)
+    total_count = count_result.scalar()
+
+    # Add the total count to the attendance object for response
+    # Note: This is not a database field, just for the response
+    setattr(attendance, 'total_attendance', total_count)
+
     return attendance
 
 

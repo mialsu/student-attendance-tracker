@@ -107,8 +107,19 @@ async def create_attendance(
     record = await attendance_service.create_attendance_record(
         db, class_id, attendance_data, current_user
     )
-    
-    return AttendanceRecordResponse.model_validate(record)
+
+    # Create response with total_attendance
+    response_data = {
+        "id": record.id,
+        "class_id": record.class_id,
+        "student_first_name": record.student_first_name,
+        "student_last_name": record.student_last_name,
+        "timestamp": record.timestamp,
+        "created_at": record.created_at,
+        "total_attendance": getattr(record, 'total_attendance', None)
+    }
+
+    return AttendanceRecordResponse.model_validate(response_data)
 
 
 @router.delete("/attendance/{attendance_id}", status_code=status.HTTP_204_NO_CONTENT)
