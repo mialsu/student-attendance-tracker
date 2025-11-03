@@ -1,105 +1,87 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-
-interface User {
-  email: string;
-  isTeacher: boolean;
-}
+import { createContext, useContext, useState, ReactNode } from 'react';
+import { authApi } from '../api/auth';
+import type { User } from '../api/types';
 
 interface AuthContextType {
   user: User | null;
-  login: (email: string, password: string) => Promise<boolean>;
-  signup: (email: string, password: string, isTeacher: boolean) => Promise<boolean>;
-  logout: () => void;
-  updateEmail: (newEmail: string, currentPassword: string) => Promise<boolean>;
-  updatePassword: (currentPassword: string, newPassword: string) => Promise<boolean>;
+  loading: boolean;
+  checkAuth: () => Promise<void>;
+  login: (email: string, password: string) => Promise<void>;
+  signup: (email: string, password: string) => Promise<void>;
+  logout: () => Promise<void>;
+  updateEmail: (newEmail: string, currentPassword: string) => Promise<void>;
+  updatePassword: (currentPassword: string, newPassword: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [initialized, setInitialized] = useState(false);
 
-  useEffect(() => {
-    const storedUser = localStorage.getItem('currentUser');
-    if (storedUser) {
-      setUser(JSON.parse(storedUser));
-    }
-  }, []);
+  const checkAuth = async () => {
+    // Skip if already authenticated or already checked
+    if (initialized || user) return;
 
-  const login = async (email: string, password: string): Promise<boolean> => {
-    const users = JSON.parse(localStorage.getItem('users') || '[]') as Array<{ email: string; password: string; isTeacher: boolean }>;
-    const foundUser = users.find((u) => u.email === email && u.password === password);
-    
-    if (foundUser) {
-      const userData = { email: foundUser.email, isTeacher: foundUser.isTeacher };
-      setUser(userData);
-      localStorage.setItem('currentUser', JSON.stringify(userData));
-      return true;
+    setLoading(true);
+    try {
+      // First, try to refresh token silently (using HTTP-only cookie)
+      // This will set the access token if a valid refresh token exists
+      await authApi.refreshToken();
+
+      // If refresh succeeds, get the current user
+      const currentUser = await authApi.getCurrentUser();
+      setUser(currentUser);
+    } catch (error) {
+      // No valid session - user needs to login
+      setUser(null);
+    } finally {
+      setLoading(false);
+      setInitialized(true);
     }
-    return false;
   };
 
-  const signup = async (email: string, password: string, isTeacher: boolean): Promise<boolean> => {
-    const users = JSON.parse(localStorage.getItem('users') || '[]') as Array<{ email: string; password: string; isTeacher: boolean }>;
-
-    if (users.find((u) => u.email === email)) {
-      return false;
-    }
-    
-    const newUser = { email, password, isTeacher };
-    users.push(newUser);
-    localStorage.setItem('users', JSON.stringify(users));
-    
-    const userData = { email, isTeacher };
-    setUser(userData);
-    localStorage.setItem('currentUser', JSON.stringify(userData));
-    return true;
+  const login = async (email: string, password: string): Promise<void> => {
+    const response = await authApi.login({ email, password });
+    setUser(response.user);
+    setInitialized(true);
   };
 
-  const logout = () => {
+  const signup = async (email: string, password: string): Promise<void> => {
+    const response = await authApi.signup({ email, password });
+    setUser(response.user);
+    setInitialized(true);
+  };
+
+  const logout = async (): Promise<void> => {
+    await authApi.logout();
     setUser(null);
-    localStorage.removeItem('currentUser');
+    setInitialized(false);
   };
 
-  const updateEmail = async (newEmail: string, currentPassword: string): Promise<boolean> => {
-    if (!user) return false;
-
-    const users = JSON.parse(localStorage.getItem('users') || '[]') as Array<{ email: string; password: string; isTeacher: boolean }>;
-    const currentUserIndex = users.findIndex((u) => u.email === user.email && u.password === currentPassword);
-
-    if (currentUserIndex === -1) return false;
-
-    // Check if new email is already taken by another user
-    if (users.find((u, idx) => u.email === newEmail && idx !== currentUserIndex)) {
-      return false;
-    }
-
-    users[currentUserIndex].email = newEmail;
-    localStorage.setItem('users', JSON.stringify(users));
-
-    const userData = { email: newEmail, isTeacher: user.isTeacher };
-    setUser(userData);
-    localStorage.setItem('currentUser', JSON.stringify(userData));
-
-    return true;
+  const updateEmail = async (newEmail: string, currentPassword: string): Promise<void> => {
+    const updatedUser = await authApi.updateEmail(newEmail, currentPassword);
+    setUser(updatedUser);
   };
 
-  const updatePassword = async (currentPassword: string, newPassword: string): Promise<boolean> => {
-    if (!user) return false;
-
-    const users = JSON.parse(localStorage.getItem('users') || '[]') as Array<{ email: string; password: string; isTeacher: boolean }>;
-    const currentUserIndex = users.findIndex((u) => u.email === user.email && u.password === currentPassword);
-
-    if (currentUserIndex === -1) return false;
-
-    users[currentUserIndex].password = newPassword;
-    localStorage.setItem('users', JSON.stringify(users));
-
-    return true;
+  const updatePassword = async (currentPassword: string, newPassword: string): Promise<void> => {
+    await authApi.updatePassword(currentPassword, newPassword);
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, signup, logout, updateEmail, updatePassword }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        loading,
+        checkAuth,
+        login,
+        signup,
+        logout,
+        updateEmail,
+        updatePassword,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

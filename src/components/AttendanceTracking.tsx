@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { logClassAttendance } from '@/lib/classes';
+import { useCreateAttendance } from '@/hooks/useAttendance';
 import { UserPlus } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
@@ -17,8 +17,9 @@ const AttendanceTracking = ({ classId }: AttendanceTrackingProps) => {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const { toast } = useToast();
+  const createAttendanceMutation = useCreateAttendance();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!firstName.trim() || !lastName.trim()) {
@@ -30,15 +31,33 @@ const AttendanceTracking = ({ classId }: AttendanceTrackingProps) => {
       return;
     }
 
-    const record = logClassAttendance(classId, firstName, lastName);
+    try {
+      const record = await createAttendanceMutation.mutateAsync({
+        classId,
+        data: {
+          student_first_name: firstName.trim(),
+          student_last_name: lastName.trim(),
+        },
+      });
 
-    toast({
-      title: 'Läsnäolo kirjattu',
-      description: `${firstName} ${lastName} - ${format(new Date(record.timestamp), 'PPP p', { locale: fi })}`,
-    });
+      const attendanceText = record.total_attendance
+        ? `Yhteensä ${record.total_attendance} läsnäoloa`
+        : '';
 
-    setFirstName('');
-    setLastName('');
+      toast({
+        title: 'Läsnäolo kirjattu',
+        description: `${firstName} ${lastName}${attendanceText ? ` - ${attendanceText}` : ''}`,
+      });
+
+      setFirstName('');
+      setLastName('');
+    } catch (error: any) {
+      toast({
+        title: 'Virhe',
+        description: error.response?.data?.detail || 'Läsnäolon kirjaaminen epäonnistui',
+        variant: 'destructive',
+      });
+    }
   };
 
   return (
@@ -74,9 +93,9 @@ const AttendanceTracking = ({ classId }: AttendanceTrackingProps) => {
             </div>
           </div>
 
-          <Button type="submit" className="w-full md:w-auto">
+          <Button type="submit" className="w-full md:w-auto" disabled={createAttendanceMutation.isPending}>
             <UserPlus className="w-4 h-4 mr-2" />
-            Kirjaa läsnäolo
+            {createAttendanceMutation.isPending ? 'Kirjataan...' : 'Kirjaa läsnäolo'}
           </Button>
         </form>
 

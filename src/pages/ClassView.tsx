@@ -1,11 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { getClassById, Class } from '@/lib/classes';
-import { ArrowLeft, LogOut, Settings } from 'lucide-react';
+import { useClass } from '@/hooks/useClasses';
+import { ArrowLeft, LogOut, Settings, Loader2 } from 'lucide-react';
 import AttendanceTracking from '@/components/AttendanceTracking';
 import StudentLogs from '@/components/StudentLogs';
 
@@ -13,30 +13,23 @@ const ClassView = () => {
   const { classId } = useParams<{ classId: string }>();
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const [classData, setClassData] = useState<Class | null>(null);
+  const { data: classData, isLoading: classLoading, error } = useClass(classId || '');
 
   useEffect(() => {
-    if (!user || !user.isTeacher) {
-      navigate('/auth');
+    // If class failed to load or doesn't belong to user, redirect
+    if (!classLoading && classData && user && classData.teacher_id !== user.id) {
+      navigate('/dashboard');
       return;
     }
 
-    if (classId) {
-      const cls = getClassById(classId);
-      if (!cls) {
-        navigate('/dashboard');
-        return;
-      }
-      if (cls.teacherEmail !== user.email) {
-        navigate('/dashboard');
-        return;
-      }
-      setClassData(cls);
+    // If class not found
+    if (error) {
+      navigate('/dashboard');
     }
-  }, [user, classId, navigate]);
+  }, [classData, classLoading, error, user, navigate]);
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await logout();
     navigate('/auth');
   };
 
@@ -47,6 +40,23 @@ const ClassView = () => {
   const handleSettings = () => {
     navigate('/settings');
   };
+
+  if (classLoading) {
+    return (
+      <div className="min-h-screen bg-background p-4 md:p-8">
+        <div className="max-w-6xl mx-auto">
+          <Card>
+            <CardContent className="py-12">
+              <div className="flex items-center justify-center gap-2">
+                <Loader2 className="w-6 h-6 animate-spin" />
+                <p className="text-muted-foreground">Ladataan kurssia...</p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
 
   if (!classData) {
     return null;
@@ -80,7 +90,7 @@ const ClassView = () => {
         <Tabs defaultValue="attendance" className="space-y-6">
           <TabsList className="grid w-full max-w-md grid-cols-2">
             <TabsTrigger value="attendance">Läsnäolon kirjaus</TabsTrigger>
-            <TabsTrigger value="logs">Opiskelijan lokit</TabsTrigger>
+            <TabsTrigger value="logs">Läsnäolot</TabsTrigger>
           </TabsList>
 
           <TabsContent value="attendance">

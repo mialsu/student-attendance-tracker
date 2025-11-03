@@ -1,12 +1,12 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Button } from '@/components/ui/button';
-import { getClassAttendanceSummary, getStudentAttendanceInClass, ClassAttendanceRecord } from '@/lib/classes';
-import { ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
+import { useAttendanceSummary, useDeleteAttendance } from '@/hooks/useAttendance';
+import type { AttendanceRecordInSummary } from '@/api/types';
+import { ChevronLeft, ChevronRight, Trash2, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { fi } from 'date-fns/locale';
-import { deleteAttendanceRecord } from '@/lib/classes';
 import { useToast } from '@/hooks/use-toast';
 
 interface StudentLogsProps {
@@ -17,10 +17,12 @@ const ITEMS_PER_PAGE = 20;
 
 const StudentLogsList = ({
   logs,
+  classId,
   onDelete
 }: {
-  logs: ClassAttendanceRecord[];
-  onDelete: (recordId: string) => void;
+  logs: AttendanceRecordInSummary[];
+  classId: string;
+  onDelete: (recordId: string, classId: string) => void;
 }) => {
   const [currentPage, setCurrentPage] = useState(1);
 
@@ -40,7 +42,7 @@ const StudentLogsList = ({
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => onDelete(log.id)}
+              onClick={() => onDelete(log.id, classId)}
               className="text-destructive hover:text-destructive"
             >
               <Trash2 className="w-4 h-4" />
@@ -79,50 +81,66 @@ const StudentLogsList = ({
 };
 
 const StudentLogs = ({ classId }: StudentLogsProps) => {
-  const [summary, setSummary] = useState<Array<{ firstName: string; lastName: string; count: number }>>([]);
   const { toast } = useToast();
+  const { data: summary, isLoading: summaryLoading } = useAttendanceSummary(classId);
+  const deleteAttendanceMutation = useDeleteAttendance();
 
-  const loadSummary = useCallback(() => {
-    setSummary(getClassAttendanceSummary(classId));
-  }, [classId]);
-
-  useEffect(() => {
-    loadSummary();
-  }, [loadSummary]);
-
-  const handleDeleteRecord = (recordId: string) => {
-    if (deleteAttendanceRecord(recordId)) {
+  const handleDeleteRecord = async (recordId: string, classId: string) => {
+    try {
+      await deleteAttendanceMutation.mutateAsync({ recordId, classId });
       toast({
         title: 'Merkintä poistettu',
         description: 'Läsnäolomerkintä on poistettu onnistuneesti',
       });
-      loadSummary();
-    } else {
+    } catch (error: any) {
       toast({
         title: 'Virhe',
-        description: 'Merkinnän poistaminen epäonnistui',
+        description: error.response?.data?.detail || 'Merkinnän poistaminen epäonnistui',
         variant: 'destructive',
       });
     }
   };
 
+  if (summaryLoading) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Opiskelijoiden läsnäolot</CardTitle>
+          <CardDescription>
+            Näet kaikki opiskelijat ja heidän läsnäolomerkintänsä kurssilla
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-center gap-2 py-8">
+            <Loader2 className="w-6 h-6 animate-spin" />
+            <p className="text-muted-foreground">Ladataan lokeja...</p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Opiskelijoiden läsnäololokit</CardTitle>
+        <CardTitle>Opiskelijoiden läsnäolot</CardTitle>
         <CardDescription>
           Näet kaikki opiskelijat ja heidän läsnäolomerkintänsä kurssilla
         </CardDescription>
       </CardHeader>
       <CardContent>
-        {summary.length === 0 ? (
+        {!summary || summary.length === 0 ? (
           <p className="text-center text-muted-foreground py-8">
             Ei läsnäoloja kirjattu vielä tälle kurssille
           </p>
         ) : (
           <Accordion type="single" collapsible className="space-y-2">
             {summary.map((student, index) => {
-              const logs = getStudentAttendanceInClass(classId, student.firstName, student.lastName);
+              // Sort records by timestamp (newest first)
+              const logs = [...student.records].sort(
+                (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+              );
+
               return (
                 <AccordionItem
                   key={index}
@@ -132,16 +150,17 @@ const StudentLogs = ({ classId }: StudentLogsProps) => {
                   <AccordionTrigger className="px-3 hover:no-underline hover:bg-secondary/80">
                     <div className="flex justify-between items-center w-full pr-2">
                       <span className="font-medium">
-                        {student.lastName}, {student.firstName}
+                        {student.student_last_name}, {student.student_first_name}
                       </span>
                       <span className="text-sm bg-primary text-primary-foreground px-3 py-1 rounded-full font-semibold">
-                        {student.count}
+                        {student.total_attendance}
                       </span>
                     </div>
                   </AccordionTrigger>
                   <AccordionContent className="px-3 pb-3">
                     <StudentLogsList
                       logs={logs}
+                      classId={classId}
                       onDelete={handleDeleteRecord}
                     />
                   </AccordionContent>

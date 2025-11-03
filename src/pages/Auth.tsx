@@ -19,19 +19,21 @@ const Auth = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const success = isLogin
-      ? await login(email, password)
-      : await signup(email, password, true); // Always teacher
+    try {
+      if (isLogin) {
+        await login(email, password);
+      } else {
+        await signup(email, password);
+      }
 
-    if (success) {
       toast({
         title: isLogin ? 'Kirjautunut sisään' : 'Rekisteröity onnistuneesti',
       });
       navigate('/dashboard');
-    } else {
+    } catch (error: any) {
       toast({
         title: 'Virhe',
-        description: isLogin ? 'Väärä sähköposti tai salasana' : 'Sähköposti on jo käytössä',
+        description: error.response?.data?.detail || (isLogin ? 'Väärä sähköposti tai salasana' : 'Rekisteröinti epäonnistui'),
         variant: 'destructive',
       });
     }

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -20,13 +20,14 @@ const Settings = () => {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
-  if (!user || !user.isTeacher) {
-    navigate('/auth');
-    return null;
-  }
+  useEffect(() => {
+    if (user) {
+      setNewEmail(user.email);
+    }
+  }, [user]);
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await logout();
     navigate('/auth');
   };
 
@@ -55,18 +56,18 @@ const Settings = () => {
       return;
     }
 
-    const success = await updateEmail(newEmail, emailPassword);
-
-    if (success) {
+    try {
+      await updateEmail(newEmail, emailPassword);
       toast({
         title: 'Sähköposti päivitetty',
         description: 'Sähköpostiosoitteesi on päivitetty onnistuneesti',
       });
       setEmailPassword('');
-    } else {
+      setNewEmail(newEmail);
+    } catch (error: any) {
       toast({
         title: 'Virhe',
-        description: 'Sähköpostin päivitys epäonnistui. Tarkista salasanasi tai sähköposti on jo käytössä.',
+        description: error.response?.data?.detail || 'Sähköpostin päivitys epäonnistui. Tarkista salasanasi tai sähköposti on jo käytössä.',
         variant: 'destructive',
       });
     }
@@ -102,9 +103,8 @@ const Settings = () => {
       return;
     }
 
-    const success = await updatePassword(currentPassword, newPassword);
-
-    if (success) {
+    try {
+      await updatePassword(currentPassword, newPassword);
       toast({
         title: 'Salasana päivitetty',
         description: 'Salasanasi on päivitetty onnistuneesti',
@@ -112,10 +112,10 @@ const Settings = () => {
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
-    } else {
+    } catch (error: any) {
       toast({
         title: 'Virhe',
-        description: 'Salasanan päivitys epäonnistui. Tarkista nykyinen salasanasi.',
+        description: error.response?.data?.detail || 'Salasanan päivitys epäonnistui. Tarkista nykyinen salasanasi.',
         variant: 'destructive',
       });
     }

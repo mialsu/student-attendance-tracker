@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -7,8 +7,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { getClassesByTeacher, createClass, Class } from '@/lib/classes';
-import { LogOut, Plus, BookOpen, Settings } from 'lucide-react';
+import { useClasses, useCreateClass } from '@/hooks/useClasses';
+import { LogOut, Plus, BookOpen, Settings, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { fi } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
@@ -17,32 +17,18 @@ const TeacherDashboard = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [classes, setClasses] = useState<Class[]>([]);
+  const { data: classes, isLoading: classesLoading } = useClasses();
+  const createClassMutation = useCreateClass();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [className, setClassName] = useState('');
   const [classDescription, setClassDescription] = useState('');
 
-  const loadClasses = useCallback(() => {
-    if (user?.email) {
-      setClasses(getClassesByTeacher(user.email));
-    }
-  }, [user?.email]);
-
-  useEffect(() => {
-    if (!user || !user.isTeacher) {
-      navigate('/auth');
-      return;
-    }
-
-    loadClasses();
-  }, [user, navigate, loadClasses]);
-
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await logout();
     navigate('/auth');
   };
 
-  const handleCreateClass = () => {
+  const handleCreateClass = async () => {
     if (!className.trim()) {
       toast({
         title: 'Virhe',
@@ -52,8 +38,12 @@ const TeacherDashboard = () => {
       return;
     }
 
-    if (user?.email) {
-      createClass(className, classDescription, user.email);
+    try {
+      await createClassMutation.mutateAsync({
+        name: className,
+        description: classDescription || undefined,
+      });
+
       toast({
         title: 'Kurssi luotu',
         description: `Kurssi "${className}" on luotu onnistuneesti`,
@@ -61,7 +51,12 @@ const TeacherDashboard = () => {
       setClassName('');
       setClassDescription('');
       setIsDialogOpen(false);
-      loadClasses();
+    } catch (error: any) {
+      toast({
+        title: 'Virhe',
+        description: error.response?.data?.detail || 'Kurssin luominen epäonnistui',
+        variant: 'destructive',
+      });
     }
   };
 
@@ -141,7 +136,16 @@ const TeacherDashboard = () => {
 
         <div>
           <h2 className="text-2xl font-semibold mb-4">Kurssit</h2>
-          {classes.length === 0 ? (
+          {classesLoading ? (
+            <Card>
+              <CardContent className="py-12">
+                <div className="flex items-center justify-center gap-2">
+                  <Loader2 className="w-6 h-6 animate-spin" />
+                  <p className="text-muted-foreground">Ladataan kursseja...</p>
+                </div>
+              </CardContent>
+            </Card>
+          ) : !classes || classes.length === 0 ? (
             <Card>
               <CardContent className="py-12">
                 <p className="text-center text-muted-foreground">
@@ -170,7 +174,7 @@ const TeacherDashboard = () => {
                   </CardHeader>
                   <CardContent>
                     <p className="text-sm text-muted-foreground">
-                      Luotu: {format(new Date(cls.createdAt), 'PPP', { locale: fi })}
+                      Luotu: {format(new Date(cls.created_at), 'PPP', { locale: fi })}
                     </p>
                   </CardContent>
                 </Card>
