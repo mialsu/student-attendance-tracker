@@ -1,0 +1,29 @@
+# Development files
+README.md
+.env.example
+.env.local
+.env.development
+
+# Docker files (not used in Vercel deployment)
+Dockerfile
+nginx.conf
+
+# Dependencies
+node_modules
+
+# Build output (Vercel builds this)
+dist
+
+# Testing
+coverage
+
+# Editor
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
