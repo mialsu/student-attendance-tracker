@@ -117,10 +117,11 @@ client-app/
 
 ## Data Storage
 
-The application uses browser localStorage for data persistence:
-- User accounts and authentication
-- Class information
-- Attendance records
+The application uses **API-based backend** for data persistence:
+- JWT-based authentication with access and refresh tokens
+- PostgreSQL database for all data storage
+- FastAPI backend at: `https://attendance-api.kotoio.fi`
+- Real-time data synchronization across devices
 
 ## Security
 
@@ -144,6 +145,23 @@ npx shadcn-ui@latest add <component-name>
 - ESLint configuration included
 - TypeScript strict mode enabled
 - React hooks linting enabled
+
+## Production Deployment
+
+The application is deployed to production:
+
+- **Frontend**: https://app-attendance.kotoio.fi (Vercel)
+- **Backend API**: https://attendance-api.kotoio.fi (Hetzner VM)
+- **Database**: PostgreSQL 17 on Hetzner
+- **SSL**: Let's Encrypt certificates
+- **Domain**: kotoio.fi
+
+### Deployment Architecture
+
+- Frontend deployed to Vercel with automatic CI/CD from Git
+- Backend deployed to Hetzner Cloud VM with Docker Compose
+- HTTPS enabled on both frontend and backend
+- CORS configured for cross-origin requests
 
 ## License
 
