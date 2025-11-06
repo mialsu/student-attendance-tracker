@@ -2,6 +2,16 @@
 
 This guide walks you through deploying the Student Attendance Tracker frontend to Vercel.
 
+## Current Production Deployment ✅
+
+The frontend is already deployed to production:
+- **URL**: https://app-attendance.kotoio.fi
+- **Backend**: https://attendance-api.kotoio.fi
+- **Domain**: Custom domain configured with CNAME record
+- **Status**: Operational
+
+This guide documents the deployment process for reference and for deploying updates.
+
 ## Prerequisites
 
 - Git repository hosted on GitHub, GitLab, or Bitbucket
@@ -15,7 +25,7 @@ User Browser
     ↓
 Vercel CDN (Global)
     ↓
-React Frontend (yourproject.vercel.app)
+React Frontend (app-attendance.kotoio.fi)
     ↓
     API Calls
     ↓
@@ -74,7 +84,7 @@ Before deploying, add your backend API URL:
 
 1. In the "Environment Variables" section, add:
    - **Key:** `VITE_API_URL`
-   - **Value:** `http://YOUR_BACKEND_IP` or `https://api.yourdomain.com`
+   - **Value:** `https://attendance-api.kotoio.fi` (production example)
    - **Environment:** Production
 
 2. Optionally add:
@@ -87,7 +97,8 @@ Before deploying, add your backend API URL:
 
 1. Click **"Deploy"**
 2. Wait 1-2 minutes for build to complete
-3. Vercel will show your deployment URL: `https://yourproject.vercel.app`
+3. Vercel will show your deployment URL (e.g., `https://yourproject.vercel.app`)
+4. Optionally configure custom domain (see below)
 
 🎉 Your frontend is now live!
 
@@ -104,7 +115,8 @@ cd student-attendance-tracker/deployment/production
 nano .env
 
 # Update CORS_ORIGINS to include your Vercel URL:
-CORS_ORIGINS=https://yourproject.vercel.app,http://localhost:5173
+# Production example:
+CORS_ORIGINS=https://app-attendance.kotoio.fi,http://localhost:5173
 
 # Restart backend
 docker-compose restart backend

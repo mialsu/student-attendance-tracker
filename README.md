@@ -2,6 +2,16 @@
 
 This directory contains all deployment configurations for the Student Attendance Tracker application.
 
+## Production Deployment Status ✅
+
+The application is currently deployed to production:
+
+- **Frontend**: https://app-attendance.kotoio.fi (Vercel)
+- **Backend API**: https://attendance-api.kotoio.fi (Hetzner)
+- **Domain**: kotoio.fi (configured at hostingpalvelu.fi)
+- **SSL**: Let's Encrypt certificates (auto-renewing)
+- **Status**: Fully operational
+
 ## Deployment Architecture
 
 The application uses a **split deployment** architecture:
@@ -9,12 +19,12 @@ The application uses a **split deployment** architecture:
 - **Frontend**: Deployed to **Vercel** (free Hobby tier)
   - Automated CI/CD from GitHub
   - Global CDN for fast loading
-  - Zero configuration needed
+  - Custom domain with CNAME record
   - See [VERCEL_DEPLOYMENT.md](VERCEL_DEPLOYMENT.md) for setup guide
 
 - **Backend + Database**: Deployed to **Hetzner Cloud VM** (€3.49/month)
   - Docker Compose orchestration
-  - Nginx as API gateway
+  - Nginx as API gateway with HTTPS
   - PostgreSQL 17 database
   - Supports hosting multiple backends on same VM (cost-efficient)
 
@@ -159,7 +169,7 @@ openssl rand -hex 32
 openssl rand -base64 32
 
 # IMPORTANT: Add your Vercel URL to CORS_ORIGINS
-# Example: CORS_ORIGINS=https://yourproject.vercel.app,http://localhost:5173
+# Production example: CORS_ORIGINS=https://app-attendance.kotoio.fi,http://localhost:5173
 ```
 
 3. **Update nginx.conf** (optional):
@@ -189,8 +199,8 @@ The deployment script will:
 ```bash
 # In Vercel dashboard, set:
 # VITE_API_URL=http://YOUR_VM_IP
-# or
-# VITE_API_URL=https://api.yourdomain.com
+# or with custom domain (recommended):
+# VITE_API_URL=https://attendance-api.kotoio.fi
 ```
 
 ### Updating Production
