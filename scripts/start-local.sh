@@ -14,19 +14,21 @@ fi
 
 # Build and start containers
 echo "🐳 Building and starting Docker containers..."
-docker-compose up -d --build
+docker compose up -d --build
 
 echo ""
 echo "✅ Local environment is starting up!"
 echo ""
 echo "📍 Services:"
-echo "   Frontend:  http://localhost:5173"
 echo "   Backend:   http://localhost:8000"
 echo "   API Docs:  http://localhost:8000/docs"
 echo "   Database:  localhost:5432"
 echo ""
 echo "📊 View logs:"
-echo "   docker-compose -f deployment/local/docker-compose.yml logs -f"
+echo "   docker compose -f deployment/local/docker-compose.yml logs -f"
+echo ""
+echo "🚀 Start frontend (in separate terminal):"
+echo "   cd client-app && npm run dev"
 echo ""
 echo "🛑 Stop services:"
 echo "   ./deployment/scripts/stop-local.sh"

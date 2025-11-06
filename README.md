@@ -2,6 +2,22 @@
 
 This directory contains all deployment configurations for the Student Attendance Tracker application.
 
+## Deployment Architecture
+
+The application uses a **split deployment** architecture:
+
+- **Frontend**: Deployed to **Vercel** (free Hobby tier)
+  - Automated CI/CD from GitHub
+  - Global CDN for fast loading
+  - Zero configuration needed
+  - See [VERCEL_DEPLOYMENT.md](VERCEL_DEPLOYMENT.md) for setup guide
+
+- **Backend + Database**: Deployed to **Hetzner Cloud VM** (€3.49/month)
+  - Docker Compose orchestration
+  - Nginx as API gateway
+  - PostgreSQL 17 database
+  - Supports hosting multiple backends on same VM (cost-efficient)
+
 ## Directory Structure
 
 ```
@@ -47,10 +63,12 @@ chmod +x deployment/scripts/*.sh
 
 ### Services
 
-- **Frontend**: http://localhost:5173
+- **Frontend**: http://localhost:5173 (run `npm run dev` in client-app/)
 - **Backend API**: http://localhost:8000
 - **API Documentation**: http://localhost:8000/docs
 - **Database**: localhost:5432
+
+**Note**: For local development, the frontend runs via `npm run dev` and connects to the local backend at `http://localhost:8000`.
 
 ### Manual Commands
 
@@ -75,13 +93,20 @@ docker-compose down -v
 
 ## Production Deployment
 
-### Prerequisites
+### Overview
+
+Production deployment is split across two platforms:
+
+1. **Frontend → Vercel** (see [VERCEL_DEPLOYMENT.md](VERCEL_DEPLOYMENT.md))
+2. **Backend + Database → Hetzner Cloud VM** (instructions below)
+
+### Backend Deployment Prerequisites
 
 1. **Server Requirements**:
    - Ubuntu 22.04 LTS (recommended)
    - Docker and Docker Compose installed
-   - Domain name pointing to server IP
-   - Ports 80 and 443 open
+   - Ports 80 and 443 open (for API access)
+   - Optional: Domain name for SSL (can start with IP address)
 
 2. **Initial Server Setup**:
 ```bash
@@ -125,52 +150,67 @@ cp .env.example .env
 nano .env  # Edit with production values
 ```
 
-**Important**: Generate secure values:
+**Important**: Generate secure values and configure CORS:
 ```bash
 # Generate SECRET_KEY
 openssl rand -hex 32
 
 # Generate strong password
 openssl rand -base64 32
+
+# IMPORTANT: Add your Vercel URL to CORS_ORIGINS
+# Example: CORS_ORIGINS=https://yourproject.vercel.app,http://localhost:5173
 ```
 
-3. **Update nginx.conf**:
+3. **Update nginx.conf** (optional):
 ```bash
 nano nginx.conf
-# Replace 'yourdomain.com' with your actual domain
+# Update server_name if using custom domain
+# Default configuration uses _ (matches any domain/IP)
 ```
 
-4. **Build frontend**:
-```bash
-cd ../../client-app
-npm install
-npm run build
-cd ../deployment/production
-```
-
-5. **Setup SSL certificates**:
-```bash
-./deployment/scripts/setup-ssl.sh
-```
-
-6. **Deploy**:
+4. **Deploy backend**:
 ```bash
 ./deployment/scripts/deploy-prod.sh
 ```
 
+The deployment script will:
+- Build the backend Docker image
+- Apply database migrations
+- Start all services (database, backend, nginx as API gateway)
+
+5. **Setup SSL certificates** (optional, recommended for production):
+```bash
+# Only if using a custom domain
+./deployment/scripts/setup-ssl.sh
+```
+
+6. **Update Vercel environment variables**:
+```bash
+# In Vercel dashboard, set:
+# VITE_API_URL=http://YOUR_VM_IP
+# or
+# VITE_API_URL=https://api.yourdomain.com
+```
+
 ### Updating Production
 
+**Frontend (Vercel)**:
+- Automatic deployment on Git push
+- No manual steps required
+
+**Backend (Hetzner VM)**:
 ```bash
+# SSH into VM
+ssh user@your-vm-ip
+
+# Navigate to project
+cd student-attendance-tracker
+
 # Pull latest code
 git pull origin main
 
-# Rebuild frontend
-cd client-app
-npm install
-npm run build
-
-# Deploy
-cd ..
+# Rebuild and deploy backend only
 ./deployment/scripts/deploy-prod.sh
 ```
 
@@ -368,14 +408,88 @@ command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
 
 Adjust workers based on CPU cores (recommended: 2-4 × CPU cores).
 
+## Multi-Backend Hosting (Cost Optimization)
+
+You can host **multiple hobby backend projects** on a single Hetzner VM to save costs.
+
+### Strategy
+
+Each backend project runs on a different port with its own Docker Compose setup:
+
+```
+VM Structure:
+├── /home/user/project1/  (port 8001, database on 5433)
+│   └── deployment/production/docker-compose.yml
+├── /home/user/project2/  (port 8002, database on 5434)
+│   └── deployment/production/docker-compose.yml
+└── /etc/nginx/           (shared Nginx routing all backends)
+```
+
+### Setup Steps
+
+1. **Deploy first backend** (this project):
+```bash
+cd /home/user/student-attendance-tracker
+# Deploy as normal (uses port 8000, PostgreSQL on 5432)
+./deployment/scripts/deploy-prod.sh
+```
+
+2. **Deploy second backend**:
+```bash
+cd /home/user/another-project
+
+# Update docker-compose.yml to use different ports:
+# Backend: internal port 8000 → host port 8001
+# Database: 5432 → 5433
+# Change container names to avoid conflicts
+
+# Deploy
+./deployment/scripts/deploy-prod.sh
+```
+
+3. **Configure shared Nginx** to route:
+```nginx
+# /etc/nginx/sites-available/backends
+
+# Project 1
+server {
+    listen 80;
+    server_name project1.yourdomain.com;
+    location /api/ {
+        proxy_pass http://localhost:8000;
+    }
+}
+
+# Project 2
+server {
+    listen 80;
+    server_name project2.yourdomain.com;
+    location /api/ {
+        proxy_pass http://localhost:8001;
+    }
+}
+```
+
+4. **Each project's frontend** (on Vercel) points to its subdomain:
+   - Project 1: `VITE_API_URL=https://project1.yourdomain.com`
+   - Project 2: `VITE_API_URL=https://project2.yourdomain.com`
+
+### Cost Savings Example
+
+| Setup | Cost |
+|-------|------|
+| 3 separate VMs | €10.47/month (3 × €3.49) |
+| 1 shared VM | €4.99/month (CX21) |
+| **Savings** | **€5.48/month (52%)** |
+
 ## Scaling Considerations
 
 ### Vertical Scaling (Single Server)
 
 Upgrade server resources on Hetzner:
-- Start: CX21 (2 vCPU, 4 GB RAM) - €5.83/month
-- Medium: CX31 (2 vCPU, 8 GB RAM) - €10.52/month
-- Large: CX41 (4 vCPU, 16 GB RAM) - €19.90/month
+- Start: CX21 (2 vCPU, 4 GB RAM) - €4.99/month
+- Medium: CX31 (2 vCPU, 8 GB RAM) - €9.18/month
+- Large: CX41 (4 vCPU, 16 GB RAM) - €17.39/month
 
 ### Horizontal Scaling (Future)
 
@@ -387,19 +501,30 @@ If you need more capacity:
 
 ## Cost Estimates
 
-### Hetzner Cloud (Europe)
+### Current Architecture (Vercel + Hetzner)
 
-| Component | Type | Monthly Cost |
-|-----------|------|--------------|
-| Server | CX21 (2 vCPU, 4GB) | €5.83 |
-| Volume (optional) | 20GB | €2.40 |
-| Snapshot (optional) | Weekly | ~€1.00 |
-| **Total** | | **€9-10/month** |
+| Component | Service | Monthly Cost |
+|-----------|---------|--------------|
+| Frontend | Vercel Hobby (free tier) | **€0** |
+| Backend + DB | Hetzner CX21 (2 vCPU, 4GB) | **€3.49** |
+| Signup Credit | €20 credit | **-€3.49/month × 5 months** |
+| **Total First 5 Months** | | **€0** |
+| **Total After 5 Months** | | **€3.49/month (~$3.80)** |
 
-### Alternative: CX31 (Recommended for Production)
-- 2 vCPU, 8 GB RAM, 80 GB SSD
-- €10.52/month
-- Better for database operations
+**Notes:**
+- Vercel Hobby tier is free for non-commercial use (100 GB bandwidth/month)
+- Hetzner €20 signup credit covers ~5-6 months of CX21 server
+- Multi-backend hosting: same €3.49/month for multiple projects
+
+### Production Upgrade Options
+
+| Server | vCPU | RAM | Storage | Monthly Cost |
+|--------|------|-----|---------|--------------|
+| CX21 | 2 | 4 GB | 40 GB | €3.49 |
+| CX31 | 2 | 8 GB | 80 GB | €6.49 |
+| CX41 | 4 | 16 GB | 160 GB | €12.49 |
+
+**Recommendation**: CX21 is sufficient for hobby projects with moderate traffic
 
 ## Support & Help
 
