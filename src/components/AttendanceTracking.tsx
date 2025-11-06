@@ -77,7 +77,7 @@ const AttendanceTracking = ({ classId }: AttendanceTrackingProps) => {
                 id="firstName"
                 value={firstName}
                 onChange={(e) => setFirstName(e.target.value)}
-                placeholder="Esim. Matti"
+                placeholder="Etunimi"
                 autoComplete="off"
               />
             </div>
@@ -87,7 +87,7 @@ const AttendanceTracking = ({ classId }: AttendanceTrackingProps) => {
                 id="lastName"
                 value={lastName}
                 onChange={(e) => setLastName(e.target.value)}
-                placeholder="Esim. Meikäläinen"
+                placeholder="Sukunimi"
                 autoComplete="off"
               />
             </div>

@@ -110,7 +110,7 @@ const TeacherDashboard = () => {
                     id="className"
                     value={className}
                     onChange={(e) => setClassName(e.target.value)}
-                    placeholder="esim. Ohjelmointi 1"
+                    placeholder="Ohjelmointi 1"
                   />
                 </div>
                 <div className="space-y-2">
