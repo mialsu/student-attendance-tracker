@@ -54,7 +54,26 @@ docker run -d \
 alembic upgrade head
 ```
 
-### 6. Start Development Server
+### 6. Seed Database (Optional)
+
+For manual testing, populate the database with realistic test data:
+
+```bash
+./scripts/seed-db.sh
+# or
+python scripts/seed_data.py
+```
+
+This creates:
+- 2 test users (teachers): `teacher1@example.com` / `teacher2@example.com`
+- 3-4 classes per teacher
+- 20-30 students per class with varying attendance
+- Some legacy students (first attendance > 5 years ago) for filter testing
+- Mix of active and inactive classes
+
+**Login credentials**: `password123` for all test users
+
+### 7. Start Development Server
 
 ```bash
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000

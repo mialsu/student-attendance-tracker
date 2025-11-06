@@ -274,11 +274,12 @@ class TestListAttendanceForClass:
             db.add(record)
         await db.commit()
 
-        result = await attendance_service.list_attendance_for_class(
+        records, total = await attendance_service.list_attendance_for_class(
             db, test_class.id, test_user
         )
 
-        assert len(result) >= 5
+        assert len(records) >= 5
+        assert total >= 5
 
     async def test_list_attendance_with_pagination(
         self, db: AsyncSession, test_class: Class, test_user: User
@@ -296,18 +297,20 @@ class TestListAttendanceForClass:
         await db.commit()
 
         # Get first 10
-        result = await attendance_service.list_attendance_for_class(
+        records, total = await attendance_service.list_attendance_for_class(
             db, test_class.id, test_user, skip=0, limit=10
         )
 
-        assert len(result) == 10
+        assert len(records) == 10
+        assert total == 15
 
         # Get next 5
-        result2 = await attendance_service.list_attendance_for_class(
+        records2, total2 = await attendance_service.list_attendance_for_class(
             db, test_class.id, test_user, skip=10, limit=10
         )
 
-        assert len(result2) == 5
+        assert len(records2) == 5
+        assert total2 == 15  # Total should be same
 
     async def test_list_attendance_filter_by_student_name(
         self, db: AsyncSession, test_class: Class, test_user: User
@@ -332,12 +335,13 @@ class TestListAttendanceForClass:
         await db.commit()
 
         # Filter for Alice
-        result = await attendance_service.list_attendance_for_class(
+        records, total = await attendance_service.list_attendance_for_class(
             db, test_class.id, test_user, student_name="Alice"
         )
 
-        assert len(result) >= 1
-        assert all("alice" in r.student_first_name.lower() for r in result)
+        assert len(records) >= 1
+        assert total >= 1
+        assert all("alice" in r.student_first_name.lower() for r in records)
 
     async def test_list_attendance_filter_by_date_from(
         self, db: AsyncSession, test_class: Class, test_user: User
@@ -361,13 +365,13 @@ class TestListAttendanceForClass:
 
         # Filter from 5 days ago
         cutoff = datetime.now(timezone.utc) - timedelta(days=5)
-        result = await attendance_service.list_attendance_for_class(
+        records, total = await attendance_service.list_attendance_for_class(
             db, test_class.id, test_user, date_from=cutoff
         )
 
         # Should only have new record
-        assert len(result) >= 1
-        assert all(r.timestamp >= cutoff for r in result)
+        assert len(records) >= 1
+        assert all(r.timestamp >= cutoff for r in records)
 
     async def test_list_attendance_filter_by_date_to(
         self, db: AsyncSession, test_class: Class, test_user: User
@@ -391,13 +395,13 @@ class TestListAttendanceForClass:
 
         # Filter up to 5 days ago
         cutoff = datetime.now(timezone.utc) - timedelta(days=5)
-        result = await attendance_service.list_attendance_for_class(
+        records, total = await attendance_service.list_attendance_for_class(
             db, test_class.id, test_user, date_to=cutoff
         )
 
         # Should only have past record
-        assert len(result) >= 1
-        assert all(r.timestamp <= cutoff for r in result)
+        assert len(records) >= 1
+        assert all(r.timestamp <= cutoff for r in records)
 
     async def test_list_attendance_legacy_filter_excludes_old(
         self, db: AsyncSession, test_class: Class, test_user: User
@@ -415,14 +419,14 @@ class TestListAttendanceForClass:
         await db.commit()
 
         # List with legacy=False (default)
-        result = await attendance_service.list_attendance_for_class(
+        records, total = await attendance_service.list_attendance_for_class(
             db, test_class.id, test_user, legacy=False
         )
 
         # Should not include old student
         assert not any(
             r.student_first_name == "VeryOld" and r.student_last_name == "Student"
-            for r in result
+            for r in records
         )
 
     async def test_list_attendance_legacy_filter_includes_when_true(
@@ -441,14 +445,14 @@ class TestListAttendanceForClass:
         await db.commit()
 
         # List with legacy=True
-        result = await attendance_service.list_attendance_for_class(
+        records, total = await attendance_service.list_attendance_for_class(
             db, test_class.id, test_user, legacy=True
         )
 
         # Should include old student
         assert any(
             r.student_first_name == "VeryOld" and r.student_last_name == "Student"
-            for r in result
+            for r in records
         )
 
     async def test_list_attendance_ordered_by_timestamp_desc(
@@ -469,13 +473,13 @@ class TestListAttendanceForClass:
             db.add(record)
         await db.commit()
 
-        result = await attendance_service.list_attendance_for_class(
+        records, total = await attendance_service.list_attendance_for_class(
             db, test_class.id, test_user
         )
 
         # Should be ordered newest first
-        for i in range(len(result) - 1):
-            assert result[i].timestamp >= result[i + 1].timestamp
+        for i in range(len(records) - 1):
+            assert records[i].timestamp >= records[i + 1].timestamp
 
 
 @pytest.mark.asyncio

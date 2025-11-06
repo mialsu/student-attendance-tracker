@@ -49,3 +49,12 @@ class AttendanceSummary(BaseModel):
     student_last_name: str
     total_attendance: int
     records: list[AttendanceRecordInSummary]
+
+
+class PaginatedAttendanceResponse(BaseModel):
+    """Paginated response for attendance records."""
+
+    items: list[AttendanceRecordResponse]
+    total: int = Field(..., description="Total number of items matching the filters")
+    skip: int = Field(..., description="Number of items skipped (offset)")
+    limit: int = Field(..., description="Maximum number of items per page")

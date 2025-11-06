@@ -25,11 +25,17 @@ class TestListAttendance:
             f"/api/classes/{test_class.id}/attendance",
             headers=auth_headers,
         )
-        
+
         assert response.status_code == 200
         data = response.json()
-        assert isinstance(data, list)
-        assert len(data) >= 1
+        assert isinstance(data, dict)
+        assert "items" in data
+        assert "total" in data
+        assert "skip" in data
+        assert "limit" in data
+        assert isinstance(data["items"], list)
+        assert len(data["items"]) >= 1
+        assert data["total"] >= 1
 
     async def test_list_attendance_with_pagination(
         self, client: AsyncClient, auth_headers: dict, test_class: Class
@@ -39,11 +45,17 @@ class TestListAttendance:
             f"/api/classes/{test_class.id}/attendance?skip=0&limit=10",
             headers=auth_headers,
         )
-        
+
         assert response.status_code == 200
         data = response.json()
-        assert isinstance(data, list)
-        assert len(data) <= 10
+        assert isinstance(data, dict)
+        assert "items" in data
+        assert "total" in data
+        assert "skip" in data
+        assert "limit" in data
+        assert len(data["items"]) <= 10
+        assert data["skip"] == 0
+        assert data["limit"] == 10
 
     async def test_list_attendance_filter_by_name(
         self,
@@ -57,11 +69,13 @@ class TestListAttendance:
             f"/api/classes/{test_class.id}/attendance?student_name=John",
             headers=auth_headers,
         )
-        
+
         assert response.status_code == 200
         data = response.json()
-        assert len(data) >= 1
-        assert any("John" in r["student_first_name"] for r in data)
+        assert isinstance(data, dict)
+        assert "items" in data
+        assert len(data["items"]) >= 1
+        assert any("John" in r["student_first_name"] for r in data["items"])
 
     async def test_list_attendance_filter_by_date(
         self, client: AsyncClient, auth_headers: dict, test_class: Class
@@ -381,7 +395,7 @@ class TestLegacyFilter:
         data = response.json()
         
         # Should only have current student, not old student
-        names = [(r["student_first_name"], r["student_last_name"]) for r in data]
+        names = [(r["student_first_name"], r["student_last_name"]) for r in data["items"]]
         assert ("Current", "Student") in names
         assert ("Old", "Student") not in names
 
@@ -412,7 +426,7 @@ class TestLegacyFilter:
         data = response.json()
         
         # Should include old student
-        names = [(r["student_first_name"], r["student_last_name"]) for r in data]
+        names = [(r["student_first_name"], r["student_last_name"]) for r in data["items"]]
         assert ("Old", "Student") in names
 
 
@@ -471,8 +485,8 @@ class TestNameNormalization:
 
         assert response.status_code == 200
         data = response.json()
-        assert len(data) >= 1
-        assert any("McDonald" in r["student_first_name"] for r in data)
+        assert len(data["items"]) >= 1
+        assert any("McDonald" in r["student_first_name"] for r in data["items"])
 
         # Search with partial name
         response = await client.get(
@@ -482,7 +496,7 @@ class TestNameNormalization:
 
         assert response.status_code == 200
         data = response.json()
-        assert len(data) >= 1
+        assert len(data["items"]) >= 1
 
 
 @pytest.mark.asyncio
@@ -527,7 +541,7 @@ class TestDateFiltering:
         data = response.json()
 
         # Should only have new record
-        names = [(r["student_first_name"], r["student_last_name"]) for r in data]
+        names = [(r["student_first_name"], r["student_last_name"]) for r in data["items"]]
         assert ("New", "Record") in names
         assert ("Old", "Record") not in names
 
@@ -569,7 +583,7 @@ class TestDateFiltering:
         data = response.json()
 
         # Should only have past record
-        names = [(r["student_first_name"], r["student_last_name"]) for r in data]
+        names = [(r["student_first_name"], r["student_last_name"]) for r in data["items"]]
         assert ("Past", "Record") in names
         assert ("Recent", "Record") not in names
 
@@ -611,7 +625,8 @@ class TestDateFiltering:
         data = response.json()
 
         # Should have 6 records (days 5, 6, 7, 8, 9, 10)
-        assert len(data) == 6
+        assert len(data["items"]) == 6
+        assert data["total"] == 6
 
 
 @pytest.mark.asyncio

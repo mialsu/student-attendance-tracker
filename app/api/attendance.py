@@ -12,13 +12,14 @@ from app.schemas.attendance import (
     AttendanceRecordCreate,
     AttendanceRecordResponse,
     AttendanceSummary,
+    PaginatedAttendanceResponse,
 )
 from app.services import attendance_service
 
 router = APIRouter()
 
 
-@router.get("/classes/{class_id}/attendance", response_model=list[AttendanceRecordResponse])
+@router.get("/classes/{class_id}/attendance", response_model=PaginatedAttendanceResponse)
 async def list_attendance(
     class_id: UUID,
     current_user: CurrentUser,
@@ -29,9 +30,9 @@ async def list_attendance(
     date_from: datetime | None = Query(None, description="Filter by start date"),
     date_to: datetime | None = Query(None, description="Filter by end date"),
     legacy: bool | None = Query(None, description="Include legacy students (first attendance > 5 years ago)"),
-) -> list[AttendanceRecordResponse]:
+) -> PaginatedAttendanceResponse:
     """
-    List attendance records for a class.
+    List attendance records for a class with pagination.
 
     Supports filtering by:
     - Student name (case-insensitive, partial match)
@@ -50,13 +51,13 @@ async def list_attendance(
         legacy: If None or False, excludes legacy students (default: None)
 
     Returns:
-        List of attendance records (excludes legacy students by default)
+        Paginated response with items, total count, skip, and limit
 
     Raises:
         404: If class not found
         403: If user doesn't own the class
     """
-    records = await attendance_service.list_attendance_for_class(
+    records, total = await attendance_service.list_attendance_for_class(
         db,
         class_id,
         current_user,
@@ -67,8 +68,13 @@ async def list_attendance(
         date_to=date_to,
         legacy=legacy,
     )
-    
-    return [AttendanceRecordResponse.model_validate(record) for record in records]
+
+    return PaginatedAttendanceResponse(
+        items=[AttendanceRecordResponse.model_validate(record) for record in records],
+        total=total,
+        skip=skip,
+        limit=limit,
+    )
 
 
 @router.post(

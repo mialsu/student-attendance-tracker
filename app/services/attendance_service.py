@@ -110,7 +110,7 @@ async def list_attendance_for_class(
     date_from: datetime | None = None,
     date_to: datetime | None = None,
     legacy: bool | None = None,
-) -> list[AttendanceRecord]:
+) -> tuple[list[AttendanceRecord], int]:
     """
     List attendance records for a class with optional filters.
 
@@ -126,7 +126,7 @@ async def list_attendance_for_class(
         legacy: If None or False, exclude students whose first attendance is > 5 years old
 
     Returns:
-        List of attendance records
+        Tuple of (list of attendance records, total count)
 
     Raises:
         NotFoundError: If class not found
@@ -173,41 +173,45 @@ async def list_attendance_for_class(
                     student_last.lower()
                 ))
     
-    # Build query
-    query = select(AttendanceRecord).where(AttendanceRecord.class_id == class_id)
-    
+    # Build base query for filtering
+    base_query = select(AttendanceRecord).where(AttendanceRecord.class_id == class_id)
+
     # Exclude legacy students if needed
     if students_to_exclude:
         for first_name_lower, last_name_lower in students_to_exclude:
-            query = query.where(
+            base_query = base_query.where(
                 ~(
                     (func.lower(AttendanceRecord.student_first_name) == first_name_lower) &
                     (func.lower(AttendanceRecord.student_last_name) == last_name_lower)
                 )
             )
-    
+
     # Apply other filters
     if student_name:
         search = f"%{student_name.lower()}%"
-        query = query.where(
+        base_query = base_query.where(
             (func.lower(AttendanceRecord.student_first_name).like(search)) |
             (func.lower(AttendanceRecord.student_last_name).like(search))
         )
-    
+
     if date_from:
-        query = query.where(AttendanceRecord.timestamp >= date_from)
-    
+        base_query = base_query.where(AttendanceRecord.timestamp >= date_from)
+
     if date_to:
-        query = query.where(AttendanceRecord.timestamp <= date_to)
-    
-    # Order by timestamp descending (most recent first)
-    query = query.order_by(AttendanceRecord.timestamp.desc())
-    
-    # Apply pagination
-    query = query.offset(skip).limit(limit)
-    
-    result = await db.execute(query)
-    return list(result.scalars().all())
+        base_query = base_query.where(AttendanceRecord.timestamp <= date_to)
+
+    # Get total count (before pagination)
+    count_query = select(func.count()).select_from(base_query.subquery())
+    count_result = await db.execute(count_query)
+    total_count = count_result.scalar() or 0
+
+    # Apply ordering and pagination to base query
+    paginated_query = base_query.order_by(AttendanceRecord.timestamp.desc()).offset(skip).limit(limit)
+
+    result = await db.execute(paginated_query)
+    records = list(result.scalars().all())
+
+    return records, total_count
 
 
 async def create_attendance_record(
