@@ -19,9 +19,11 @@ describe('Authentication Flow Integration Tests', () => {
     // Fill in signup form
     const emailInput = screen.getByLabelText('Sähköposti');
     const passwordInput = screen.getByLabelText('Salasana');
+    const confirmPasswordInput = screen.getByLabelText('Vahvista salasana');
 
     await user.type(emailInput, 'teacher@test.com');
     await user.type(passwordInput, 'password123');
+    await user.type(confirmPasswordInput, 'password123');
 
     // Submit form
     const submitButton = screen.getByRole('button', { name: /rekisteröidy/i });
@@ -97,9 +99,11 @@ describe('Authentication Flow Integration Tests', () => {
     // Try to signup with existing email
     const emailInput = screen.getByLabelText('Sähköposti');
     const passwordInput = screen.getByLabelText('Salasana');
+    const confirmPasswordInput = screen.getByLabelText('Vahvista salasana');
 
     await user.type(emailInput, 'existing@test.com');
     await user.type(passwordInput, 'newpassword');
+    await user.type(confirmPasswordInput, 'newpassword');
 
     const submitButton = screen.getByRole('button', { name: /rekisteröidy/i });
     await user.click(submitButton);
@@ -126,9 +130,121 @@ describe('Authentication Flow Integration Tests', () => {
     expect(screen.getByRole('heading', { name: /rekisteröidy/i })).toBeInTheDocument();
 
     // Switch back to login
-    const toLoginButton = screen.getByRole('button', { name: /on jo tili\? kirjaudu/i });
+    const toLoginButton = screen.getByRole('button', { name: /takaisin kirjautumiseen/i });
     await user.click(toLoginButton);
 
     expect(screen.getByRole('heading', { name: /kirjaudu sisään/i })).toBeInTheDocument();
+  });
+
+  it('should validate email format', async () => {
+    const user = userEvent.setup();
+    render(<Auth />);
+
+    // Switch to signup mode
+    const switchButton = screen.getByRole('button', { name: /ei tiliä\? rekisteröidy/i });
+    await user.click(switchButton);
+
+    // Fill in form with invalid email
+    const emailInput = screen.getByLabelText('Sähköposti');
+    const passwordInput = screen.getByLabelText('Salasana');
+    const confirmPasswordInput = screen.getByLabelText('Vahvista salasana');
+
+    await user.type(emailInput, 'invalid-email');
+    await user.type(passwordInput, 'password123');
+    await user.type(confirmPasswordInput, 'password123');
+
+    // Submit form
+    const submitButton = screen.getByRole('button', { name: /rekisteröidy/i });
+    await user.click(submitButton);
+
+    // Verify error message appears
+    await waitFor(() => {
+      expect(screen.getByText(/sähköpostin tulee olla oikeassa muodossa/i)).toBeInTheDocument();
+    });
+
+    // Verify no user was created
+    const users = JSON.parse(localStorage.getItem('users') || '[]');
+    expect(users).toHaveLength(0);
+  });
+
+  it('should validate password confirmation match', async () => {
+    const user = userEvent.setup();
+    render(<Auth />);
+
+    // Switch to signup mode
+    const switchButton = screen.getByRole('button', { name: /ei tiliä\? rekisteröidy/i });
+    await user.click(switchButton);
+
+    // Fill in form with mismatched passwords
+    const emailInput = screen.getByLabelText('Sähköposti');
+    const passwordInput = screen.getByLabelText('Salasana');
+    const confirmPasswordInput = screen.getByLabelText('Vahvista salasana');
+
+    await user.type(emailInput, 'test@example.com');
+    await user.type(passwordInput, 'password123');
+    await user.type(confirmPasswordInput, 'password456');
+
+    // Submit form
+    const submitButton = screen.getByRole('button', { name: /rekisteröidy/i });
+    await user.click(submitButton);
+
+    // Verify error message appears
+    await waitFor(() => {
+      expect(screen.getByText(/salasanat eivät täsmää/i)).toBeInTheDocument();
+    });
+
+    // Verify no user was created
+    const users = JSON.parse(localStorage.getItem('users') || '[]');
+    expect(users).toHaveLength(0);
+  });
+
+  it('should toggle password visibility', async () => {
+    const user = userEvent.setup();
+    render(<Auth />);
+
+    // Switch to signup mode to see both password fields
+    const switchButton = screen.getByRole('button', { name: /ei tiliä\? rekisteröidy/i });
+    await user.click(switchButton);
+
+    const passwordInput = screen.getByLabelText('Salasana') as HTMLInputElement;
+    const confirmPasswordInput = screen.getByLabelText('Vahvista salasana') as HTMLInputElement;
+
+    // Initially passwords should be hidden
+    expect(passwordInput.type).toBe('password');
+    expect(confirmPasswordInput.type).toBe('password');
+
+    // Click the eye icon for password field
+    const showPasswordButtons = screen.getAllByRole('button', { name: /näytä salasana/i });
+    await user.click(showPasswordButtons[0]);
+
+    // Password should now be visible
+    expect(passwordInput.type).toBe('text');
+
+    // Click again to hide
+    const hidePasswordButton = screen.getByRole('button', { name: /piilota salasana/i });
+    await user.click(hidePasswordButton);
+
+    // Password should be hidden again
+    expect(passwordInput.type).toBe('password');
+  });
+
+  it('should clear form when toggling between modes', async () => {
+    const user = userEvent.setup();
+    render(<Auth />);
+
+    // Fill in login form
+    const emailInput = screen.getByLabelText('Sähköposti') as HTMLInputElement;
+    const passwordInput = screen.getByLabelText('Salasana') as HTMLInputElement;
+
+    await user.type(emailInput, 'test@example.com');
+    await user.type(passwordInput, 'password123');
+
+    // Switch to signup mode
+    const switchButton = screen.getByRole('button', { name: /ei tiliä\? rekisteröidy/i });
+    await user.click(switchButton);
+
+    // Form should be cleared
+    expect(emailInput.value).toBe('');
+    expect(passwordInput.value).toBe('');
   });
 });
