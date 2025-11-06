@@ -40,6 +40,13 @@ export interface AttendanceSummary {
   records: AttendanceRecordInSummary[];
 }
 
+export interface PaginatedAttendanceResponse {
+  items: AttendanceRecord[];
+  total: number;
+  skip: number;
+  limit: number;
+}
+
 export interface AuthTokens {
   access_token: string;
   refresh_token: string;

@@ -1,5 +1,5 @@
 import { apiClient } from './client';
-import type { AttendanceRecord, AttendanceSummary } from './types';
+import type { AttendanceRecord, AttendanceSummary, PaginatedAttendanceResponse } from './types';
 
 export interface CreateAttendanceRequest {
   student_first_name: string;
@@ -17,7 +17,7 @@ export interface ListAttendanceParams {
 }
 
 export const attendanceApi = {
-  async list(classId: string, params?: ListAttendanceParams): Promise<AttendanceRecord[]> {
+  async list(classId: string, params?: ListAttendanceParams): Promise<PaginatedAttendanceResponse> {
     const response = await apiClient.get(`/api/classes/${classId}/attendance`, {
       params,
     });
