@@ -2,6 +2,7 @@
 
 from app.models.attendance import AttendanceRecord
 from app.models.class_ import Class
-from app.models.user import User
+from app.models.registration_code import RegistrationCode
+from app.models.user import User, UserRole
 
-__all__ = ["User", "Class", "AttendanceRecord"]
+__all__ = ["User", "UserRole", "Class", "AttendanceRecord", "RegistrationCode"]

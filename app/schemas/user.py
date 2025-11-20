@@ -16,6 +16,7 @@ class UserCreate(UserBase):
     """Schema for creating a new user (signup)."""
 
     password: str = Field(..., min_length=8, description="Password (minimum 8 characters)")
+    registration_code: str = Field(..., min_length=1, description="Registration code")
 
 
 class UserLogin(UserBase):
@@ -28,6 +29,7 @@ class UserResponse(UserBase):
     """Schema for user response."""
 
     id: uuid.UUID
+    role: str
     active: bool
     created_at: datetime
 

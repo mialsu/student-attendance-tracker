@@ -8,8 +8,8 @@ from app.core.security import decode_token
 from app.database import get_db
 from app.dependencies import CurrentUser
 from app.schemas.auth import Token, TokenRefresh
-from app.schemas.user import EmailUpdate, PasswordUpdate, UserCreate, UserResponse
-from app.services import auth_service
+from app.schemas.user import EmailUpdate, PasswordUpdate, UserCreate, UserLogin, UserResponse
+from app.services import auth_service, registration_code_service
 
 router = APIRouter()
 
@@ -23,28 +23,37 @@ async def signup(
     Create a new user account.
 
     Args:
-        user_data: User registration data (email, password)
+        user_data: User registration data (email, password, registration_code)
         db: Database session
 
     Returns:
         Token: Access and refresh tokens with user data
 
     Raises:
+        400: If registration code is invalid, used, or revoked
         409: If email already exists
         422: If validation fails
     """
+    # Validate registration code
+    reg_code = await registration_code_service.validate_registration_code(
+        db, user_data.registration_code, user_data.email
+    )
+
     # Create user
     user = await auth_service.create_user(db, user_data)
-    
+
+    # Mark registration code as used
+    await registration_code_service.mark_code_as_used(db, reg_code, user)
+
     # Generate tokens
     tokens = await auth_service.create_tokens_for_user(user)
-    
+
     return tokens
 
 
 @router.post("/login", response_model=Token)
 async def login(
-    credentials: UserCreate,
+    credentials: UserLogin,
     db: AsyncSession = Depends(get_db),
 ) -> Token:
     """

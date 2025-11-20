@@ -22,13 +22,17 @@ class TestSignup:
         assert data["user"]["email"] == sample_user_data["email"]
         assert data["user"]["active"] is True
 
-    async def test_signup_duplicate_email(self, client: AsyncClient, test_user: User):
+    async def test_signup_duplicate_email(self, client: AsyncClient, test_user: User, valid_registration_code):
         """Test signup with duplicate email fails."""
         response = await client.post(
             "/api/auth/signup",
-            json={"email": test_user.email, "password": "password123"},
+            json={
+                "email": test_user.email,
+                "password": "password123",
+                "registration_code": valid_registration_code.code,
+            },
         )
-        
+
         assert response.status_code == 409
         assert "already" in response.json()["detail"].lower()
 
@@ -102,14 +106,18 @@ class TestLogin:
 class TestTokenRefresh:
     """Tests for token refresh."""
 
-    async def test_refresh_token_success(self, client: AsyncClient):
+    async def test_refresh_token_success(self, client: AsyncClient, valid_registration_code):
         """Test successful token refresh."""
-        # First login
-        login_response = await client.post(
+        # First signup
+        signup_response = await client.post(
             "/api/auth/signup",
-            json={"email": "refresh@example.com", "password": "password123"},
+            json={
+                "email": "refresh@example.com",
+                "password": "password123",
+                "registration_code": valid_registration_code.code,
+            },
         )
-        refresh_token = login_response.json()["refresh_token"]
+        refresh_token = signup_response.json()["refresh_token"]
         
         # Refresh token
         response = await client.post(
@@ -201,7 +209,7 @@ class TestUpdateEmail:
         assert response.status_code == 401
 
     async def test_update_email_duplicate(
-        self, client: AsyncClient, auth_headers: dict, test_user: User
+        self, client: AsyncClient, auth_headers: dict, test_user: User, valid_registration_code
     ):
         """Test email update to existing email."""
         # First, create another user with a different email
@@ -210,6 +218,7 @@ class TestUpdateEmail:
             json={
                 "email": "another@example.com",
                 "password": "testpassword123",
+                "registration_code": valid_registration_code.code,
             },
         )
         
@@ -408,13 +417,14 @@ class TestAuthEdgeCases:
         )
         assert new_login.status_code == 200
 
-    async def test_signup_with_whitespace_in_email(self, client: AsyncClient):
+    async def test_signup_with_whitespace_in_email(self, client: AsyncClient, valid_registration_code):
         """Test signup with email containing whitespace gets trimmed."""
         response = await client.post(
             "/api/auth/signup",
             json={
                 "email": "  whitespace@example.com  ",
                 "password": "password123",
+                "registration_code": valid_registration_code.code,
             },
         )
 

@@ -15,7 +15,8 @@ from app.database import Base, get_db
 from app.main import app
 from app.models.attendance import AttendanceRecord
 from app.models.class_ import Class
-from app.models.user import User
+from app.models.registration_code import RegistrationCode
+from app.models.user import User, UserRole
 
 
 # Test database URL - PostgreSQL by default
@@ -122,6 +123,37 @@ async def inactive_user(db: AsyncSession) -> User:
 
 
 @pytest_asyncio.fixture
+async def superadmin_for_tests(db: AsyncSession) -> User:
+    """Create a superadmin user for tests."""
+    user = User(
+        email="superadmin@example.com",
+        password_hash=hash_password("superadminpass"),
+        role=UserRole.SUPERADMIN.value,
+        active=True,
+    )
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
+    return user
+
+
+@pytest_asyncio.fixture
+async def valid_registration_code(db: AsyncSession, superadmin_for_tests: User) -> RegistrationCode:
+    """Create a valid registration code for tests."""
+    code = RegistrationCode(
+        code="testcode1234567",  # exactly 16 characters
+        email_restriction=None,
+        used=False,
+        revoked=False,
+        created_by_user_id=superadmin_for_tests.id,
+    )
+    db.add(code)
+    await db.commit()
+    await db.refresh(code)
+    return code
+
+
+@pytest_asyncio.fixture
 async def auth_headers(client: AsyncClient, test_user: User) -> dict[str, str]:
     """Get authentication headers for test user."""
     # Login with the test_user credentials
@@ -187,11 +219,12 @@ async def test_attendance(
 
 
 @pytest.fixture
-def sample_user_data() -> dict:
+def sample_user_data(valid_registration_code: RegistrationCode) -> dict:
     """Sample user data for testing."""
     return {
         "email": "newuser@example.com",
         "password": "newpassword123",
+        "registration_code": valid_registration_code.code,
     }
 
 

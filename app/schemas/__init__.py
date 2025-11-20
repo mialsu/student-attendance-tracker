@@ -7,6 +7,7 @@ from app.schemas.attendance import (
 )
 from app.schemas.auth import Token, TokenRefresh
 from app.schemas.class_ import ClassCreate, ClassResponse, ClassUpdate
+from app.schemas.registration_code import CodeResponse, CreateCodeRequest
 from app.schemas.user import (
     EmailUpdate,
     PasswordUpdate,
@@ -29,4 +30,6 @@ __all__ = [
     "AttendanceRecordCreate",
     "AttendanceRecordResponse",
     "AttendanceSummary",
+    "CreateCodeRequest",
+    "CodeResponse",
 ]

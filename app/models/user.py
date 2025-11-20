@@ -2,12 +2,20 @@
 
 import uuid
 from datetime import datetime, timezone
+from enum import Enum
 
 from sqlalchemy import Boolean, DateTime, String, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
+
+
+class UserRole(str, Enum):
+    """User role enum."""
+
+    TEACHER = "teacher"
+    SUPERADMIN = "superadmin"
 
 
 class User(Base):
@@ -23,6 +31,9 @@ class User(Base):
     )
     active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    role: Mapped[str] = mapped_column(
+        String(20), default=UserRole.TEACHER.value, nullable=False
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
@@ -37,6 +48,16 @@ class User(Base):
     # Relationships
     classes: Mapped[list["Class"]] = relationship(
         "Class", back_populates="teacher", cascade="all, delete-orphan"
+    )
+    used_codes: Mapped[list["RegistrationCode"]] = relationship(
+        "RegistrationCode",
+        foreign_keys="RegistrationCode.used_by_user_id",
+        back_populates="used_by",
+    )
+    created_codes: Mapped[list["RegistrationCode"]] = relationship(
+        "RegistrationCode",
+        foreign_keys="RegistrationCode.created_by_user_id",
+        back_populates="created_by",
     )
 
     def __repr__(self) -> str:

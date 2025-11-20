@@ -113,6 +113,7 @@ class TestCreateUser:
         user_data = UserCreate(
             email="newuser@example.com",
             password="password123",
+            registration_code="dummy-code-here",
         )
 
         result = await auth_service.create_user(db, user_data)
@@ -131,6 +132,7 @@ class TestCreateUser:
         user_data = UserCreate(
             email=test_user.email,
             password="password123",
+            registration_code="dummy-code-here",
         )
 
         with pytest.raises(DuplicateError) as exc:
