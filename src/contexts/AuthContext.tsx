@@ -7,7 +7,7 @@ interface AuthContextType {
   loading: boolean;
   checkAuth: () => Promise<void>;
   login: (email: string, password: string) => Promise<void>;
-  signup: (email: string, password: string) => Promise<void>;
+  signup: (email: string, password: string, registrationCode: string) => Promise<void>;
   logout: () => Promise<void>;
   updateEmail: (newEmail: string, currentPassword: string) => Promise<void>;
   updatePassword: (currentPassword: string, newPassword: string) => Promise<void>;
@@ -48,8 +48,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setInitialized(true);
   };
 
-  const signup = async (email: string, password: string): Promise<void> => {
-    const response = await authApi.signup({ email, password });
+  const signup = async (email: string, password: string, registrationCode: string): Promise<void> => {
+    const response = await authApi.signup({ email, password, registration_code: registrationCode });
     setUser(response.user);
     setInitialized(true);
   };

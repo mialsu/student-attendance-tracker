@@ -7,8 +7,13 @@ const Index = () => {
   const { user } = useAuth();
 
   useEffect(() => {
-    if (user && user.isTeacher) {
-      navigate('/dashboard');
+    if (user) {
+      // Role-based redirect
+      if (user.role === 'superadmin') {
+        navigate('/admin/dashboard');
+      } else {
+        navigate('/dashboard');
+      }
     } else {
       navigate('/auth');
     }

@@ -14,6 +14,7 @@ const Auth = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [registrationCode, setRegistrationCode] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [emailError, setEmailError] = useState('');
@@ -64,7 +65,7 @@ const Auth = () => {
       if (isLogin) {
         await login(email, password);
       } else {
-        await signup(email, password);
+        await signup(email, password, registrationCode);
       }
 
       toast({
@@ -86,6 +87,7 @@ const Auth = () => {
     setEmail('');
     setPassword('');
     setConfirmPassword('');
+    setRegistrationCode('');
     setEmailError('');
     setPasswordError('');
     setShowPassword(false);
@@ -140,30 +142,43 @@ const Auth = () => {
               </div>
             </div>
             {!isLogin && (
-              <div className="space-y-2">
-                <Label htmlFor="confirmPassword">Vahvista salasana</Label>
-                <div className="relative">
-                  <Input
-                    id="confirmPassword"
-                    type={showConfirmPassword ? "text" : "password"}
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    required
-                    className="pr-10"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                    aria-label={showConfirmPassword ? "Piilota salasana" : "Näytä salasana"}
-                  >
-                    {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </button>
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="confirmPassword">Vahvista salasana</Label>
+                  <div className="relative">
+                    <Input
+                      id="confirmPassword"
+                      type={showConfirmPassword ? "text" : "password"}
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      required
+                      className="pr-10"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      aria-label={showConfirmPassword ? "Piilota salasana" : "Näytä salasana"}
+                    >
+                      {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                  {passwordError && (
+                    <p className="text-sm text-destructive">{passwordError}</p>
+                  )}
                 </div>
-                {passwordError && (
-                  <p className="text-sm text-destructive">{passwordError}</p>
-                )}
-              </div>
+                <div className="space-y-2">
+                  <Label htmlFor="registrationCode">Rekisteröintikoodi</Label>
+                  <Input
+                    id="registrationCode"
+                    type="text"
+                    value={registrationCode}
+                    onChange={(e) => setRegistrationCode(e.target.value)}
+                    placeholder="Syötä 16-merkkinen koodi"
+                    required
+                  />
+                </div>
+              </>
             )}
             <Button type="submit" className="w-full">
               {isLogin ? 'Kirjaudu' : 'Rekisteröidy'}

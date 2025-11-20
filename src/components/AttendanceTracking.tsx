@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -18,6 +18,22 @@ const AttendanceTracking = ({ classId }: AttendanceTrackingProps) => {
   const [lastName, setLastName] = useState('');
   const { toast } = useToast();
   const createAttendanceMutation = useCreateAttendance();
+  const lastNameInputRef = useRef<HTMLInputElement>(null);
+  const submitButtonRef = useRef<HTMLButtonElement>(null);
+
+  const handleFirstNameKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      lastNameInputRef.current?.focus();
+    }
+  };
+
+  const handleLastNameKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      submitButtonRef.current?.click();
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -77,6 +93,7 @@ const AttendanceTracking = ({ classId }: AttendanceTrackingProps) => {
                 id="firstName"
                 value={firstName}
                 onChange={(e) => setFirstName(e.target.value)}
+                onKeyDown={handleFirstNameKeyDown}
                 placeholder="Etunimi"
                 autoComplete="off"
               />
@@ -85,15 +102,22 @@ const AttendanceTracking = ({ classId }: AttendanceTrackingProps) => {
               <Label htmlFor="lastName">Sukunimi</Label>
               <Input
                 id="lastName"
+                ref={lastNameInputRef}
                 value={lastName}
                 onChange={(e) => setLastName(e.target.value)}
+                onKeyDown={handleLastNameKeyDown}
                 placeholder="Sukunimi"
                 autoComplete="off"
               />
             </div>
           </div>
 
-          <Button type="submit" className="w-full md:w-auto" disabled={createAttendanceMutation.isPending}>
+          <Button
+            ref={submitButtonRef}
+            type="submit"
+            className="w-full md:w-auto"
+            disabled={createAttendanceMutation.isPending}
+          >
             <UserPlus className="w-4 h-4 mr-2" />
             {createAttendanceMutation.isPending ? 'Kirjataan...' : 'Kirjaa läsnäolo'}
           </Button>
