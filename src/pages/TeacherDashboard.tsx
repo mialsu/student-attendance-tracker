@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -8,13 +7,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useClasses, useCreateClass } from '@/hooks/useClasses';
-import { LogOut, Plus, BookOpen, Settings, Loader2 } from 'lucide-react';
+import { Plus, BookOpen, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { fi } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
+import { TeacherLayout } from '@/components/layouts/TeacherLayout';
 
 const TeacherDashboard = () => {
-  const { user, logout } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
   const { data: classes, isLoading: classesLoading } = useClasses();
@@ -22,11 +21,6 @@ const TeacherDashboard = () => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [className, setClassName] = useState('');
   const [classDescription, setClassDescription] = useState('');
-
-  const handleLogout = async () => {
-    await logout();
-    navigate('/auth');
-  };
 
   const handleCreateClass = async () => {
     if (!className.trim()) {
@@ -64,78 +58,56 @@ const TeacherDashboard = () => {
     navigate(`/class/${classId}`);
   };
 
-  const handleSettings = () => {
-    navigate('/settings');
-  };
-
   return (
-    <div className="min-h-screen bg-background p-4 md:p-8">
-      <div className="max-w-6xl mx-auto">
-        <div className="flex justify-between items-center mb-6">
-          <div>
-            <h1 className="text-3xl font-bold">Opettajan näkymä</h1>
-            <p className="text-muted-foreground mt-1">{user?.email}</p>
-          </div>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={handleSettings}>
-              <Settings className="w-4 h-4 mr-2" />
-              Asetukset
+    <TeacherLayout breadcrumbs={[{ label: 'Dashboard' }]}>
+      <div className="flex justify-between items-center mb-8">
+        <h2 className="text-3xl font-bold text-heading">Kurssit</h2>
+        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <DialogTrigger asChild>
+            <Button>
+              <Plus className="w-4 h-4 mr-2" />
+              Lisää uusi kurssi
             </Button>
-            <Button variant="outline" onClick={handleLogout}>
-              <LogOut className="w-4 h-4 mr-2" />
-              Kirjaudu ulos
-            </Button>
-          </div>
-        </div>
-
-        <div className="mb-6">
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="w-4 h-4 mr-2" />
-                Lisää uusi kurssi
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Luo uusi kurssi</DialogTitle>
-                <DialogDescription>
-                  Lisää kurssin tiedot ja aloita läsnäolojen seuranta
-                </DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4 py-4">
-                <div className="space-y-2">
-                  <Label htmlFor="className">Kurssin nimi</Label>
-                  <Input
-                    id="className"
-                    value={className}
-                    onChange={(e) => setClassName(e.target.value)}
-                    placeholder="Ohjelmointi 1"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="classDescription">Kuvaus (valinnainen)</Label>
-                  <Textarea
-                    id="classDescription"
-                    value={classDescription}
-                    onChange={(e) => setClassDescription(e.target.value)}
-                    placeholder="Kurssin lyhyt kuvaus"
-                    rows={3}
-                  />
-                </div>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Luo uusi kurssi</DialogTitle>
+              <DialogDescription>
+                Lisää kurssin tiedot ja aloita läsnäolojen seuranta
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-6 py-4">
+              <div className="space-y-3">
+                <Label htmlFor="className">Kurssin nimi</Label>
+                <Input
+                  id="className"
+                  value={className}
+                  onChange={(e) => setClassName(e.target.value)}
+                  placeholder="Ohjelmointi 1"
+                />
               </div>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
-                  Peruuta
-                </Button>
-                <Button onClick={handleCreateClass}>Luo kurssi</Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        </div>
+              <div className="space-y-3">
+                <Label htmlFor="classDescription">Kuvaus (valinnainen)</Label>
+                <Textarea
+                  id="classDescription"
+                  value={classDescription}
+                  onChange={(e) => setClassDescription(e.target.value)}
+                  placeholder="Kurssin lyhyt kuvaus"
+                  rows={3}
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
+                Peruuta
+              </Button>
+              <Button onClick={handleCreateClass}>Luo kurssi</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
 
-        <div>
-          <h2 className="text-2xl font-semibold mb-4">Kurssit</h2>
+      <div>
           {classesLoading ? (
             <Card>
               <CardContent className="py-12">
@@ -154,11 +126,11 @@ const TeacherDashboard = () => {
               </CardContent>
             </Card>
           ) : (
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
               {classes.map((cls) => (
                 <Card
                   key={cls.id}
-                  className="cursor-pointer hover:shadow-lg transition-shadow"
+                  className="cursor-pointer hover:shadow-sm hover:-translate-y-0.5 transition-all duration-200"
                   onClick={() => handleOpenClass(cls.id)}
                 >
                   <CardHeader>
@@ -179,11 +151,10 @@ const TeacherDashboard = () => {
                   </CardContent>
                 </Card>
               ))}
-            </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
-    </div>
+    </TeacherLayout>
   );
 };
 

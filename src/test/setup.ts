@@ -48,3 +48,13 @@ Object.defineProperty(window, 'matchMedia', {
     dispatchEvent: () => {},
   }),
 });
+
+// Mock ResizeObserver (needed for cmdk/Command component)
+global.ResizeObserver = class ResizeObserver {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+};
+
+// Mock scrollIntoView (needed for cmdk/Command component)
+Element.prototype.scrollIntoView = function() {};

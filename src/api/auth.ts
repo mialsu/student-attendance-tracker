@@ -1,14 +1,14 @@
 import { apiClient, setAccessToken, clearTokens } from './client';
-import type { User, AuthTokens, LoginRequest, SignupRequest } from './types';
+import type { User, AuthResponse, LoginRequest, SignupRequest } from './types';
 
 export const authApi = {
-  async signup(data: SignupRequest): Promise<{ user: User } & AuthTokens> {
+  async signup(data: SignupRequest): Promise<AuthResponse> {
     const response = await apiClient.post('/api/auth/signup', data);
     setAccessToken(response.data.access_token);
     return response.data;
   },
 
-  async login(data: LoginRequest): Promise<{ user: User } & AuthTokens> {
+  async login(data: LoginRequest): Promise<AuthResponse> {
     const response = await apiClient.post('/api/auth/login', data);
     setAccessToken(response.data.access_token);
     return response.data;

@@ -8,89 +8,91 @@ All colors MUST be HSL.
 
 @layer base {
   :root {
-    --background: 210 20% 98%;
-    --foreground: 215 25% 15%;
-
+    /* Backgrounds */
+    --background: 0 0% 100%;
     --card: 0 0% 100%;
-    --card-foreground: 215 25% 15%;
-
+    --muted: 0 0% 96%;
     --popover: 0 0% 100%;
-    --popover-foreground: 215 25% 15%;
 
-    --primary: 195 85% 45%;
+    /* Text */
+    --foreground: 0 0% 9%;
+    --muted-foreground: 0 0% 45%;
+    --card-foreground: 0 0% 9%;
+    --popover-foreground: 0 0% 9%;
+
+    /* Borders */
+    --border: 0 0% 90%;
+    --input: 0 0% 90%;
+
+    /* Accent (refined cyan) */
+    --primary: 195 100% 45%;
     --primary-foreground: 0 0% 100%;
-
-    --secondary: 195 25% 92%;
-    --secondary-foreground: 195 85% 25%;
-
-    --muted: 195 20% 95%;
-    --muted-foreground: 215 15% 50%;
-
-    --accent: 195 70% 50%;
+    --accent: 195 90% 50%;
     --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 84.2% 60.2%;
+    /* Secondary (neutral alternative) */
+    --secondary: 0 0% 96%;
+    --secondary-foreground: 0 0% 9%;
+
+    /* Semantic */
+    --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
+    --ring: 195 100% 45%;
 
-    --border: 195 20% 88%;
-    --input: 195 20% 88%;
-    --ring: 195 85% 45%;
-
-    --radius: 0.75rem;
-
+    /* Sidebar */
     --sidebar-background: 0 0% 98%;
-
-    --sidebar-foreground: 240 5.3% 26.1%;
-
-    --sidebar-primary: 240 5.9% 10%;
-
+    --sidebar-foreground: 0 0% 9%;
+    --sidebar-primary: 0 0% 9%;
     --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 0 0% 96%;
+    --sidebar-accent-foreground: 0 0% 9%;
+    --sidebar-border: 0 0% 90%;
+    --sidebar-ring: 195 100% 45%;
 
-    --sidebar-accent: 240 4.8% 95.9%;
-
-    --sidebar-accent-foreground: 240 5.9% 10%;
-
-    --sidebar-border: 220 13% 91%;
-
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --radius: 0.5rem;
   }
 
   .dark {
-    --background: 215 30% 8%;
-    --foreground: 210 20% 95%;
+    /* Backgrounds */
+    --background: 0 0% 9%;
+    --card: 0 0% 12%;
+    --muted: 0 0% 14%;
+    --popover: 0 0% 12%;
 
-    --card: 215 25% 12%;
-    --card-foreground: 210 20% 95%;
+    /* Text */
+    --foreground: 0 0% 98%;
+    --muted-foreground: 0 0% 60%;
+    --card-foreground: 0 0% 98%;
+    --popover-foreground: 0 0% 98%;
 
-    --popover: 215 25% 12%;
-    --popover-foreground: 210 20% 95%;
+    /* Borders */
+    --border: 0 0% 20%;
+    --input: 0 0% 20%;
 
-    --primary: 195 85% 50%;
+    /* Accent */
+    --primary: 195 100% 50%;
     --primary-foreground: 0 0% 100%;
-
-    --secondary: 215 25% 18%;
-    --secondary-foreground: 210 20% 95%;
-
-    --muted: 215 25% 18%;
-    --muted-foreground: 215 15% 60%;
-
-    --accent: 195 70% 45%;
+    --accent: 195 90% 45%;
     --accent-foreground: 0 0% 100%;
 
+    /* Secondary */
+    --secondary: 0 0% 14%;
+    --secondary-foreground: 0 0% 98%;
+
+    /* Semantic */
     --destructive: 0 70% 50%;
     --destructive-foreground: 0 0% 100%;
+    --ring: 195 100% 50%;
 
-    --border: 215 25% 18%;
-    --input: 215 25% 18%;
-    --ring: 195 85% 50%;
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
+    /* Sidebar */
+    --sidebar-background: 0 0% 9%;
+    --sidebar-foreground: 0 0% 98%;
+    --sidebar-primary: 195 100% 50%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-accent: 0 0% 14%;
+    --sidebar-accent-foreground: 0 0% 98%;
+    --sidebar-border: 0 0% 20%;
+    --sidebar-ring: 195 100% 50%;
   }
 }
 
@@ -101,5 +103,37 @@ All colors MUST be HSL.
 
   body {
     @apply bg-background text-foreground;
+  }
+}
+
+@layer utilities {
+  /* Typography utilities */
+  .text-heading {
+    @apply font-semibold tracking-tight;
+  }
+
+  .text-body {
+    @apply text-base leading-relaxed;
+  }
+
+  /* Smooth page transitions */
+  .animate-fade-in {
+    animation: fadeIn 0.3s ease-out;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* Smooth transitions */
+  .transition-smooth {
+    transition: all 0.2s ease-in-out;
   }
 }

@@ -1,17 +1,16 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowLeft, LogOut, Mail, Lock } from 'lucide-react';
+import { Mail, Lock } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { TeacherLayout } from '@/components/layouts/TeacherLayout';
 
 const Settings = () => {
-  const { user, logout, updateEmail, updatePassword } = useAuth();
-  const navigate = useNavigate();
+  const { user, updateEmail, updatePassword } = useAuth();
   const { toast } = useToast();
 
   const [newEmail, setNewEmail] = useState(user?.email || '');
@@ -25,15 +24,6 @@ const Settings = () => {
       setNewEmail(user.email);
     }
   }, [user]);
-
-  const handleLogout = async () => {
-    await logout();
-    navigate('/auth');
-  };
-
-  const handleBack = () => {
-    navigate('/dashboard');
-  };
 
   const handleEmailChange = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -122,25 +112,17 @@ const Settings = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background p-4 md:p-8">
+    <TeacherLayout breadcrumbs={[
+      { label: 'Dashboard', href: '/dashboard' },
+      { label: 'Asetukset' }
+    ]}>
       <div className="max-w-3xl mx-auto">
-        <div className="flex justify-between items-center mb-8">
-          <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" onClick={handleBack}>
-              <ArrowLeft className="w-5 h-5" />
-            </Button>
-            <div>
-              <h1 className="text-3xl font-bold">Asetukset</h1>
-              <p className="text-muted-foreground mt-1">Hallinnoi tiliäsi</p>
-            </div>
-          </div>
-          <Button variant="outline" onClick={handleLogout}>
-            <LogOut className="w-4 h-4 mr-2" />
-            Kirjaudu ulos
-          </Button>
+        <div className="mb-10">
+          <h1 className="text-4xl font-bold text-heading mb-2">Asetukset</h1>
+          <p className="text-muted-foreground">Hallinnoi tiliäsi</p>
         </div>
 
-        <Tabs defaultValue="email" className="space-y-6">
+        <Tabs defaultValue="email" className="space-y-8">
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="email" className="gap-2">
               <Mail className="w-4 h-4" />
@@ -160,9 +142,9 @@ const Settings = () => {
               </p>
             </div>
 
-            <form onSubmit={handleEmailChange} className="space-y-6">
-              <div className="space-y-4">
-                <div className="space-y-2">
+            <form onSubmit={handleEmailChange} className="space-y-8">
+              <div className="space-y-6">
+                <div className="space-y-3">
                   <Label htmlFor="currentEmail" className="text-sm font-medium">
                     Nykyinen sähköposti
                   </Label>
@@ -174,7 +156,7 @@ const Settings = () => {
                     className="bg-muted"
                   />
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-3">
                   <Label htmlFor="newEmail" className="text-sm font-medium">
                     Uusi sähköposti
                   </Label>
@@ -190,7 +172,7 @@ const Settings = () => {
 
               <Separator />
 
-              <div className="space-y-2">
+              <div className="space-y-3">
                 <Label htmlFor="emailPassword" className="text-sm font-medium">
                   Vahvista salasanallasi
                 </Label>
@@ -220,9 +202,9 @@ const Settings = () => {
               </p>
             </div>
 
-            <form onSubmit={handlePasswordChange} className="space-y-6">
-              <div className="space-y-4">
-                <div className="space-y-2">
+            <form onSubmit={handlePasswordChange} className="space-y-8">
+              <div className="space-y-6">
+                <div className="space-y-3">
                   <Label htmlFor="currentPasswordChange" className="text-sm font-medium">
                     Nykyinen salasana
                   </Label>
@@ -237,7 +219,7 @@ const Settings = () => {
 
                 <Separator />
 
-                <div className="space-y-2">
+                <div className="space-y-3">
                   <Label htmlFor="newPassword" className="text-sm font-medium">
                     Uusi salasana
                   </Label>
@@ -249,7 +231,7 @@ const Settings = () => {
                     placeholder="Syötä uusi salasana"
                   />
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-3">
                   <Label htmlFor="confirmPassword" className="text-sm font-medium">
                     Vahvista uusi salasana
                   </Label>
@@ -273,7 +255,7 @@ const Settings = () => {
           </TabsContent>
         </Tabs>
       </div>
-    </div>
+    </TeacherLayout>
   );
 };
 

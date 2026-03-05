@@ -1,19 +1,21 @@
-import { useEffect } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useClass } from '@/hooks/useClasses';
-import { ArrowLeft, LogOut, Settings, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import AttendanceTracking from '@/components/AttendanceTracking';
 import StudentLogs from '@/components/StudentLogs';
+import { TeacherLayout } from '@/components/layouts/TeacherLayout';
+import type { BreadcrumbItem } from '@/types/breadcrumb';
 
 const ClassView = () => {
   const { classId } = useParams<{ classId: string }>();
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const { data: classData, isLoading: classLoading, error } = useClass(classId || '');
+  const [activeTab, setActiveTab] = useState('attendance');
 
   useEffect(() => {
     // If class failed to load or doesn't belong to user, redirect
@@ -28,18 +30,23 @@ const ClassView = () => {
     }
   }, [classData, classLoading, error, user, navigate]);
 
-  const handleLogout = async () => {
-    await logout();
-    navigate('/auth');
-  };
+  const breadcrumbs = useMemo(() => {
+    const crumbs: BreadcrumbItem[] = [
+      { label: 'Dashboard', href: '/dashboard' },
+    ];
 
-  const handleBack = () => {
-    navigate('/dashboard');
-  };
+    if (classData) {
+      crumbs.push({ label: classData.name, href: `/class/${classId}` });
 
-  const handleSettings = () => {
-    navigate('/settings');
-  };
+      if (activeTab === 'attendance') {
+        crumbs.push({ label: 'Läsnäolon kirjaus' });
+      } else if (activeTab === 'logs') {
+        crumbs.push({ label: 'Läsnäolot' });
+      }
+    }
+
+    return crumbs;
+  }, [classData, classId, activeTab]);
 
   if (classLoading) {
     return (
@@ -63,31 +70,19 @@ const ClassView = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background p-4 md:p-8">
-      <div className="max-w-6xl mx-auto">
-        <div className="flex justify-between items-center mb-6">
-          <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" onClick={handleBack}>
-              <ArrowLeft className="w-5 h-5" />
-            </Button>
-            <div>
-              <h1 className="text-3xl font-bold">{classData.name}</h1>
-              <p className="text-muted-foreground mt-1">{classData.description || 'Ei kuvausta'}</p>
-            </div>
-          </div>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={handleSettings}>
-              <Settings className="w-4 h-4 mr-2" />
-              Asetukset
-            </Button>
-            <Button variant="outline" onClick={handleLogout}>
-              <LogOut className="w-4 h-4 mr-2" />
-              Kirjaudu ulos
-            </Button>
-          </div>
-        </div>
+    <TeacherLayout breadcrumbs={breadcrumbs}>
+      <div className="mb-10">
+        <h1 className="text-4xl font-bold text-heading mb-3">{classData.name}</h1>
+        {classData.description && (
+          <p className="text-lg text-muted-foreground">{classData.description}</p>
+        )}
+      </div>
 
-        <Tabs defaultValue="attendance" className="space-y-6">
+      <Tabs
+        defaultValue="attendance"
+        onValueChange={(value) => setActiveTab(value)}
+        className="space-y-8"
+      >
           <TabsList className="grid w-full max-w-md grid-cols-2">
             <TabsTrigger value="attendance">Läsnäolon kirjaus</TabsTrigger>
             <TabsTrigger value="logs">Läsnäolot</TabsTrigger>
@@ -101,8 +96,7 @@ const ClassView = () => {
             <StudentLogs classId={classData.id} />
           </TabsContent>
         </Tabs>
-      </div>
-    </div>
+    </TeacherLayout>
   );
 };
 

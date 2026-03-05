@@ -1,10 +1,14 @@
 import { apiClient } from './client';
-import type { AttendanceRecord, AttendanceSummary, PaginatedAttendanceResponse } from './types';
+import type { AttendanceRecord, AttendanceSummary, PaginatedAttendanceResponse, PaginatedAttendanceSummaryResponse } from './types';
 
 export interface CreateAttendanceRequest {
-  student_first_name: string;
-  student_last_name: string;
-  timestamp?: string; // ISO 8601 format, optional - defaults to current time on server
+  student_name: string;      // NEW: Single field
+  quantity?: number;         // NEW: Bulk logging (1-50, default 1)
+  timestamp?: string;        // ISO 8601 format, optional - defaults to current time on server
+
+  // DEPRECATED: Keep for backward compatibility during migration
+  student_first_name?: string;
+  student_last_name?: string;
 }
 
 export interface ListAttendanceParams {
@@ -14,6 +18,13 @@ export interface ListAttendanceParams {
   date_from?: string; // ISO 8601 format
   date_to?: string; // ISO 8601 format
   legacy?: boolean; // Include students with first attendance > 5 years ago
+}
+
+export interface GetSummaryParams {
+  skip?: number;
+  limit?: number;
+  search?: string;
+  sort_by?: 'attendance_desc' | 'name_asc';
 }
 
 export const attendanceApi = {
@@ -33,8 +44,13 @@ export const attendanceApi = {
     await apiClient.delete(`/api/attendance/${recordId}`);
   },
 
-  async getSummary(classId: string): Promise<AttendanceSummary[]> {
-    const response = await apiClient.get(`/api/classes/${classId}/attendance/summary`);
+  async getSummary(
+    classId: string,
+    params?: GetSummaryParams
+  ): Promise<PaginatedAttendanceSummaryResponse> {
+    const response = await apiClient.get(`/api/classes/${classId}/attendance/summary`, {
+      params,
+    });
     return response.data;
   },
 };
