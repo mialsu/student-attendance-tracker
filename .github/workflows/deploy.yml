@@ -1,0 +1,175 @@
+name: Test and Deploy Backend
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:  # Allow manual trigger from GitHub UI
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_pass
+          POSTGRES_DB: test_db
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run tests with coverage
+        env:
+          DATABASE_URL: postgresql+asyncpg://test_user:test_pass@localhost:5432/test_db
+          SECRET_KEY: test-secret-key-for-ci
+          ALGORITHM: HS256
+          ACCESS_TOKEN_EXPIRE_MINUTES: 15
+          REFRESH_TOKEN_EXPIRE_DAYS: 30
+          COOKIE_SECURE: false
+          COOKIE_SAMESITE: lax
+          COOKIE_DOMAIN: ""
+          CORS_ORIGINS: http://localhost:5173
+          ENVIRONMENT: test
+          DEBUG: false
+        run: |
+          pytest -v --cov=app --cov-report=term-missing --cov-report=html
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: htmlcov/
+          retention-days: 7
+
+  deploy:
+    name: Deploy to Production
+    needs: test
+    runs-on: ubuntu-latest
+    # Only deploy on push to main (not PRs)
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Deploy to Hetzner via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script_stop: true  # Stop on first error
+          script: |
+            set -e  # Exit on error
+
+            echo "🚀 Starting deployment..."
+
+            # Navigate to project directory
+            cd ${{ secrets.PROJECT_PATH }}
+
+            # Pull latest code from backend repo
+            echo "📥 Pulling backend code..."
+            cd student-attendance-tracker-api
+            git fetch origin
+            git reset --hard origin/main
+
+            # Pull deployment configs
+            echo "📥 Pulling deployment configs..."
+            cd ../deployment
+            git fetch origin
+            git reset --hard origin/master
+
+            # Return to project root
+            cd ${{ secrets.PROJECT_PATH }}
+
+            # Stop containers
+            echo "🛑 Stopping containers..."
+            docker compose -f deployment/production/docker-compose.yml down
+
+            # Rebuild backend image (no cache to ensure latest code)
+            echo "🔨 Rebuilding backend image..."
+            docker compose -f deployment/production/docker-compose.yml build --no-cache backend
+
+            # Start containers (migrations run automatically)
+            echo "🚀 Starting containers..."
+            docker compose -f deployment/production/docker-compose.yml up -d
+
+            # Wait for backend to be ready
+            echo "⏳ Waiting for backend to be ready..."
+            sleep 15
+
+            # Health check
+            echo "🏥 Running health check..."
+            if curl -f -s https://attendance-api.kotoio.fi/health > /dev/null; then
+              echo "✅ Backend is healthy!"
+            else
+              echo "❌ Health check failed!"
+              docker compose -f deployment/production/docker-compose.yml logs --tail=50 backend
+              exit 1
+            fi
+
+            # Show running containers
+            echo "📊 Container status:"
+            docker compose -f deployment/production/docker-compose.yml ps
+
+            echo "✅ Deployment completed successfully!"
+
+      - name: Deployment Status
+        if: always()
+        run: |
+          if [ "${{ job.status }}" == "success" ]; then
+            echo "🎉 Deployment successful!"
+            echo "🌐 Backend: https://attendance-api.kotoio.fi"
+            echo "📚 API Docs: https://attendance-api.kotoio.fi/docs"
+          else
+            echo "❌ Deployment failed!"
+            echo "Check the logs above for details."
+            exit 1
+          fi
+
+  notify:
+    name: Deployment Notification
+    needs: [test, deploy]
+    runs-on: ubuntu-latest
+    if: always()
+
+    steps:
+      - name: Summary
+        run: |
+          echo "## Deployment Summary 🚀" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Tests:** ${{ needs.test.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Deploy:** ${{ needs.deploy.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ needs.deploy.result }}" == "success" ]; then
+            echo "✅ **Deployment successful!**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "- Backend API: https://attendance-api.kotoio.fi" >> $GITHUB_STEP_SUMMARY
+            echo "- API Docs: https://attendance-api.kotoio.fi/docs" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **Deployment failed or skipped**" >> $GITHUB_STEP_SUMMARY
+          fi
