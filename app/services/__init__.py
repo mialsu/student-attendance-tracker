@@ -5,6 +5,7 @@ from app.services import (
     auth_service,
     class_service,
     registration_code_service,
+    student_service,
 )
 
 __all__ = [
@@ -12,4 +13,5 @@ __all__ = [
     "class_service",
     "attendance_service",
     "registration_code_service",
+    "student_service",
 ]

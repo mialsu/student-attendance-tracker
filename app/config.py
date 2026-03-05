@@ -13,7 +13,12 @@ class Settings(BaseSettings):
     secret_key: str
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 15
-    refresh_token_expire_days: int = 7
+    refresh_token_expire_days: int = 30
+
+    # Cookie configuration
+    cookie_secure: bool = True  # False for local dev
+    cookie_samesite: str = "lax"
+    cookie_domain: str | None = None  # ".kotoio.fi" for production
 
     # Documentation Authentication
     docs_username: str = "admin"

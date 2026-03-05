@@ -1,33 +1,36 @@
 """Authentication API endpoints."""
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.core.exceptions import AuthenticationError
 from app.core.security import decode_token
 from app.database import get_db
 from app.dependencies import CurrentUser
-from app.schemas.auth import Token, TokenRefresh
+from app.schemas.auth import TokenRefreshResponse, TokenResponse
 from app.schemas.user import EmailUpdate, PasswordUpdate, UserCreate, UserLogin, UserResponse
-from app.services import auth_service, registration_code_service
+from app.services import auth_service, refresh_token_service, registration_code_service
 
 router = APIRouter()
 
 
-@router.post("/signup", response_model=Token, status_code=status.HTTP_201_CREATED)
+@router.post("/signup", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
 async def signup(
+    response: Response,
     user_data: UserCreate,
     db: AsyncSession = Depends(get_db),
-) -> Token:
+) -> TokenResponse:
     """
     Create a new user account.
 
     Args:
+        response: FastAPI response object
         user_data: User registration data (email, password, registration_code)
         db: Database session
 
     Returns:
-        Token: Access and refresh tokens with user data
+        TokenResponse: Access token and user data (refresh token in cookie)
 
     Raises:
         400: If registration code is invalid, used, or revoked
@@ -46,111 +49,178 @@ async def signup(
     await registration_code_service.mark_code_as_used(db, reg_code, user)
 
     # Generate tokens
-    tokens = await auth_service.create_tokens_for_user(user)
+    tokens = await auth_service.create_tokens_for_user(user, db)
 
-    return tokens
+    # Set refresh token as HTTP-only cookie
+    response.set_cookie(
+        key="refresh_token",
+        value=tokens.refresh_token,
+        max_age=settings.refresh_token_expire_days * 24 * 60 * 60,
+        httponly=True,
+        secure=settings.cookie_secure,
+        samesite=settings.cookie_samesite,
+        domain=settings.cookie_domain,
+    )
+
+    # Return only access token in JSON
+    return TokenResponse(
+        access_token=tokens.access_token,
+        token_type=tokens.token_type,
+        user=tokens.user,
+    )
 
 
-@router.post("/login", response_model=Token)
+@router.post("/login", response_model=TokenResponse)
 async def login(
+    response: Response,
     credentials: UserLogin,
     db: AsyncSession = Depends(get_db),
-) -> Token:
+) -> TokenResponse:
     """
     Login with email and password.
 
     Args:
+        response: FastAPI response object
         credentials: Login credentials (email, password)
         db: Database session
 
     Returns:
-        Token: Access and refresh tokens with user data
+        TokenResponse: Access token and user data (refresh token in cookie)
 
     Raises:
         401: If credentials are invalid or account is inactive
     """
     # Authenticate user
-    user = await auth_service.authenticate_user(
-        db, credentials.email, credentials.password
-    )
-    
+    user = await auth_service.authenticate_user(db, credentials.email, credentials.password)
+
     # Generate tokens
-    tokens = await auth_service.create_tokens_for_user(user)
-    
-    return tokens
+    tokens = await auth_service.create_tokens_for_user(user, db)
+
+    # Set refresh token as HTTP-only cookie
+    response.set_cookie(
+        key="refresh_token",
+        value=tokens.refresh_token,
+        max_age=settings.refresh_token_expire_days * 24 * 60 * 60,
+        httponly=True,
+        secure=settings.cookie_secure,
+        samesite=settings.cookie_samesite,
+        domain=settings.cookie_domain,
+    )
+
+    # Return only access token in JSON
+    return TokenResponse(
+        access_token=tokens.access_token,
+        token_type=tokens.token_type,
+        user=tokens.user,
+    )
 
 
-@router.post("/refresh", response_model=Token)
+@router.post("/refresh", response_model=TokenRefreshResponse)
 async def refresh_token(
-    token_data: TokenRefresh,
+    request: Request,
+    response: Response,
     db: AsyncSession = Depends(get_db),
-) -> Token:
+) -> TokenRefreshResponse:
     """
-    Refresh access token using refresh token.
+    Refresh access token using refresh token from cookie.
 
     Args:
-        token_data: Refresh token
+        request: FastAPI request object (to read cookies)
+        response: FastAPI response object (to set new cookie)
         db: Database session
 
     Returns:
-        Token: New access and refresh tokens
+        TokenRefreshResponse: New access token (refresh token in cookie)
 
     Raises:
-        401: If refresh token is invalid or expired
+        401: If refresh token is invalid, expired, or revoked
     """
-    # Decode refresh token
-    payload = decode_token(token_data.refresh_token)
+    # Read refresh token from cookie (NOT body)
+    refresh_token = request.cookies.get("refresh_token")
+    if not refresh_token:
+        raise AuthenticationError("Refresh token not found")
+
+    # Validate refresh token exists in database (not revoked)
+    stored_token = await refresh_token_service.validate_refresh_token(db, refresh_token)
+    if not stored_token:
+        raise AuthenticationError("Invalid or revoked refresh token")
+
+    # Decode and validate JWT token
+    payload = decode_token(refresh_token)
     if not payload:
         raise AuthenticationError("Invalid or expired refresh token")
-    
-    # Verify token type
+
     if payload.get("type") != "refresh":
         raise AuthenticationError("Invalid token type")
-    
-    # Get user email
+
+    # Get user
     email: str | None = payload.get("sub")
     if not email:
         raise AuthenticationError("Token missing user information")
-    
-    # Get user from database
+
     user = await auth_service.get_user_by_email(db, email)
-    if not user:
-        raise AuthenticationError("User not found")
-    
-    if not user.active:
-        raise AuthenticationError("Account is inactive")
-    
-    # Generate new tokens
-    tokens = await auth_service.create_tokens_for_user(user)
-    
-    return tokens
+    if not user or not user.active:
+        raise AuthenticationError("User not found or inactive")
+
+    # Revoke old refresh token (TOKEN ROTATION)
+    await refresh_token_service.revoke_token(db, refresh_token)
+
+    # Generate new tokens (this will store new refresh token)
+    tokens = await auth_service.create_tokens_for_user(user, db)
+
+    # Set new refresh token cookie (TOKEN ROTATION)
+    response.set_cookie(
+        key="refresh_token",
+        value=tokens.refresh_token,
+        max_age=settings.refresh_token_expire_days * 24 * 60 * 60,
+        httponly=True,
+        secure=settings.cookie_secure,
+        samesite=settings.cookie_samesite,
+        domain=settings.cookie_domain,
+    )
+
+    # Return only access token
+    return TokenRefreshResponse(
+        access_token=tokens.access_token,
+        token_type=tokens.token_type,
+    )
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
 async def logout(
+    request: Request,
+    response: Response,
     current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
 ) -> None:
     """
-    Logout current user.
-
-    Note: With JWT tokens, logout is handled client-side by removing tokens.
-    This endpoint exists for consistency and future token blacklisting.
+    Logout current user and revoke refresh token.
 
     Args:
+        request: FastAPI request object (to read cookies)
+        response: FastAPI response object (to clear cookie)
         current_user: Current authenticated user
+        db: Database session
 
     Returns:
         None: No content
     """
-    # In a stateless JWT implementation, logout is handled client-side
-    # by removing tokens from storage.
-    # 
-    # For added security, you could:
-    # 1. Implement token blacklisting with Redis
-    # 2. Track active sessions in database
-    # 3. Add token revocation list
-    #
-    # For now, this is a placeholder that validates the token is valid.
+    # Get refresh token from cookie
+    refresh_token = request.cookies.get("refresh_token")
+
+    # Revoke the refresh token if present
+    if refresh_token:
+        await refresh_token_service.revoke_token(db, refresh_token)
+
+    # Clear refresh token cookie
+    response.delete_cookie(
+        key="refresh_token",
+        httponly=True,
+        secure=settings.cookie_secure,
+        samesite=settings.cookie_samesite,
+        domain=settings.cookie_domain,
+    )
+
     return None
 
 

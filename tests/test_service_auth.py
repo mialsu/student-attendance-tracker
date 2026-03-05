@@ -145,9 +145,9 @@ class TestCreateUser:
 class TestCreateTokensForUser:
     """Tests for create_tokens_for_user."""
 
-    async def test_create_tokens_for_user(self, test_user: User):
+    async def test_create_tokens_for_user(self, db: AsyncSession, test_user: User):
         """Test creating tokens for a user."""
-        result = await auth_service.create_tokens_for_user(test_user)
+        result = await auth_service.create_tokens_for_user(test_user, db)
 
         assert isinstance(result, Token)
         assert result.access_token is not None

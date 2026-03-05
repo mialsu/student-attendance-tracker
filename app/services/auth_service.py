@@ -107,25 +107,28 @@ async def create_user(db: AsyncSession, user_data: UserCreate) -> User:
     return user
 
 
-async def create_tokens_for_user(user: User) -> Token:
+async def create_tokens_for_user(user: User, db: AsyncSession) -> Token:
     """
     Create access and refresh tokens for a user.
 
+    Also stores refresh token in database for rotation tracking.
+
     Args:
         user: User object
+        db: Database session
 
     Returns:
         Token response with access and refresh tokens
     """
     from app.schemas.user import UserResponse
-    
-    access_token = create_access_token(
-        data={"sub": user.email, "user_id": str(user.id)}
-    )
-    refresh_token = create_refresh_token(
-        data={"sub": user.email, "user_id": str(user.id)}
-    )
-    
+    from app.services import refresh_token_service
+
+    access_token = create_access_token(data={"sub": user.email, "user_id": str(user.id)})
+    refresh_token = create_refresh_token(data={"sub": user.email, "user_id": str(user.id)})
+
+    # Store refresh token in database for rotation
+    await refresh_token_service.store_refresh_token(db, user.id, refresh_token)
+
     return Token(
         access_token=access_token,
         refresh_token=refresh_token,

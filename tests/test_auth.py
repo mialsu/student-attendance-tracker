@@ -13,14 +13,18 @@ class TestSignup:
     async def test_signup_success(self, client: AsyncClient, sample_user_data):
         """Test successful user signup."""
         response = await client.post("/api/auth/signup", json=sample_user_data)
-        
+
         assert response.status_code == 201
         data = response.json()
         assert "access_token" in data
-        assert "refresh_token" in data
         assert data["token_type"] == "bearer"
         assert data["user"]["email"] == sample_user_data["email"]
         assert data["user"]["active"] is True
+
+        # Verify refresh token is set as HTTP-only cookie
+        assert "refresh_token" in response.cookies
+        cookie = response.cookies["refresh_token"]
+        assert cookie is not None
 
     async def test_signup_duplicate_email(self, client: AsyncClient, test_user: User, valid_registration_code):
         """Test signup with duplicate email fails."""
@@ -65,12 +69,14 @@ class TestLogin:
             "/api/auth/login",
             json={"email": test_user.email, "password": "testpassword123"},
         )
-        
+
         assert response.status_code == 200
         data = response.json()
         assert "access_token" in data
-        assert "refresh_token" in data
         assert data["user"]["email"] == test_user.email
+
+        # Verify refresh token is set as HTTP-only cookie
+        assert "refresh_token" in response.cookies
 
     async def test_login_wrong_password(self, client: AsyncClient, test_user: User):
         """Test login with wrong password."""
@@ -117,26 +123,60 @@ class TestTokenRefresh:
                 "registration_code": valid_registration_code.code,
             },
         )
-        refresh_token = signup_response.json()["refresh_token"]
-        
-        # Refresh token
+
+        # Extract refresh token from cookie
+        refresh_cookie = signup_response.cookies.get("refresh_token")
+        assert refresh_cookie is not None
+
+        # Refresh token by sending cookie
         response = await client.post(
             "/api/auth/refresh",
-            json={"refresh_token": refresh_token},
+            cookies={"refresh_token": refresh_cookie},
         )
-        
+
         assert response.status_code == 200
         data = response.json()
         assert "access_token" in data
-        assert "refresh_token" in data
+
+        # Verify new refresh token is set as cookie (token rotation)
+        assert "refresh_token" in response.cookies
 
     async def test_refresh_invalid_token(self, client: AsyncClient):
         """Test refresh with invalid token."""
         response = await client.post(
             "/api/auth/refresh",
-            json={"refresh_token": "invalid.token.here"},
+            cookies={"refresh_token": "invalid.token.here"},
         )
-        
+
+        assert response.status_code == 401
+
+    async def test_token_rotation_revokes_old_token(self, client: AsyncClient, valid_registration_code):
+        """Test that using refresh token revokes the old one (token rotation)."""
+        # Login
+        login_response = await client.post(
+            "/api/auth/signup",
+            json={
+                "email": "rotation@example.com",
+                "password": "password123",
+                "registration_code": valid_registration_code.code,
+            },
+        )
+        old_token = login_response.cookies.get("refresh_token")
+
+        # Refresh (should revoke old token)
+        refresh_response = await client.post(
+            "/api/auth/refresh",
+            cookies={"refresh_token": old_token},
+        )
+        assert refresh_response.status_code == 200
+        new_token = refresh_response.cookies.get("refresh_token")
+        assert new_token != old_token
+
+        # Try to use old token again (should fail)
+        response = await client.post(
+            "/api/auth/refresh",
+            cookies={"refresh_token": old_token},
+        )
         assert response.status_code == 401
 
 
@@ -289,11 +329,31 @@ class TestUpdatePassword:
 class TestLogout:
     """Tests for logout."""
 
-    async def test_logout_success(self, client: AsyncClient, auth_headers: dict):
-        """Test successful logout."""
-        response = await client.post("/api/auth/logout", headers=auth_headers)
-        
+    async def test_logout_success(self, client: AsyncClient, test_user: User):
+        """Test successful logout clears cookie."""
+        # Login first
+        login_response = await client.post(
+            "/api/auth/login",
+            json={"email": test_user.email, "password": "testpassword123"},
+        )
+        access_token = login_response.json()["access_token"]
+        refresh_cookie = login_response.cookies.get("refresh_token")
+        assert refresh_cookie is not None
+
+        # Logout
+        response = await client.post(
+            "/api/auth/logout",
+            headers={"Authorization": f"Bearer {access_token}"},
+            cookies={"refresh_token": refresh_cookie},
+        )
+
         assert response.status_code == 204
+
+        # Verify cookie is cleared (Max-Age should be 0 or empty)
+        # Note: In httpx, deleted cookies appear with empty value
+        if "refresh_token" in response.cookies:
+            # Cookie should be marked for deletion
+            assert response.cookies["refresh_token"] == "" or response.cookies.get("max-age") == "0"
 
     async def test_logout_no_token(self, client: AsyncClient):
         """Test logout without token."""

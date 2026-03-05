@@ -379,14 +379,24 @@ class TestClassServiceFunctions:
     ):
         """Test get_class_with_attendance_count via API."""
         from app.models.attendance import AttendanceRecord
+        from app.models.student import Student
         from datetime import datetime, timezone
 
         # Add some attendance records
         for i in range(5):
+            # Create student first
+            student = Student(
+                name=f"Student{i} Test",
+                class_id=test_class.id,
+                course_credit_received=False,
+            )
+            db.add(student)
+            await db.flush()
+
+            # Create attendance with student_id
             record = AttendanceRecord(
                 class_id=test_class.id,
-                student_first_name=f"Student{i}",
-                student_last_name="Test",
+                student_id=student.id,
                 timestamp=datetime.now(timezone.utc),
             )
             db.add(record)
@@ -451,14 +461,24 @@ class TestClassServiceFunctions:
     ):
         """Test that listing classes includes attendance count."""
         from app.models.attendance import AttendanceRecord
+        from app.models.student import Student
         from datetime import datetime, timezone
 
         # Add attendance records
         for i in range(3):
+            # Create student first
+            student = Student(
+                name=f"Student{i} Test",
+                class_id=test_class.id,
+                course_credit_received=False,
+            )
+            db.add(student)
+            await db.flush()
+
+            # Create attendance with student_id
             record = AttendanceRecord(
                 class_id=test_class.id,
-                student_first_name=f"Student{i}",
-                student_last_name="Test",
+                student_id=student.id,
                 timestamp=datetime.now(timezone.utc),
             )
             db.add(record)

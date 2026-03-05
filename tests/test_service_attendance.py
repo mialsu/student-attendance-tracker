@@ -7,9 +7,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.attendance import AttendanceRecord
 from app.models.class_ import Class
+from app.models.student import Student
 from app.models.user import User
 from app.schemas.attendance import AttendanceRecordCreate
-from app.services import attendance_service
+from app.services import attendance_service, student_service
 from app.core.exceptions import NotFoundError, ForbiddenException, BadRequestException
 
 
@@ -19,27 +20,27 @@ class TestNormalizeName:
 
     def test_normalize_uppercase(self):
         """Test normalizing uppercase name."""
-        assert attendance_service.normalize_name("JOHN") == "John"
+        assert student_service.normalize_name("JOHN DOE") == "John Doe"
 
     def test_normalize_lowercase(self):
         """Test normalizing lowercase name."""
-        assert attendance_service.normalize_name("mary") == "Mary"
+        assert student_service.normalize_name("mary smith") == "Mary Smith"
 
     def test_normalize_mixed_case(self):
         """Test normalizing mixed case."""
-        assert attendance_service.normalize_name("mCdOnAlD") == "Mcdonald"
+        assert student_service.normalize_name("mCdOnAlD jones") == "Mcdonald Jones"
 
     def test_normalize_with_spaces(self):
         """Test normalizing with leading/trailing spaces."""
-        assert attendance_service.normalize_name("  john  ") == "John"
+        assert student_service.normalize_name("  john doe  ") == "John Doe"
 
     def test_normalize_apostrophe(self):
         """Test normalizing name with apostrophe."""
-        assert attendance_service.normalize_name("O'BRIEN") == "O'brien"
+        assert student_service.normalize_name("O'BRIEN smith") == "O'brien Smith"
 
     def test_normalize_hyphen(self):
         """Test normalizing name with hyphen."""
-        assert attendance_service.normalize_name("jean-paul") == "Jean-paul"
+        assert student_service.normalize_name("jean-paul sartre") == "Jean-paul Sartre"
 
 
 @pytest.mark.asyncio
@@ -146,8 +147,7 @@ class TestCreateAttendanceRecord:
     ):
         """Test creating attendance for inactive class fails."""
         attendance_data = AttendanceRecordCreate(
-            student_first_name="John",
-            student_last_name="Doe",
+            student_name="John Doe",
             timestamp=datetime.now(timezone.utc),
         )
 
@@ -163,17 +163,17 @@ class TestCreateAttendanceRecord:
     ):
         """Test that names are normalized when creating attendance."""
         attendance_data = AttendanceRecordCreate(
-            student_first_name="JOHN",
-            student_last_name="doe",
+            student_name="JOHN doe",
             timestamp=datetime.now(timezone.utc),
         )
 
-        result = await attendance_service.create_attendance_record(
+        result, quantity = await attendance_service.create_attendance_record(
             db, test_class.id, attendance_data, test_user
         )
 
-        assert result.student_first_name == "John"
-        assert result.student_last_name == "Doe"
+        # Student name should be normalized
+        assert result.student.name == "John Doe"
+        assert quantity == 1
 
     async def test_create_attendance_adds_total_count(
         self, db: AsyncSession, test_class: Class, test_user: User
@@ -181,24 +181,25 @@ class TestCreateAttendanceRecord:
         """Test that total_attendance attribute is added."""
         # Create first attendance
         attendance_data = AttendanceRecordCreate(
-            student_first_name="Jane",
-            student_last_name="Smith",
+            student_name="Jane Smith",
             timestamp=datetime.now(timezone.utc),
         )
 
-        result1 = await attendance_service.create_attendance_record(
+        result1, quantity1 = await attendance_service.create_attendance_record(
             db, test_class.id, attendance_data, test_user
         )
 
         assert hasattr(result1, 'total_attendance')
         assert result1.total_attendance == 1
+        assert quantity1 == 1
 
         # Create second attendance for same student
-        result2 = await attendance_service.create_attendance_record(
+        result2, quantity2 = await attendance_service.create_attendance_record(
             db, test_class.id, attendance_data, test_user
         )
 
         assert result2.total_attendance == 2
+        assert quantity2 == 1
 
 
 @pytest.mark.asyncio
@@ -265,10 +266,19 @@ class TestListAttendanceForClass:
         """Test basic listing of attendance records."""
         # Create some attendance records
         for i in range(5):
+            # Create student first
+            student = Student(
+                name=f"Student{i} Test",
+                class_id=test_class.id,
+                course_credit_received=False,
+            )
+            db.add(student)
+            await db.flush()
+
+            # Create attendance with student_id
             record = AttendanceRecord(
                 class_id=test_class.id,
-                student_first_name=f"Student{i}",
-                student_last_name="Test",
+                student_id=student.id,
                 timestamp=datetime.now(timezone.utc) - timedelta(days=i),
             )
             db.add(record)
@@ -287,10 +297,19 @@ class TestListAttendanceForClass:
         """Test pagination of attendance records."""
         # Create 15 records
         for i in range(15):
+            # Create student first
+            student = Student(
+                name=f"Student{i} Test",
+                class_id=test_class.id,
+                course_credit_received=False,
+            )
+            db.add(student)
+            await db.flush()
+
+            # Create attendance with student_id
             record = AttendanceRecord(
                 class_id=test_class.id,
-                student_first_name=f"Student{i}",
-                student_last_name="Test",
+                student_id=student.id,
                 timestamp=datetime.now(timezone.utc) - timedelta(hours=i),
             )
             db.add(record)
@@ -316,18 +335,33 @@ class TestListAttendanceForClass:
         self, db: AsyncSession, test_class: Class, test_user: User
     ):
         """Test filtering by student name."""
-        # Create records
+        # Create students first
+        alice_student = Student(
+            name="Alice Johnson",
+            class_id=test_class.id,
+            course_credit_received=False,
+        )
+        db.add(alice_student)
+        await db.flush()
+
+        bob_student = Student(
+            name="Bob Smith",
+            class_id=test_class.id,
+            course_credit_received=False,
+        )
+        db.add(bob_student)
+        await db.flush()
+
+        # Create attendance records
         records = [
             AttendanceRecord(
                 class_id=test_class.id,
-                student_first_name="Alice",
-                student_last_name="Johnson",
+                student_id=alice_student.id,
                 timestamp=datetime.now(timezone.utc),
             ),
             AttendanceRecord(
                 class_id=test_class.id,
-                student_first_name="Bob",
-                student_last_name="Smith",
+                student_id=bob_student.id,
                 timestamp=datetime.now(timezone.utc),
             ),
         ]
@@ -341,23 +375,38 @@ class TestListAttendanceForClass:
 
         assert len(records) >= 1
         assert total >= 1
-        assert all("alice" in r.student_first_name.lower() for r in records)
+        assert all("alice" in r.student.name.lower() for r in records)
 
     async def test_list_attendance_filter_by_date_from(
         self, db: AsyncSession, test_class: Class, test_user: User
     ):
         """Test filtering by start date."""
+        # Create students first
+        old_student = Student(
+            name="Old Record",
+            class_id=test_class.id,
+            course_credit_received=False,
+        )
+        db.add(old_student)
+        await db.flush()
+
+        new_student = Student(
+            name="New Record",
+            class_id=test_class.id,
+            course_credit_received=False,
+        )
+        db.add(new_student)
+        await db.flush()
+
         # Create old and new records
         old_record = AttendanceRecord(
             class_id=test_class.id,
-            student_first_name="Old",
-            student_last_name="Record",
+            student_id=old_student.id,
             timestamp=datetime.now(timezone.utc) - timedelta(days=10),
         )
         new_record = AttendanceRecord(
             class_id=test_class.id,
-            student_first_name="New",
-            student_last_name="Record",
+            student_id=new_student.id,
             timestamp=datetime.now(timezone.utc),
         )
         db.add_all([old_record, new_record])
@@ -377,17 +426,32 @@ class TestListAttendanceForClass:
         self, db: AsyncSession, test_class: Class, test_user: User
     ):
         """Test filtering by end date."""
+        # Create students first
+        past_student = Student(
+            name="Past Record",
+            class_id=test_class.id,
+            course_credit_received=False,
+        )
+        db.add(past_student)
+        await db.flush()
+
+        recent_student = Student(
+            name="Recent Record",
+            class_id=test_class.id,
+            course_credit_received=False,
+        )
+        db.add(recent_student)
+        await db.flush()
+
         # Create records
         past_record = AttendanceRecord(
             class_id=test_class.id,
-            student_first_name="Past",
-            student_last_name="Record",
+            student_id=past_student.id,
             timestamp=datetime.now(timezone.utc) - timedelta(days=10),
         )
         recent_record = AttendanceRecord(
             class_id=test_class.id,
-            student_first_name="Recent",
-            student_last_name="Record",
+            student_id=recent_student.id,
             timestamp=datetime.now(timezone.utc),
         )
         db.add_all([past_record, recent_record])
@@ -406,13 +470,22 @@ class TestListAttendanceForClass:
     async def test_list_attendance_legacy_filter_excludes_old(
         self, db: AsyncSession, test_class: Class, test_user: User
     ):
-        """Test that legacy filter excludes students with first attendance > 5 years ago."""
-        # Create old student
+        """Test that legacy filter excludes students created > 5 years ago."""
+        # Create old student with old created_at
         old_date = datetime.now(timezone.utc) - timedelta(days=6 * 365)
+        old_student = Student(
+            name="VeryOld Student",
+            class_id=test_class.id,
+            course_credit_received=False,
+            created_at=old_date,  # Set old created_at
+        )
+        db.add(old_student)
+        await db.flush()
+
+        # Create old attendance record
         old_record = AttendanceRecord(
             class_id=test_class.id,
-            student_first_name="VeryOld",
-            student_last_name="Student",
+            student_id=old_student.id,
             timestamp=old_date,
         )
         db.add(old_record)
@@ -425,7 +498,7 @@ class TestListAttendanceForClass:
 
         # Should not include old student
         assert not any(
-            r.student_first_name == "VeryOld" and r.student_last_name == "Student"
+            r.student.name == "VeryOld Student"
             for r in records
         )
 
@@ -433,12 +506,21 @@ class TestListAttendanceForClass:
         self, db: AsyncSession, test_class: Class, test_user: User
     ):
         """Test that legacy=True includes old students."""
-        # Create old student
+        # Create old student with old created_at
         old_date = datetime.now(timezone.utc) - timedelta(days=6 * 365)
+        old_student = Student(
+            name="VeryOld Student",
+            class_id=test_class.id,
+            course_credit_received=False,
+            created_at=old_date,  # Set old created_at
+        )
+        db.add(old_student)
+        await db.flush()
+
+        # Create old attendance record
         old_record = AttendanceRecord(
             class_id=test_class.id,
-            student_first_name="VeryOld",
-            student_last_name="Student",
+            student_id=old_student.id,
             timestamp=old_date,
         )
         db.add(old_record)
@@ -451,7 +533,7 @@ class TestListAttendanceForClass:
 
         # Should include old student
         assert any(
-            r.student_first_name == "VeryOld" and r.student_last_name == "Student"
+            r.student.name == "VeryOld Student"
             for r in records
         )
 
@@ -464,10 +546,19 @@ class TestListAttendanceForClass:
             datetime.now(timezone.utc) - timedelta(hours=i) for i in range(5)
         ]
         for i, ts in enumerate(timestamps):
+            # Create student first
+            student = Student(
+                name=f"Student{i} Test",
+                class_id=test_class.id,
+                course_credit_received=False,
+            )
+            db.add(student)
+            await db.flush()
+
+            # Create attendance with student_id
             record = AttendanceRecord(
                 class_id=test_class.id,
-                student_first_name=f"Student{i}",
-                student_last_name="Test",
+                student_id=student.id,
                 timestamp=ts,
             )
             db.add(record)
@@ -490,95 +581,113 @@ class TestGetAttendanceSummary:
         self, db: AsyncSession, test_class: Class, test_user: User
     ):
         """Test that summary groups records by student."""
+        # Create student first
+        alice = Student(
+            name="Alice Johnson",
+            class_id=test_class.id,
+            course_credit_received=False,
+        )
+        db.add(alice)
+        await db.flush()
+
         # Create multiple records for same student
         for i in range(3):
             record = AttendanceRecord(
                 class_id=test_class.id,
-                student_first_name="Alice",
-                student_last_name="Johnson",
+                student_id=alice.id,
                 timestamp=datetime.now(timezone.utc) - timedelta(days=i),
             )
             db.add(record)
 
         await db.commit()
 
-        summary = await attendance_service.get_attendance_summary(
+        summary, total = await attendance_service.get_attendance_summary(
             db, test_class.id, test_user
         )
 
         # Find Alice in summary
-        alice = next(
-            (s for s in summary if s["student_first_name"] == "Alice"), None
+        alice_summary = next(
+            (s for s in summary if s["student_name"] == "Alice Johnson"), None
         )
-        assert alice is not None
-        assert alice["total_attendance"] == 3
-        assert len(alice["records"]) == 3
+        assert alice_summary is not None
+        assert alice_summary["total_attendance"] == 3
+        assert len(alice_summary["records"]) == 3
 
     async def test_summary_case_insensitive_grouping(
         self, db: AsyncSession, test_class: Class, test_user: User
     ):
         """Test that summary groups case-insensitively."""
-        # Create records with different cases
+        # Create student first (names will be normalized)
+        bob = Student(
+            name="Bob Smith",
+            class_id=test_class.id,
+            course_credit_received=False,
+        )
+        db.add(bob)
+        await db.flush()
+
+        # Create records for same student
         records = [
             AttendanceRecord(
                 class_id=test_class.id,
-                student_first_name="Bob",
-                student_last_name="Smith",
+                student_id=bob.id,
                 timestamp=datetime.now(timezone.utc),
             ),
             AttendanceRecord(
                 class_id=test_class.id,
-                student_first_name="bob",
-                student_last_name="SMITH",
+                student_id=bob.id,
                 timestamp=datetime.now(timezone.utc) - timedelta(days=1),
             ),
         ]
         db.add_all(records)
         await db.commit()
 
-        summary = await attendance_service.get_attendance_summary(
+        summary, total = await attendance_service.get_attendance_summary(
             db, test_class.id, test_user
         )
 
         # Should be grouped as one student
-        bobs = [
-            s for s in summary
-            if s["student_first_name"].lower() == "bob"
-            and s["student_last_name"].lower() == "smith"
-        ]
+        bobs = [s for s in summary if s["student_name"].lower() == "bob smith"]
         assert len(bobs) == 1
         assert bobs[0]["total_attendance"] == 2
 
     async def test_summary_sorted_by_name(
         self, db: AsyncSession, test_class: Class, test_user: User
     ):
-        """Test that summary is sorted by last name, then first name."""
-        # Create records for different students
-        students = [
-            ("Zoe", "Apple"),
-            ("Alice", "Banana"),
-            ("Bob", "Banana"),
+        """Test that summary is sorted by student name."""
+        # Create students and records
+        students_data = [
+            "Zoe Apple",
+            "Alice Banana",
+            "Bob Banana",
         ]
 
-        for first, last in students:
+        for name in students_data:
+            # Create student first
+            student = Student(
+                name=name,
+                class_id=test_class.id,
+                course_credit_received=False,
+            )
+            db.add(student)
+            await db.flush()
+
+            # Create attendance record
             record = AttendanceRecord(
                 class_id=test_class.id,
-                student_first_name=first,
-                student_last_name=last,
+                student_id=student.id,
                 timestamp=datetime.now(timezone.utc),
             )
             db.add(record)
 
         await db.commit()
 
-        summary = await attendance_service.get_attendance_summary(
+        summary, total = await attendance_service.get_attendance_summary(
             db, test_class.id, test_user
         )
 
         # Extract names
-        names = [
-            (s["student_last_name"], s["student_first_name"]) for s in summary
-        ]
+        names = [s["student_name"] for s in summary]
 
         # Should be sorted
         assert names == sorted(names)

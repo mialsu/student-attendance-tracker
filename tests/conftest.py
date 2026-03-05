@@ -16,6 +16,7 @@ from app.main import app
 from app.models.attendance import AttendanceRecord
 from app.models.class_ import Class
 from app.models.registration_code import RegistrationCode
+from app.models.student import Student
 from app.models.user import User, UserRole
 
 
@@ -200,16 +201,43 @@ async def inactive_class(db: AsyncSession, test_user: User) -> Class:
 
 
 @pytest_asyncio.fixture
+async def test_student(db: AsyncSession, test_class: Class) -> Student:
+    """Create a test student."""
+    student = Student(
+        name="John Doe",
+        class_id=test_class.id,
+        course_credit_received=False,
+    )
+    db.add(student)
+    await db.commit()
+    await db.refresh(student)
+    return student
+
+
+@pytest_asyncio.fixture
+async def test_student_with_credit(db: AsyncSession, test_class: Class) -> Student:
+    """Create a student who received course credit."""
+    student = Student(
+        name="Jane Smith",
+        class_id=test_class.id,
+        course_credit_received=True,
+    )
+    db.add(student)
+    await db.commit()
+    await db.refresh(student)
+    return student
+
+
+@pytest_asyncio.fixture
 async def test_attendance(
-    db: AsyncSession, test_class: Class
+    db: AsyncSession, test_class: Class, test_student: Student
 ) -> AttendanceRecord:
     """Create a test attendance record."""
     from datetime import datetime, timezone
-    
+
     record = AttendanceRecord(
         class_id=test_class.id,
-        student_first_name="John",
-        student_last_name="Doe",
+        student_id=test_student.id,
         timestamp=datetime.now(timezone.utc),
     )
     db.add(record)
@@ -241,9 +269,8 @@ def sample_class_data() -> dict:
 def sample_attendance_data() -> dict:
     """Sample attendance data for testing."""
     from datetime import datetime, timezone
-    
+
     return {
-        "student_first_name": "Jane",
-        "student_last_name": "Smith",
+        "student_name": "Jane Smith",
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }

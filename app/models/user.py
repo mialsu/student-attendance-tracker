@@ -59,6 +59,9 @@ class User(Base):
         foreign_keys="RegistrationCode.created_by_user_id",
         back_populates="created_by",
     )
+    refresh_tokens: Mapped[list["RefreshToken"]] = relationship(
+        "RefreshToken", back_populates="user", cascade="all, delete-orphan"
+    )
 
     def __repr__(self) -> str:
         return f"<User(id={self.id}, email={self.email})>"

@@ -122,9 +122,10 @@ async def openapi(username: str = Depends(get_docs_dependency())):
 
 
 # Include routers
-from app.api import admin, attendance, auth, classes
+from app.api import admin, attendance, auth, classes, students
 
 app.include_router(auth.router, prefix="/api/auth", tags=["authentication"])
 app.include_router(classes.router, prefix="/api/classes", tags=["classes"])
 app.include_router(attendance.router, prefix="/api", tags=["attendance"])
+app.include_router(students.router, prefix="/api", tags=["students"])
 app.include_router(admin.router, prefix="/api/admin", tags=["admin"])

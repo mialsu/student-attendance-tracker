@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.attendance import AttendanceRecord
 from app.models.class_ import Class
+from app.models.student import Student
 from app.models.user import User
 from app.schemas.class_ import ClassCreate, ClassUpdate
 from app.services import class_service
@@ -103,10 +104,19 @@ class TestGetClassWithAttendanceCount:
         """Test getting class with attendance count."""
         # Add some attendance records
         for i in range(5):
+            # Create student first
+            student = Student(
+                name=f"Student{i} Test",
+                class_id=test_class.id,
+                course_credit_received=False,
+            )
+            db.add(student)
+            await db.flush()
+
+            # Create attendance with student_id
             record = AttendanceRecord(
                 class_id=test_class.id,
-                student_first_name=f"Student{i}",
-                student_last_name="Test",
+                student_id=student.id,
                 timestamp=datetime.now(timezone.utc),
             )
             db.add(record)

@@ -12,6 +12,7 @@ from app.database import Base
 
 if TYPE_CHECKING:
     from app.models.class_ import Class
+    from app.models.student import Student
 
 
 class AttendanceRecord(Base):
@@ -28,8 +29,16 @@ class AttendanceRecord(Base):
         nullable=False,
         index=True,
     )
-    student_first_name: Mapped[str] = mapped_column(String(100), nullable=False)
-    student_last_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    # Student foreign key
+    student_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("students.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    # DEPRECATED: Keep for backward compatibility (nullable, will be dropped in Phase 5)
+    student_first_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    student_last_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
     timestamp: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False
     )
@@ -41,6 +50,7 @@ class AttendanceRecord(Base):
 
     # Relationships
     class_: Mapped["Class"] = relationship("Class", back_populates="attendance_records")
+    student: Mapped["Student"] = relationship("Student", back_populates="attendance_records")
 
     # Indexes for performance
     __table_args__ = (
@@ -50,4 +60,5 @@ class AttendanceRecord(Base):
     )
 
     def __repr__(self) -> str:
-        return f"<AttendanceRecord(id={self.id}, student={self.student_first_name} {self.student_last_name})>"
+        student_name = self.student.name if self.student else "Unknown"
+        return f"<AttendanceRecord(id={self.id}, student={student_name})>"

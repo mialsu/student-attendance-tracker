@@ -9,7 +9,7 @@ from pydantic import BaseModel, ConfigDict, EmailStr
 class CreateCodeRequest(BaseModel):
     """Schema for creating a registration code."""
 
-    email_restriction: EmailStr
+    email_restriction: EmailStr | None = None
 
 
 class CodeResponse(BaseModel):

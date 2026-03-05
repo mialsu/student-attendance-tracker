@@ -26,7 +26,7 @@ def generate_code() -> str:
 async def create_registration_code(
     db: AsyncSession,
     creator: User,
-    email_restriction: str,
+    email_restriction: str | None = None,
 ) -> RegistrationCode:
     """
     Create a new registration code.
@@ -34,7 +34,7 @@ async def create_registration_code(
     Args:
         db: Database session
         creator: User creating the code (must be superadmin)
-        email_restriction: Email that can use this code (required)
+        email_restriction: Email that can use this code (None = universal code)
 
     Returns:
         Created RegistrationCode instance
@@ -42,18 +42,20 @@ async def create_registration_code(
     Raises:
         BadRequestException: If email already has an unused code
     """
-    # Check if email already has an unused code
-    result = await db.execute(
-        select(RegistrationCode).where(
-            RegistrationCode.email_restriction == email_restriction,
-            RegistrationCode.used == False,
+    # Check if email already has an unused code (only for email-restricted codes)
+    if email_restriction is not None:
+        result = await db.execute(
+            select(RegistrationCode).where(
+                RegistrationCode.email_restriction == email_restriction,
+                RegistrationCode.used == False,
+                RegistrationCode.revoked == False,
+            )
         )
-    )
-    existing_code = result.scalar_one_or_none()
-    if existing_code:
-        raise BadRequestException(
-            f"An unused registration code already exists for {email_restriction}"
-        )
+        existing_code = result.scalar_one_or_none()
+        if existing_code:
+            raise BadRequestException(
+                f"An unused registration code already exists for {email_restriction}"
+            )
 
     code = RegistrationCode(
         code=generate_code(),
@@ -116,7 +118,8 @@ async def validate_registration_code(
     if reg_code.revoked:
         raise BadRequestException("Registration code has been revoked")
 
-    if reg_code.email_restriction != email:
+    # Check email restriction (None = universal code)
+    if reg_code.email_restriction is not None and reg_code.email_restriction != email:
         raise BadRequestException("This registration code is not valid for your email")
 
     return reg_code
@@ -168,6 +171,36 @@ async def delete_code(
 
     await db.delete(code)
     await db.commit()
+
+
+async def revoke_code(
+    db: AsyncSession,
+    code_id: str,
+) -> RegistrationCode:
+    """
+    Revoke a registration code (soft delete).
+
+    Args:
+        db: Database session
+        code_id: ID of the code to revoke
+
+    Returns:
+        The revoked registration code
+
+    Raises:
+        NotFoundError: If code not found
+    """
+    result = await db.execute(
+        select(RegistrationCode).where(RegistrationCode.id == code_id)
+    )
+    code = result.scalar_one_or_none()
+    if not code:
+        raise NotFoundError("Registration code not found")
+
+    code.revoked = True
+    await db.commit()
+    await db.refresh(code)
+    return code
 
 
 async def list_registration_codes(

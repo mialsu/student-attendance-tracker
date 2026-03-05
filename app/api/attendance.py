@@ -13,6 +13,7 @@ from app.schemas.attendance import (
     AttendanceRecordResponse,
     AttendanceSummary,
     PaginatedAttendanceResponse,
+    PaginatedAttendanceSummaryResponse,
 )
 from app.services import attendance_service
 
@@ -29,7 +30,7 @@ async def list_attendance(
     student_name: str | None = Query(None, description="Filter by student name (partial match)"),
     date_from: datetime | None = Query(None, description="Filter by start date"),
     date_to: datetime | None = Query(None, description="Filter by end date"),
-    legacy: bool | None = Query(None, description="Include legacy students (first attendance > 5 years ago)"),
+    legacy: bool | None = Query(None, description="Include legacy students (created > 5 years ago)"),
 ) -> PaginatedAttendanceResponse:
     """
     List attendance records for a class with pagination.
@@ -37,7 +38,7 @@ async def list_attendance(
     Supports filtering by:
     - Student name (case-insensitive, partial match)
     - Date range (date_from and date_to)
-    - Legacy (exclude students whose first attendance is > 5 years old)
+    - Legacy (exclude students created > 5 years ago)
 
     Args:
         class_id: Class UUID
@@ -69,8 +70,30 @@ async def list_attendance(
         legacy=legacy,
     )
 
+    # Build response items with backward compatibility
+    items = []
+    for record in records:
+        # Split name for backward compatibility
+        name_parts = record.student.name.split(" ", 1)
+        first_name = name_parts[0]
+        last_name = name_parts[1] if len(name_parts) > 1 else ""
+
+        response_data = {
+            "id": record.id,
+            "class_id": record.class_id,
+            "timestamp": record.timestamp,
+            "created_at": record.created_at,
+            "student": record.student,  # NEW
+            "student_first_name": first_name,  # DEPRECATED
+            "student_last_name": last_name,  # DEPRECATED
+            "student_name": record.student.name,  # Full name
+            "total_attendance": getattr(record, "total_attendance", None),
+        }
+
+        items.append(AttendanceRecordResponse.model_validate(response_data))
+
     return PaginatedAttendanceResponse(
-        items=[AttendanceRecordResponse.model_validate(record) for record in records],
+        items=items,
         total=total,
         skip=skip,
         limit=limit,
@@ -89,40 +112,57 @@ async def create_attendance(
     db: AsyncSession = Depends(get_db),
 ) -> AttendanceRecordResponse:
     """
-    Log attendance for a student.
+    Log attendance for a student (supports bulk logging).
 
     Student names are automatically normalized:
-    - "john" -> "John"
-    - "MARY DOE" -> "Mary Doe"
+    - "john doe" -> "John Doe"
+    - "MARY JANE" -> "Mary Jane"
     - Matching is case-insensitive
+
+    Bulk Logging (NEW):
+    - Set `quantity` field (1-50) to create multiple records at once
+    - All records share the same student and timestamp
+    - Useful for logging past attendance or corrections
+    - Returns first created record with `quantity_created` metadata
+
+    If a student with the same name (case-insensitive) already exists in the class,
+    the existing student is used. Otherwise, a new student is created.
 
     Args:
         class_id: Class UUID
-        attendance_data: Student name and timestamp
+        attendance_data: Student name, timestamp, and quantity (default: 1)
         current_user: Current authenticated user
         db: Database session
 
     Returns:
-        Created attendance record
+        Created attendance record with student information and quantity metadata
 
     Raises:
-        400: If class is not active
+        400: If class is not active, student name is invalid, or quantity out of range
         404: If class not found
         403: If user doesn't own the class
     """
-    record = await attendance_service.create_attendance_record(
+    # Service now returns tuple (record, quantity_created)
+    record, quantity_created = await attendance_service.create_attendance_record(
         db, class_id, attendance_data, current_user
     )
 
-    # Create response with total_attendance
+    # Split name for backward compatibility
+    name_parts = record.student.name.split(" ", 1)
+    first_name = name_parts[0]
+    last_name = name_parts[1] if len(name_parts) > 1 else ""
+
     response_data = {
         "id": record.id,
         "class_id": record.class_id,
-        "student_first_name": record.student_first_name,
-        "student_last_name": record.student_last_name,
         "timestamp": record.timestamp,
         "created_at": record.created_at,
-        "total_attendance": getattr(record, 'total_attendance', None)
+        "student": record.student,  # NEW
+        "student_first_name": first_name,  # DEPRECATED
+        "student_last_name": last_name,  # DEPRECATED
+        "student_name": record.student.name,  # Full name
+        "total_attendance": getattr(record, "total_attendance", None),
+        "quantity_created": quantity_created if quantity_created > 1 else None,  # NEW
     }
 
     return AttendanceRecordResponse.model_validate(response_data)
@@ -158,23 +198,34 @@ async def delete_attendance(
 
 @router.get(
     "/classes/{class_id}/attendance/summary",
-    response_model=list[AttendanceSummary],
+    response_model=PaginatedAttendanceSummaryResponse,
 )
 async def get_attendance_summary(
     class_id: UUID,
     current_user: CurrentUser,
     db: AsyncSession = Depends(get_db),
-) -> list[AttendanceSummary]:
+    search: str | None = Query(None, description="Filter by student name (case-insensitive partial match)"),
+    skip: int = Query(0, ge=0, description="Pagination offset (number of items to skip)"),
+    limit: int = Query(20, ge=1, le=100, description="Items per page (max 100)"),
+    sort_by: str = Query(
+        "attendance_desc",
+        description="Sort field: 'attendance_desc' (most attendances first) or 'name_asc' (alphabetical)"
+    ),
+) -> PaginatedAttendanceSummaryResponse:
     """
-    Get attendance summary grouped by student.
+    Get attendance summary grouped by student with search, pagination, and sorting.
 
-    Returns each unique student with:
+    Returns each student with:
+    - Student ID and name
+    - Course credit status
     - Total attendance count
     - List of all attendance records with timestamps
 
-    Students are grouped case-insensitively:
-    - "John Doe" and "john doe" are treated as the same student
-    - Display name uses the proper capitalization from most recent record
+    Query Parameters:
+    - search: Filter students by name (case-insensitive, partial match)
+    - skip: Number of students to skip (for pagination)
+    - limit: Maximum number of students to return (default 20, max 100)
+    - sort_by: Sort order - 'attendance_desc' (default) or 'name_asc'
 
     Args:
         class_id: Class UUID
@@ -182,15 +233,26 @@ async def get_attendance_summary(
         db: Database session
 
     Returns:
-        List of student summaries sorted by last name
+        Paginated list of student summaries with total count
 
     Raises:
         404: If class not found
         403: If user doesn't own the class
     """
-    summary = await attendance_service.get_attendance_summary(
-        db, class_id, current_user
+    summary, total = await attendance_service.get_attendance_summary(
+        db=db,
+        class_id=class_id,
+        teacher=current_user,
+        search=search,
+        skip=skip,
+        limit=limit,
+        sort_by=sort_by,
     )
-    
-    return [AttendanceSummary.model_validate(item) for item in summary]
+
+    return PaginatedAttendanceSummaryResponse(
+        items=[AttendanceSummary.model_validate(item) for item in summary],
+        total=total,
+        skip=skip,
+        limit=limit,
+    )
 

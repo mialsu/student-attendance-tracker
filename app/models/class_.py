@@ -12,6 +12,7 @@ from app.database import Base
 
 if TYPE_CHECKING:
     from app.models.attendance import AttendanceRecord
+    from app.models.student import Student
     from app.models.user import User
 
 
@@ -47,6 +48,11 @@ class Class(Base):
     teacher: Mapped["User"] = relationship("User", back_populates="classes")
     attendance_records: Mapped[list["AttendanceRecord"]] = relationship(
         "AttendanceRecord", back_populates="class_", cascade="all, delete-orphan"
+    )
+    students: Mapped[list["Student"]] = relationship(
+        "Student",
+        back_populates="class_",
+        cascade="all, delete-orphan"
     )
 
     def __repr__(self) -> str:

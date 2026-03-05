@@ -65,20 +65,24 @@ async def list_registration_codes(
     return [CodeResponse.model_validate(code) for code in codes]
 
 
-@router.delete("/codes/{code_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_registration_code(
+@router.delete("/codes/{code_id}", response_model=CodeResponse)
+async def revoke_registration_code(
     code_id: UUID,
     current_user: SuperadminUser,
     db: AsyncSession = Depends(get_db),
-) -> None:
+) -> CodeResponse:
     """
-    Delete a registration code (superadmin only).
+    Revoke a registration code (superadmin only).
 
-    Cannot delete codes that have already been used.
+    Revoked codes cannot be used for signup but are preserved for audit trail.
 
     Args:
-        code_id: UUID of the code to delete
+        code_id: UUID of the code to revoke
         current_user: Current authenticated superadmin user
         db: Database session
+
+    Returns:
+        The revoked registration code
     """
-    await registration_code_service.delete_code(db=db, code_id=str(code_id))
+    code = await registration_code_service.revoke_code(db=db, code_id=str(code_id))
+    return CodeResponse.model_validate(code)

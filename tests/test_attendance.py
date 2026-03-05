@@ -75,7 +75,7 @@ class TestListAttendance:
         assert isinstance(data, dict)
         assert "items" in data
         assert len(data["items"]) >= 1
-        assert any("John" in r["student_first_name"] for r in data["items"])
+        assert any("john" in r["student"]["name"].lower() for r in data["items"])
 
     async def test_list_attendance_filter_by_date(
         self, client: AsyncClient, auth_headers: dict, test_class: Class
@@ -133,11 +133,16 @@ class TestCreateAttendance:
             headers=auth_headers,
             json=sample_attendance_data,
         )
-        
+
         assert response.status_code == 201
         data = response.json()
         assert "id" in data
         assert data["class_id"] == str(test_class.id)
+        # Check new structure
+        assert "student" in data
+        assert "name" in data["student"]
+        assert data["student"]["name"] == "Jane Smith"
+        # Backward compatibility fields
         assert "student_first_name" in data
         assert "student_last_name" in data
 
@@ -149,14 +154,15 @@ class TestCreateAttendance:
             f"/api/classes/{test_class.id}/attendance",
             headers=auth_headers,
             json={
-                "student_first_name": "john",
-                "student_last_name": "DOE",
+                "student_name": "john DOE",
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             },
         )
-        
+
         assert response.status_code == 201
         data = response.json()
+        assert data["student"]["name"] == "John Doe"
+        # Backward compatibility
         assert data["student_first_name"] == "John"
         assert data["student_last_name"] == "Doe"
 
@@ -209,12 +215,11 @@ class TestCreateAttendance:
             f"/api/classes/{test_class.id}/attendance",
             headers=auth_headers,
             json={
-                "student_first_name": "",
-                "student_last_name": "Doe",
+                "student_name": "",
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             },
         )
-        
+
         assert response.status_code == 422
 
 
@@ -273,16 +278,24 @@ class TestAttendanceSummary:
             f"/api/classes/{test_class.id}/attendance/summary",
             headers=auth_headers,
         )
-        
+
         assert response.status_code == 200
         data = response.json()
-        assert isinstance(data, list)
-        assert len(data) >= 1
-        
-        # Check structure
-        student = data[0]
-        assert "student_first_name" in student
-        assert "student_last_name" in student
+
+        # Check paginated response structure
+        assert isinstance(data, dict)
+        assert "items" in data
+        assert "total" in data
+        assert "skip" in data
+        assert "limit" in data
+        assert isinstance(data["items"], list)
+        assert len(data["items"]) >= 1
+
+        # Check student structure
+        student = data["items"][0]
+        assert "student_id" in student
+        assert "student_name" in student
+        assert "course_credit_received" in student
         assert "total_attendance" in student
         assert "records" in student
         assert isinstance(student["records"], list)
@@ -292,39 +305,212 @@ class TestAttendanceSummary:
     ):
         """Test that summary groups students case-insensitively."""
         from app.models.attendance import AttendanceRecord
-        
-        # Create records with different capitalizations
-        record1 = AttendanceRecord(
-            class_id=test_class.id,
-            student_first_name="John",
-            student_last_name="Doe",
-            timestamp=datetime.now(timezone.utc),
+        from app.models.student import Student
+
+        # Create student via API with proper name normalization
+        response1 = await client.post(
+            f"/api/classes/{test_class.id}/attendance",
+            headers=auth_headers,
+            json={
+                "student_name": "John Doe",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            },
         )
-        record2 = AttendanceRecord(
-            class_id=test_class.id,
-            student_first_name="john",
-            student_last_name="doe",
-            timestamp=datetime.now(timezone.utc),
+        assert response1.status_code == 201
+
+        # Create another record for same student (case-insensitive match)
+        response2 = await client.post(
+            f"/api/classes/{test_class.id}/attendance",
+            headers=auth_headers,
+            json={
+                "student_name": "john doe",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            },
         )
-        db.add_all([record1, record2])
-        await db.commit()
-        
+        assert response2.status_code == 201
+
         response = await client.get(
             f"/api/classes/{test_class.id}/attendance/summary",
             headers=auth_headers,
         )
-        
+
         assert response.status_code == 200
         data = response.json()
-        
+        items = data["items"]
+
         # Should be grouped as one student
-        john_does = [
-            s for s in data
-            if s["student_first_name"].lower() == "john"
-            and s["student_last_name"].lower() == "doe"
-        ]
+        john_does = [s for s in items if "john doe" in s["student_name"].lower()]
         assert len(john_does) == 1
         assert john_does[0]["total_attendance"] >= 2
+
+    async def test_summary_with_search(
+        self, client: AsyncClient, auth_headers: dict, test_class: Class
+    ):
+        """Test filtering students by name search."""
+        # Create multiple students
+        await client.post(
+            f"/api/classes/{test_class.id}/attendance",
+            headers=auth_headers,
+            json={
+                "student_name": "John Doe",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            },
+        )
+        await client.post(
+            f"/api/classes/{test_class.id}/attendance",
+            headers=auth_headers,
+            json={
+                "student_name": "Jane Smith",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            },
+        )
+        await client.post(
+            f"/api/classes/{test_class.id}/attendance",
+            headers=auth_headers,
+            json={
+                "student_name": "Bob Johnson",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            },
+        )
+
+        # Search for "john" - should match both "John Doe" and "Bob Johnson"
+        response = await client.get(
+            f"/api/classes/{test_class.id}/attendance/summary?search=john",
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total"] == 2
+        assert len(data["items"]) == 2
+
+        names = [s["student_name"].lower() for s in data["items"]]
+        assert any("john" in name for name in names)
+
+    async def test_summary_with_pagination(
+        self, client: AsyncClient, auth_headers: dict, test_class: Class
+    ):
+        """Test pagination of summary results."""
+        # Create multiple students
+        for i in range(5):
+            await client.post(
+                f"/api/classes/{test_class.id}/attendance",
+                headers=auth_headers,
+                json={
+                    "student_name": f"Student {i}",
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                },
+            )
+
+        # Get first page (2 items)
+        response = await client.get(
+            f"/api/classes/{test_class.id}/attendance/summary?skip=0&limit=2",
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["items"]) == 2
+        assert data["total"] == 5
+        assert data["skip"] == 0
+        assert data["limit"] == 2
+
+        # Get second page
+        response = await client.get(
+            f"/api/classes/{test_class.id}/attendance/summary?skip=2&limit=2",
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["items"]) == 2
+        assert data["total"] == 5
+        assert data["skip"] == 2
+
+    async def test_summary_sorted_by_attendance(
+        self, client: AsyncClient, auth_headers: dict, test_class: Class
+    ):
+        """Test sorting by attendance count descending."""
+        # Create students with different attendance counts
+        # Student A: 3 attendances
+        for _ in range(3):
+            await client.post(
+                f"/api/classes/{test_class.id}/attendance",
+                headers=auth_headers,
+                json={
+                    "student_name": "Student A",
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                },
+            )
+
+        # Student B: 1 attendance
+        await client.post(
+            f"/api/classes/{test_class.id}/attendance",
+            headers=auth_headers,
+            json={
+                "student_name": "Student B",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            },
+        )
+
+        # Student C: 5 attendances
+        for _ in range(5):
+            await client.post(
+                f"/api/classes/{test_class.id}/attendance",
+                headers=auth_headers,
+                json={
+                    "student_name": "Student C",
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                },
+            )
+
+        # Get summary sorted by attendance (default)
+        response = await client.get(
+            f"/api/classes/{test_class.id}/attendance/summary?sort_by=attendance_desc",
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        items = data["items"]
+
+        # Verify descending order by attendance count
+        assert len(items) >= 3
+        for i in range(len(items) - 1):
+            assert items[i]["total_attendance"] >= items[i + 1]["total_attendance"]
+
+        # Student C should be first (5 attendances)
+        assert items[0]["student_name"] == "Student C"
+        assert items[0]["total_attendance"] == 5
+
+    async def test_summary_sorted_by_name(
+        self, client: AsyncClient, auth_headers: dict, test_class: Class
+    ):
+        """Test sorting by name alphabetically."""
+        # Create students
+        for name in ["Zoe", "Alice", "Mike"]:
+            await client.post(
+                f"/api/classes/{test_class.id}/attendance",
+                headers=auth_headers,
+                json={
+                    "student_name": name,
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                },
+            )
+
+        # Get summary sorted by name
+        response = await client.get(
+            f"/api/classes/{test_class.id}/attendance/summary?sort_by=name_asc",
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        items = data["items"]
+
+        # Verify alphabetical order
+        names = [s["student_name"] for s in items]
+        assert names == sorted(names)
 
     async def test_summary_no_auth(self, client: AsyncClient, test_class: Class):
         """Test getting summary without authentication."""
@@ -354,80 +540,112 @@ class TestLegacyFilter:
     async def test_legacy_filter_excludes_old_students(
         self, client: AsyncClient, auth_headers: dict, test_class: Class, db
     ):
-        """Test that legacy filter excludes students with first attendance > 5 years ago."""
+        """Test that legacy filter excludes students created > 5 years ago."""
         from app.models.attendance import AttendanceRecord
-        
-        # Create old record (> 5 years)
-        old_date = datetime.now(timezone.utc) - timedelta(days=6*365)
-        old_record = AttendanceRecord(
+        from app.models.student import Student
+        from sqlalchemy import update
+
+        # Create old student (created > 5 years ago)
+        old_student = Student(
+            name="Old Student",
             class_id=test_class.id,
-            student_first_name="Old",
-            student_last_name="Student",
-            timestamp=old_date,
+            course_credit_received=False,
         )
-        
-        # Create recent record for same student
-        recent_record = AttendanceRecord(
-            class_id=test_class.id,
-            student_first_name="Old",
-            student_last_name="Student",
-            timestamp=datetime.now(timezone.utc),
-        )
-        
-        # Create record for current student
-        current_record = AttendanceRecord(
-            class_id=test_class.id,
-            student_first_name="Current",
-            student_last_name="Student",
-            timestamp=datetime.now(timezone.utc),
-        )
-        
-        db.add_all([old_record, recent_record, current_record])
+        db.add(old_student)
         await db.commit()
-        
+        await db.refresh(old_student)
+
+        # Manually update created_at to simulate old student
+        old_date = datetime.now(timezone.utc) - timedelta(days=6 * 365)
+        await db.execute(
+            update(Student)
+            .where(Student.id == old_student.id)
+            .values(created_at=old_date)
+        )
+        await db.commit()
+
+        # Create attendance for old student
+        old_attendance = AttendanceRecord(
+            class_id=test_class.id,
+            student_id=old_student.id,
+            timestamp=datetime.now(timezone.utc),
+        )
+        db.add(old_attendance)
+
+        # Create current student via API
+        await client.post(
+            f"/api/classes/{test_class.id}/attendance",
+            headers=auth_headers,
+            json={
+                "student_name": "Current Student",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            },
+        )
+
+        await db.commit()
+
         # Default (legacy=None) should exclude old student
         response = await client.get(
             f"/api/classes/{test_class.id}/attendance",
             headers=auth_headers,
         )
-        
+
         assert response.status_code == 200
         data = response.json()
-        
+
         # Should only have current student, not old student
-        names = [(r["student_first_name"], r["student_last_name"]) for r in data["items"]]
-        assert ("Current", "Student") in names
-        assert ("Old", "Student") not in names
+        names = [r["student"]["name"] for r in data["items"]]
+        assert "Current Student" in names
+        assert "Old Student" not in names
 
     async def test_legacy_filter_includes_when_true(
         self, client: AsyncClient, auth_headers: dict, test_class: Class, db
     ):
         """Test that legacy=true includes all students."""
         from app.models.attendance import AttendanceRecord
-        
-        # Create old record
-        old_date = datetime.now(timezone.utc) - timedelta(days=6*365)
+        from app.models.student import Student
+        from sqlalchemy import update
+
+        # Create old student
+        old_student = Student(
+            name="Old Student Legacy",
+            class_id=test_class.id,
+            course_credit_received=False,
+        )
+        db.add(old_student)
+        await db.commit()
+        await db.refresh(old_student)
+
+        # Set created_at to > 5 years ago
+        old_date = datetime.now(timezone.utc) - timedelta(days=6 * 365)
+        await db.execute(
+            update(Student)
+            .where(Student.id == old_student.id)
+            .values(created_at=old_date)
+        )
+        await db.commit()
+
+        # Create attendance
         old_record = AttendanceRecord(
             class_id=test_class.id,
-            student_first_name="Old",
-            student_last_name="Student",
-            timestamp=old_date,
+            student_id=old_student.id,
+            timestamp=datetime.now(timezone.utc),
         )
         db.add(old_record)
         await db.commit()
-        
+
         # With legacy=true
         response = await client.get(
             f"/api/classes/{test_class.id}/attendance?legacy=true",
             headers=auth_headers,
         )
-        
+
         assert response.status_code == 200
         data = response.json()
-        
+
         # Should include old student
-        names = [(r["student_first_name"], r["student_last_name"]) for r in data["items"]]
-        assert ("Old", "Student") in names
+        names = [r["student"]["name"] for r in data["items"]]
+        assert "Old Student Legacy" in names
 
 
 @pytest.mark.asyncio
@@ -439,11 +657,11 @@ class TestNameNormalization:
     ):
         """Test normalization of various name formats."""
         test_cases = [
-            ("JOHN", "John"),
-            ("mary", "Mary"),
-            ("O'BRIEN", "O'brien"),
-            ("jean-paul", "Jean-paul"),
-            ("  spaced  ", "Spaced"),
+            ("JOHN TEST", "John Test"),
+            ("mary test", "Mary Test"),
+            ("O'BRIEN test", "O'brien Test"),
+            ("jean-paul test", "Jean-paul Test"),
+            ("  spaced  test  ", "Spaced Test"),
         ]
 
         for input_name, expected_name in test_cases:
@@ -451,31 +669,28 @@ class TestNameNormalization:
                 f"/api/classes/{test_class.id}/attendance",
                 headers=auth_headers,
                 json={
-                    "student_first_name": input_name,
-                    "student_last_name": "Test",
+                    "student_name": input_name,
                     "timestamp": datetime.now(timezone.utc).isoformat(),
                 },
             )
 
             assert response.status_code == 201
             data = response.json()
-            assert data["student_first_name"] == expected_name
+            assert data["student"]["name"] == expected_name
 
     async def test_name_filtering_case_insensitive(
         self, client: AsyncClient, auth_headers: dict, test_class: Class, db
     ):
         """Test that name filtering is case-insensitive."""
-        from app.models.attendance import AttendanceRecord
-
-        # Create record with mixed case
-        record = AttendanceRecord(
-            class_id=test_class.id,
-            student_first_name="McDonald",
-            student_last_name="Johnson",
-            timestamp=datetime.now(timezone.utc),
+        # Create attendance via API
+        await client.post(
+            f"/api/classes/{test_class.id}/attendance",
+            headers=auth_headers,
+            json={
+                "student_name": "McDonald Johnson",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            },
         )
-        db.add(record)
-        await db.commit()
 
         # Search with lowercase
         response = await client.get(
@@ -486,7 +701,7 @@ class TestNameNormalization:
         assert response.status_code == 200
         data = response.json()
         assert len(data["items"]) >= 1
-        assert any("McDonald" in r["student_first_name"] for r in data["items"])
+        assert any("mcdonald" in r["student"]["name"].lower() for r in data["items"])
 
         # Search with partial name
         response = await client.get(
@@ -508,27 +723,28 @@ class TestDateFiltering:
     ):
         """Test filtering by start date only."""
         from urllib.parse import quote
-        from app.models.attendance import AttendanceRecord
 
-        # Create old and new records
+        # Create old and new records via API
         old_date = datetime.now(timezone.utc) - timedelta(days=10)
         new_date = datetime.now(timezone.utc)
 
-        old_record = AttendanceRecord(
-            class_id=test_class.id,
-            student_first_name="Old",
-            student_last_name="Record",
-            timestamp=old_date,
-        )
-        new_record = AttendanceRecord(
-            class_id=test_class.id,
-            student_first_name="New",
-            student_last_name="Record",
-            timestamp=new_date,
+        await client.post(
+            f"/api/classes/{test_class.id}/attendance",
+            headers=auth_headers,
+            json={
+                "student_name": "Old Record",
+                "timestamp": old_date.isoformat(),
+            },
         )
 
-        db.add_all([old_record, new_record])
-        await db.commit()
+        await client.post(
+            f"/api/classes/{test_class.id}/attendance",
+            headers=auth_headers,
+            json={
+                "student_name": "New Record",
+                "timestamp": new_date.isoformat(),
+            },
+        )
 
         # Filter from 5 days ago
         cutoff = datetime.now(timezone.utc) - timedelta(days=5)
@@ -541,36 +757,37 @@ class TestDateFiltering:
         data = response.json()
 
         # Should only have new record
-        names = [(r["student_first_name"], r["student_last_name"]) for r in data["items"]]
-        assert ("New", "Record") in names
-        assert ("Old", "Record") not in names
+        names = [r["student"]["name"] for r in data["items"]]
+        assert "New Record" in names
+        assert "Old Record" not in names
 
     async def test_filter_by_date_to(
         self, client: AsyncClient, auth_headers: dict, test_class: Class, db
     ):
         """Test filtering by end date only."""
         from urllib.parse import quote
-        from app.models.attendance import AttendanceRecord
 
-        # Create records at different times
+        # Create records at different times via API
         past_date = datetime.now(timezone.utc) - timedelta(days=10)
         recent_date = datetime.now(timezone.utc) - timedelta(days=3)
 
-        past_record = AttendanceRecord(
-            class_id=test_class.id,
-            student_first_name="Past",
-            student_last_name="Record",
-            timestamp=past_date,
-        )
-        recent_record = AttendanceRecord(
-            class_id=test_class.id,
-            student_first_name="Recent",
-            student_last_name="Record",
-            timestamp=recent_date,
+        await client.post(
+            f"/api/classes/{test_class.id}/attendance",
+            headers=auth_headers,
+            json={
+                "student_name": "Past Record",
+                "timestamp": past_date.isoformat(),
+            },
         )
 
-        db.add_all([past_record, recent_record])
-        await db.commit()
+        await client.post(
+            f"/api/classes/{test_class.id}/attendance",
+            headers=auth_headers,
+            json={
+                "student_name": "Recent Record",
+                "timestamp": recent_date.isoformat(),
+            },
+        )
 
         # Filter up to 5 days ago
         cutoff = datetime.now(timezone.utc) - timedelta(days=5)
@@ -583,32 +800,28 @@ class TestDateFiltering:
         data = response.json()
 
         # Should only have past record
-        names = [(r["student_first_name"], r["student_last_name"]) for r in data["items"]]
-        assert ("Past", "Record") in names
-        assert ("Recent", "Record") not in names
+        names = [r["student"]["name"] for r in data["items"]]
+        assert "Past Record" in names
+        assert "Recent Record" not in names
 
     async def test_filter_by_both_dates(
         self, client: AsyncClient, auth_headers: dict, test_class: Class, db
     ):
         """Test filtering with both date_from and date_to."""
         from urllib.parse import quote
-        from app.models.attendance import AttendanceRecord
 
-        # Create records at different times
+        # Create records at different times via API
         base_date = datetime.now(timezone.utc)
 
-        records = [
-            AttendanceRecord(
-                class_id=test_class.id,
-                student_first_name=f"Student{i}",
-                student_last_name="Test",
-                timestamp=base_date - timedelta(days=i),
+        for i in range(15):  # 0 to 14 days ago
+            await client.post(
+                f"/api/classes/{test_class.id}/attendance",
+                headers=auth_headers,
+                json={
+                    "student_name": f"Student{i} Test",
+                    "timestamp": (base_date - timedelta(days=i)).isoformat(),
+                },
             )
-            for i in range(15)  # 0 to 14 days ago
-        ]
-
-        db.add_all(records)
-        await db.commit()
 
         # Filter for days 5-10
         date_from = base_date - timedelta(days=10)
@@ -696,8 +909,7 @@ class TestAttendancePermissions:
             f"/api/classes/{test_class.id}/attendance",
             headers=other_headers,
             json={
-                "student_first_name": "Test",
-                "student_last_name": "Student",
+                "student_name": "Test Student",
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             },
         )

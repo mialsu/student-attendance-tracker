@@ -6,7 +6,7 @@ from app.schemas.user import UserResponse
 
 
 class Token(BaseModel):
-    """Schema for token response."""
+    """Internal token model (used by service layer)."""
 
     access_token: str
     refresh_token: str
@@ -14,7 +14,16 @@ class Token(BaseModel):
     user: UserResponse
 
 
-class TokenRefresh(BaseModel):
-    """Schema for token refresh request."""
+class TokenResponse(BaseModel):
+    """Token response for API (refresh token in cookie)."""
 
-    refresh_token: str
+    access_token: str
+    token_type: str = "bearer"
+    user: UserResponse
+
+
+class TokenRefreshResponse(BaseModel):
+    """Token refresh response (only access token)."""
+
+    access_token: str
+    token_type: str = "bearer"

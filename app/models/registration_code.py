@@ -21,8 +21,8 @@ class RegistrationCode(Base):
     code: Mapped[str] = mapped_column(
         String(16), unique=True, nullable=False, index=True
     )
-    email_restriction: Mapped[str] = mapped_column(
-        String(255), unique=True, nullable=False, index=True
+    email_restriction: Mapped[str | None] = mapped_column(
+        String(255), nullable=True, index=True
     )
     used: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     revoked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)

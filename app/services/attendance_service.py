@@ -1,35 +1,18 @@
 """Attendance service - Business logic for attendance tracking."""
 
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import BadRequestException, ForbiddenException, NotFoundError
 from app.models.attendance import AttendanceRecord
 from app.models.class_ import Class
+from app.models.student import Student
 from app.models.user import User
 from app.schemas.attendance import AttendanceRecordCreate
-
-
-def normalize_name(name: str) -> str:
-    """
-    Normalize a name to proper case (Firstname).
-    
-    Examples:
-        "john" -> "John"
-        "MARY" -> "Mary"
-        "jean-paul" -> "Jean-paul"
-        "o'brien" -> "O'brien"
-    
-    Args:
-        name: Name to normalize
-    
-    Returns:
-        Normalized name with first letter capitalized
-    """
-    return name.strip().capitalize()
+from app.services import student_service
 
 
 async def get_attendance_by_id(
@@ -123,7 +106,7 @@ async def list_attendance_for_class(
         student_name: Filter by student name (case-insensitive, partial match)
         date_from: Filter by start date
         date_to: Filter by end date
-        legacy: If None or False, exclude students whose first attendance is > 5 years old
+        legacy: If None or False, exclude students created > 5 years ago
 
     Returns:
         Tuple of (list of attendance records, total count)
@@ -132,86 +115,68 @@ async def list_attendance_for_class(
         NotFoundError: If class not found
         ForbiddenException: If user doesn't own the class
     """
-    from datetime import timedelta, timezone as tz
-    
     # Verify access
     await verify_class_access(db, class_id, teacher)
-    
-    # Handle legacy filter
+
+    # Handle legacy filter: exclude students created > 5 years ago
     students_to_exclude = set()
     if legacy is None or legacy is False:
-        # Get all students with their first (oldest) attendance date
-        first_attendance_query = select(
-            AttendanceRecord.student_first_name,
-            AttendanceRecord.student_last_name,
-            func.min(AttendanceRecord.timestamp).label('first_attendance')
-        ).where(
-            AttendanceRecord.class_id == class_id
-        ).group_by(
-            func.lower(AttendanceRecord.student_first_name),
-            func.lower(AttendanceRecord.student_last_name),
-            AttendanceRecord.student_first_name,
-            AttendanceRecord.student_last_name,
-        )
-        
-        result = await db.execute(first_attendance_query)
-        students = result.all()
-        
-        # Calculate cutoff date (5 years ago)
-        five_years_ago = datetime.now(tz.utc) - timedelta(days=5*365)
-        
-        # Find students whose first attendance is > 5 years old
-        for student_first, student_last, first_attendance in students:
-            # Handle timezone-naive datetimes (from SQLite in tests)
-            if first_attendance.tzinfo is None:
-                first_attendance = first_attendance.replace(tzinfo=tz.utc)
-            
-            if first_attendance < five_years_ago:
-                # Use lowercase for comparison (case-insensitive)
-                students_to_exclude.add((
-                    student_first.lower(),
-                    student_last.lower()
-                ))
-    
-    # Build base query for filtering
-    base_query = select(AttendanceRecord).where(AttendanceRecord.class_id == class_id)
+        five_years_ago = datetime.now(timezone.utc) - timedelta(days=5 * 365)
 
-    # Exclude legacy students if needed
-    if students_to_exclude:
-        for first_name_lower, last_name_lower in students_to_exclude:
-            base_query = base_query.where(
-                ~(
-                    (func.lower(AttendanceRecord.student_first_name) == first_name_lower) &
-                    (func.lower(AttendanceRecord.student_last_name) == last_name_lower)
+        # Use Student.created_at instead of grouping by names
+        result = await db.execute(
+            select(Student.id).where(
+                and_(
+                    Student.class_id == class_id, Student.created_at < five_years_ago
                 )
             )
+        )
+        students_to_exclude = {row[0] for row in result.all()}
 
-    # Apply other filters
-    if student_name:
-        search = f"%{student_name.lower()}%"
+    # Build query joining Student table
+    base_query = (
+        select(AttendanceRecord)
+        .join(Student, Student.id == AttendanceRecord.student_id)
+        .where(AttendanceRecord.class_id == class_id)
+    )
+
+    # Exclude legacy students
+    if students_to_exclude:
         base_query = base_query.where(
-            (func.lower(AttendanceRecord.student_first_name).like(search)) |
-            (func.lower(AttendanceRecord.student_last_name).like(search))
+            AttendanceRecord.student_id.not_in(students_to_exclude)
         )
 
+    # Filter by student name (now using Student.name)
+    if student_name:
+        search = f"%{student_name.lower()}%"
+        base_query = base_query.where(func.lower(Student.name).like(search))
+
+    # Apply date filters
     if date_from:
         base_query = base_query.where(AttendanceRecord.timestamp >= date_from)
-
     if date_to:
         base_query = base_query.where(AttendanceRecord.timestamp <= date_to)
 
-    # Get total count (before pagination)
+    # Get total count
     count_query = select(func.count()).select_from(base_query.subquery())
     count_result = await db.execute(count_query)
-    total_count = count_result.scalar() or 0
+    total = count_result.scalar() or 0
 
-    # Apply ordering and pagination to base query
-    paginated_query = base_query.order_by(AttendanceRecord.timestamp.desc()).offset(skip).limit(limit)
+    # Apply pagination
+    paginated_query = (
+        base_query.order_by(AttendanceRecord.timestamp.desc())
+        .offset(skip)
+        .limit(limit)
+    )
 
     result = await db.execute(paginated_query)
     records = list(result.scalars().all())
 
-    return records, total_count
+    # Eager load students
+    for record in records:
+        await db.refresh(record, ["student"])
+
+    return records, total
 
 
 async def create_attendance_record(
@@ -219,64 +184,76 @@ async def create_attendance_record(
     class_id: UUID,
     attendance_data: AttendanceRecordCreate,
     teacher: User,
-) -> AttendanceRecord:
+) -> tuple[AttendanceRecord, int]:
     """
-    Create a new attendance record for a student.
+    Create one or more attendance records for a student (bulk support).
+
+    When quantity > 1, all records share:
+    - Same student_id
+    - Same timestamp
+    - Same class_id
 
     Args:
         db: Database session
         class_id: Class UUID
-        attendance_data: Attendance data (student names, timestamp)
+        attendance_data: Attendance data (student name, timestamp, quantity)
         teacher: Teacher creating the record
 
     Returns:
-        Created attendance record
+        Tuple of (first created record, total quantity created)
 
     Raises:
         NotFoundError: If class not found
         ForbiddenException: If user doesn't own the class
-        BadRequestException: If class is not active
+        BadRequestException: If class is not active or student name is invalid
     """
-    # Verify access
+    # Verify access and active status
     class_obj = await verify_class_access(db, class_id, teacher)
-    
-    # Check if class is active
+
     if not class_obj.active:
         raise BadRequestException(
             "Cannot add attendance to inactive class. "
             "Please activate the class first."
         )
-    
-    # Normalize student names (capitalize first letter)
-    first_name = normalize_name(attendance_data.student_first_name)
-    last_name = normalize_name(attendance_data.student_last_name)
-    
-    # Create attendance record
-    attendance = AttendanceRecord(
-        class_id=class_id,
-        student_first_name=first_name,
-        student_last_name=last_name,
-        timestamp=attendance_data.timestamp,
+
+    # Get or create student ONCE (before bulk loop)
+    student = await student_service.get_or_create_student(
+        db, name=attendance_data.student_name, class_id=class_id
     )
 
-    db.add(attendance)
+    # Extract quantity (default: 1)
+    quantity = attendance_data.quantity
+    base_timestamp = attendance_data.timestamp
+
+    # Create attendance records (bulk insert pattern)
+    created_records = []
+    for i in range(quantity):
+        attendance = AttendanceRecord(
+            class_id=class_id,
+            student_id=student.id,
+            timestamp=base_timestamp,
+        )
+        db.add(attendance)
+        created_records.append(attendance)
+
+    # Single commit for entire bulk operation (atomic transaction)
     await db.commit()
-    await db.refresh(attendance)
 
-    # Count total attendances for this student (case-insensitive)
-    count_query = select(func.count(AttendanceRecord.id)).where(
-        AttendanceRecord.class_id == class_id,
-        func.lower(AttendanceRecord.student_first_name) == first_name.lower(),
-        func.lower(AttendanceRecord.student_last_name) == last_name.lower()
+    # Refresh first record to return to client
+    first_record = created_records[0]
+    await db.refresh(first_record)
+    await db.refresh(first_record, ["student"])  # Load relationship
+
+    # Count total attendances for this student (after bulk insert)
+    count_result = await db.execute(
+        select(func.count(AttendanceRecord.id)).where(
+            AttendanceRecord.student_id == student.id
+        )
     )
-    count_result = await db.execute(count_query)
     total_count = count_result.scalar()
+    setattr(first_record, "total_attendance", total_count)
 
-    # Add the total count to the attendance object for response
-    # Note: This is not a database field, just for the response
-    setattr(attendance, 'total_attendance', total_count)
-
-    return attendance
+    return first_record, quantity
 
 
 async def delete_attendance_record(
@@ -320,9 +297,13 @@ async def get_attendance_summary(
     db: AsyncSession,
     class_id: UUID,
     teacher: User,
-) -> list[dict]:
+    search: str | None = None,
+    skip: int = 0,
+    limit: int = 20,
+    sort_by: str = "attendance_desc",
+) -> tuple[list[dict], int]:
     """
-    Get attendance summary grouped by student.
+    Get attendance summary grouped by student with pagination and filtering.
 
     Returns a list of students with their total attendance count and all records.
 
@@ -330,9 +311,13 @@ async def get_attendance_summary(
         db: Database session
         class_id: Class UUID
         teacher: Teacher requesting the summary
+        search: Optional search term to filter students by name
+        skip: Number of records to skip (pagination offset)
+        limit: Maximum number of records to return (page size)
+        sort_by: Sort field - 'attendance_desc' or 'name_asc'
 
     Returns:
-        List of student summaries with attendance counts and records
+        Tuple of (list of student summaries, total count of matching students)
 
     Raises:
         NotFoundError: If class not found
@@ -340,50 +325,63 @@ async def get_attendance_summary(
     """
     # Verify access
     await verify_class_access(db, class_id, teacher)
-    
-    # Get all attendance records for the class
-    result = await db.execute(
-        select(AttendanceRecord)
-        .where(AttendanceRecord.class_id == class_id)
-        .order_by(AttendanceRecord.timestamp.desc())
-    )
-    records = list(result.scalars().all())
-    
-    # Group by student (case-insensitive)
-    students_map: dict[tuple[str, str], list[AttendanceRecord]] = {}
-    
-    for record in records:
-        # Use normalized names as key (lowercase for grouping)
-        key = (
-            record.student_first_name.lower(),
-            record.student_last_name.lower()
+
+    # Build base query for students
+    query = select(Student).where(Student.class_id == class_id)
+
+    # Add search filter if provided
+    if search:
+        search_pattern = f"%{search.lower()}%"
+        query = query.where(func.lower(Student.name).like(search_pattern))
+
+    # Count total matching students (before pagination)
+    count_query = select(func.count()).select_from(query.subquery())
+    count_result = await db.execute(count_query)
+    total = count_result.scalar_one()
+
+    # Apply sorting
+    if sort_by == "attendance_desc":
+        # Sort by attendance count descending, then by name ascending
+        # We need to join with attendance_records and count them
+        query = (
+            query
+            .outerjoin(AttendanceRecord, Student.id == AttendanceRecord.student_id)
+            .group_by(Student.id)
+            .order_by(func.count(AttendanceRecord.id).desc(), Student.name.asc())
         )
-        
-        if key not in students_map:
-            students_map[key] = []
-        students_map[key].append(record)
-    
-    # Build summary list
+    else:  # name_asc (default)
+        query = query.order_by(Student.name.asc())
+
+    # Apply pagination
+    query = query.offset(skip).limit(limit)
+
+    # Execute query
+    students_result = await db.execute(query)
+    students = list(students_result.scalars().all())
+
+    # Build summary
     summary = []
-    for (first_lower, last_lower), student_records in students_map.items():
-        # Use the actual capitalized name from the most recent record
-        most_recent = student_records[0]
-        
-        summary.append({
-            "student_first_name": most_recent.student_first_name,
-            "student_last_name": most_recent.student_last_name,
-            "total_attendance": len(student_records),
-            "records": [
-                {
-                    "id": str(record.id),
-                    "timestamp": record.timestamp.isoformat(),
-                }
-                for record in student_records
-            ],
-        })
-    
-    # Sort by last name, then first name
-    summary.sort(key=lambda x: (x["student_last_name"], x["student_first_name"]))
-    
-    return summary
+    for student in students:
+        # Get all attendance records for this student
+        records_result = await db.execute(
+            select(AttendanceRecord)
+            .where(AttendanceRecord.student_id == student.id)
+            .order_by(AttendanceRecord.timestamp.desc())
+        )
+        records = list(records_result.scalars().all())
+
+        summary.append(
+            {
+                "student_id": student.id,
+                "student_name": student.name,
+                "course_credit_received": student.course_credit_received,
+                "total_attendance": len(records),
+                "records": [
+                    {"id": str(r.id), "timestamp": r.timestamp.isoformat()}
+                    for r in records
+                ],
+            }
+        )
+
+    return summary, total
 
