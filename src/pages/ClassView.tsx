@@ -7,6 +7,7 @@ import { useClass } from '@/hooks/useClasses';
 import { Loader2 } from 'lucide-react';
 import AttendanceTracking from '@/components/AttendanceTracking';
 import StudentLogs from '@/components/StudentLogs';
+import ClassStatistics from '@/pages/ClassStatistics';
 import { TeacherLayout } from '@/components/layouts/TeacherLayout';
 import type { BreadcrumbItem } from '@/types/breadcrumb';
 
@@ -42,6 +43,8 @@ const ClassView = () => {
         crumbs.push({ label: 'Läsnäolon kirjaus' });
       } else if (activeTab === 'logs') {
         crumbs.push({ label: 'Läsnäolot' });
+      } else if (activeTab === 'statistics') {
+        crumbs.push({ label: 'Tilastot' });
       }
     }
 
@@ -83,9 +86,10 @@ const ClassView = () => {
         onValueChange={(value) => setActiveTab(value)}
         className="space-y-8"
       >
-          <TabsList className="grid w-full max-w-md grid-cols-2">
+          <TabsList className="grid w-full max-w-3xl grid-cols-3">
             <TabsTrigger value="attendance">Läsnäolon kirjaus</TabsTrigger>
             <TabsTrigger value="logs">Läsnäolot</TabsTrigger>
+            <TabsTrigger value="statistics">Tilastot</TabsTrigger>
           </TabsList>
 
           <TabsContent value="attendance">
@@ -94,6 +98,10 @@ const ClassView = () => {
 
           <TabsContent value="logs">
             <StudentLogs classId={classData.id} />
+          </TabsContent>
+
+          <TabsContent value="statistics">
+            <ClassStatistics classId={classData.id} />
           </TabsContent>
         </Tabs>
     </TeacherLayout>

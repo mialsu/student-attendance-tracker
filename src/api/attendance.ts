@@ -27,6 +27,25 @@ export interface GetSummaryParams {
   sort_by?: 'attendance_desc' | 'name_asc';
 }
 
+export interface DailyStatistic {
+  date: string; // ISO format: "2024-01-15"
+  count: number;
+}
+
+export interface MonthlyStatistic {
+  year_month: string; // Format: "2024-01"
+  count: number;
+}
+
+export interface AttendanceStatistics {
+  total_records: number;
+  total_students: number;
+  first_date: string | null;
+  last_date: string | null;
+  daily_stats: DailyStatistic[];
+  monthly_stats: MonthlyStatistic[];
+}
+
 export const attendanceApi = {
   async list(classId: string, params?: ListAttendanceParams): Promise<PaginatedAttendanceResponse> {
     const response = await apiClient.get(`/api/classes/${classId}/attendance`, {
@@ -51,6 +70,11 @@ export const attendanceApi = {
     const response = await apiClient.get(`/api/classes/${classId}/attendance/summary`, {
       params,
     });
+    return response.data;
+  },
+
+  async getStatistics(classId: string): Promise<AttendanceStatistics> {
+    const response = await apiClient.get(`/api/classes/${classId}/attendance/statistics`);
     return response.data;
   },
 };

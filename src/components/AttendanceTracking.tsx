@@ -4,12 +4,16 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Command, CommandEmpty, CommandGroup, CommandItem, CommandList } from '@/components/ui/command';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
 import { useCreateAttendance } from '@/hooks/useAttendance';
 import { useStudentAutocomplete } from '@/hooks/useStudents';
 import { useDebounce } from '@/hooks/useDebounce';
-import { UserPlus, Check } from 'lucide-react';
+import { UserPlus, Check, Calendar as CalendarIcon } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import { format } from 'date-fns';
+import { fi } from 'date-fns/locale';
 
 interface AttendanceTrackingProps {
   classId: string;
@@ -18,6 +22,7 @@ interface AttendanceTrackingProps {
 const AttendanceTracking = ({ classId }: AttendanceTrackingProps) => {
   const [studentName, setStudentName] = useState('');
   const [quantity, setQuantity] = useState(1);
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [autocompleteOpen, setAutocompleteOpen] = useState(false);
   const [selectedFromDropdown, setSelectedFromDropdown] = useState(false);
   const { toast } = useToast();
@@ -107,11 +112,18 @@ const AttendanceTracking = ({ classId }: AttendanceTrackingProps) => {
     }
 
     try {
+      // Create timestamp from selected date + current time
+      const timestamp = new Date(selectedDate);
+      timestamp.setHours(new Date().getHours());
+      timestamp.setMinutes(new Date().getMinutes());
+      timestamp.setSeconds(new Date().getSeconds());
+
       const record = await createAttendanceMutation.mutateAsync({
         classId,
         data: {
           student_name: studentName.trim(),
           quantity,
+          timestamp: timestamp.toISOString(),
         },
       });
 
@@ -124,6 +136,7 @@ const AttendanceTracking = ({ classId }: AttendanceTrackingProps) => {
         description: `${studentName}${quantityText}`,
       });
 
+      // Reset form but keep the selected date
       setStudentName('');
       setQuantity(1);
       setSelectedFromDropdown(false);
@@ -146,6 +159,36 @@ const AttendanceTracking = ({ classId }: AttendanceTrackingProps) => {
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Date Picker */}
+          <div className="space-y-3">
+            <Label htmlFor="attendance-date">Päivämäärä</Label>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  id="attendance-date"
+                  variant="outline"
+                  className={cn(
+                    'w-full justify-start text-left font-normal',
+                    !selectedDate && 'text-muted-foreground'
+                  )}
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {selectedDate ? format(selectedDate, 'PPP', { locale: fi }) : 'Valitse päivämäärä'}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={selectedDate}
+                  onSelect={(date) => date && setSelectedDate(date)}
+                  disabled={(date) => date > new Date()}
+                  initialFocus
+                  locale={fi}
+                />
+              </PopoverContent>
+            </Popover>
+          </div>
+
           <div className="grid md:grid-cols-2 gap-6">
             {/* Student Name with Autocomplete */}
             <div className="space-y-3">

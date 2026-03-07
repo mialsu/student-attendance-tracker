@@ -21,6 +21,15 @@ export function useAttendanceSummary(
   });
 }
 
+export function useAttendanceStatistics(classId: string) {
+  return useQuery({
+    queryKey: ['attendance-statistics', classId],
+    queryFn: () => attendanceApi.getStatistics(classId),
+    enabled: !!classId,
+    staleTime: 1000 * 60 * 5, // 5 minutes
+  });
+}
+
 export function useCreateAttendance() {
   const queryClient = useQueryClient();
 
@@ -30,6 +39,7 @@ export function useCreateAttendance() {
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['attendance', variables.classId] });
       queryClient.invalidateQueries({ queryKey: ['attendance-summary', variables.classId] });
+      queryClient.invalidateQueries({ queryKey: ['attendance-statistics', variables.classId] });
     },
   });
 }
@@ -43,6 +53,7 @@ export function useDeleteAttendance() {
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['attendance', variables.classId] });
       queryClient.invalidateQueries({ queryKey: ['attendance-summary', variables.classId] });
+      queryClient.invalidateQueries({ queryKey: ['attendance-statistics', variables.classId] });
     },
   });
 }
