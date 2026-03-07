@@ -389,6 +389,7 @@ async def get_attendance_summary(
 async def get_attendance_statistics(
     db: AsyncSession,
     class_id: UUID,
+    exclude_dates: list[str] | None = None,
 ) -> dict:
     """
     Get daily and monthly attendance statistics for a class.
@@ -399,23 +400,46 @@ async def get_attendance_statistics(
     Args:
         db: Database session
         class_id: Class UUID
+        exclude_dates: Optional list of dates to exclude (format: "YYYY-MM-DD")
 
     Returns:
         Dictionary with statistics including daily and monthly aggregations
     """
-    # Total records count
+    # Total records count (ALL data, not filtered)
     total_result = await db.execute(
         select(func.count(AttendanceRecord.id))
         .where(AttendanceRecord.class_id == class_id)
     )
     total_records = total_result.scalar() or 0
 
-    # Total unique students count
+    # Total unique students count (ALL data, not filtered)
     students_result = await db.execute(
         select(func.count(func.distinct(AttendanceRecord.student_id)))
         .where(AttendanceRecord.class_id == class_id)
     )
     total_students = students_result.scalar() or 0
+
+    # Build WHERE clause for statistics (with exclusions)
+    where_conditions = [AttendanceRecord.class_id == class_id]
+
+    # Add date exclusions if provided (only affects charts/tables)
+    if exclude_dates:
+        # Convert string dates to date objects for comparison
+        from datetime import datetime
+        exclude_date_objs = []
+        for date_str in exclude_dates:
+            try:
+                date_obj = datetime.strptime(date_str, "%Y-%m-%d").date()
+                exclude_date_objs.append(date_obj)
+            except ValueError:
+                continue  # Skip invalid dates
+
+        if exclude_date_objs:
+            # Exclude records where DATE(timestamp) matches any excluded date
+            for excluded_date in exclude_date_objs:
+                where_conditions.append(
+                    func.date(AttendanceRecord.timestamp) != excluded_date
+                )
 
     # Check database dialect
     dialect = db.bind.dialect.name
@@ -429,7 +453,7 @@ async def get_attendance_statistics(
                 date_col.label('date'),
                 func.count(AttendanceRecord.id).label('count')
             ).where(
-                AttendanceRecord.class_id == class_id
+                and_(*where_conditions)
             ).group_by(
                 date_col
             ).order_by(
@@ -448,7 +472,7 @@ async def get_attendance_statistics(
                 month_col.label('month'),
                 func.count(AttendanceRecord.id).label('count')
             ).where(
-                AttendanceRecord.class_id == class_id
+                and_(*where_conditions)
             ).group_by(
                 month_col
             ).order_by(
@@ -468,7 +492,7 @@ async def get_attendance_statistics(
                 date_col.label('date'),
                 func.count(AttendanceRecord.id).label('count')
             ).where(
-                AttendanceRecord.class_id == class_id
+                and_(*where_conditions)
             ).group_by(
                 date_col
             ).order_by(
@@ -487,7 +511,7 @@ async def get_attendance_statistics(
                 month_col.label('month'),
                 func.count(AttendanceRecord.id).label('count')
             ).where(
-                AttendanceRecord.class_id == class_id
+                and_(*where_conditions)
             ).group_by(
                 month_col
             ).order_by(

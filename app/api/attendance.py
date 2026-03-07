@@ -29,6 +29,7 @@ async def get_attendance_statistics(
     class_id: UUID,
     current_user: CurrentUser,
     db: AsyncSession = Depends(get_db),
+    exclude_dates: str | None = Query(None, description="Comma-separated dates to exclude (YYYY-MM-DD)"),
 ) -> AttendanceStatistics:
     """
     Get attendance statistics grouped by date and month.
@@ -45,6 +46,7 @@ async def get_attendance_statistics(
         class_id: Class UUID
         current_user: Current authenticated user
         db: Database session
+        exclude_dates: Optional comma-separated dates to exclude (e.g., "2026-02-27,2026-03-01")
 
     Returns:
         Attendance statistics with daily and monthly aggregations
@@ -56,8 +58,15 @@ async def get_attendance_statistics(
     # Verify class access
     await attendance_service.verify_class_access(db, class_id, current_user)
 
+    # Parse exclude_dates
+    excluded_dates_list = []
+    if exclude_dates:
+        excluded_dates_list = [d.strip() for d in exclude_dates.split(",") if d.strip()]
+
     # Get statistics
-    stats = await attendance_service.get_attendance_statistics(db, class_id)
+    stats = await attendance_service.get_attendance_statistics(
+        db, class_id, exclude_dates=excluded_dates_list
+    )
 
     return AttendanceStatistics(**stats)
 
