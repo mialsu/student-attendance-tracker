@@ -73,8 +73,13 @@ export const attendanceApi = {
     return response.data;
   },
 
-  async getStatistics(classId: string): Promise<AttendanceStatistics> {
-    const response = await apiClient.get(`/api/classes/${classId}/attendance/statistics`);
+  async getStatistics(classId: string, excludeDates?: string[]): Promise<AttendanceStatistics> {
+    const params = excludeDates && excludeDates.length > 0
+      ? { exclude_dates: excludeDates.join(',') }
+      : {};
+    const response = await apiClient.get(`/api/classes/${classId}/attendance/statistics`, {
+      params,
+    });
     return response.data;
   },
 };

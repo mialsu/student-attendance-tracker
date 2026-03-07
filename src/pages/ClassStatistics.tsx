@@ -20,7 +20,11 @@ const chartConfig = {
 } satisfies ChartConfig;
 
 const ClassStatistics = ({ classId }: ClassStatisticsProps) => {
-  const { data: stats, isLoading } = useAttendanceStatistics(classId);
+  // TODO: Make this configurable via UI settings
+  // For now, exclude the bulk log from 2026-02-27
+  const excludeDates = ['2026-02-27'];
+
+  const { data: stats, isLoading } = useAttendanceStatistics(classId, excludeDates);
 
   // Format daily data for chart
   const dailyData = useMemo(() => {

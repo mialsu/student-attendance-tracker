@@ -21,10 +21,10 @@ export function useAttendanceSummary(
   });
 }
 
-export function useAttendanceStatistics(classId: string) {
+export function useAttendanceStatistics(classId: string, excludeDates?: string[]) {
   return useQuery({
-    queryKey: ['attendance-statistics', classId],
-    queryFn: () => attendanceApi.getStatistics(classId),
+    queryKey: ['attendance-statistics', classId, excludeDates],
+    queryFn: () => attendanceApi.getStatistics(classId, excludeDates),
     enabled: !!classId,
     staleTime: 1000 * 60 * 5, // 5 minutes
   });
