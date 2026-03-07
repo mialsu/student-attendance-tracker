@@ -98,3 +98,28 @@ class PaginatedAttendanceSummaryResponse(BaseModel):
     total: int = Field(..., description="Total number of matching students")
     skip: int = Field(..., description="Number of items skipped (offset)")
     limit: int = Field(..., description="Number of items per page")
+
+
+class DailyStatistic(BaseModel):
+    """Daily attendance statistic."""
+
+    date: str = Field(..., description="Date in ISO format (YYYY-MM-DD)")
+    count: int = Field(..., description="Total attendance count for this day")
+
+
+class MonthlyStatistic(BaseModel):
+    """Monthly attendance statistic."""
+
+    year_month: str = Field(..., description="Year and month in format YYYY-MM")
+    count: int = Field(..., description="Total attendance count for this month")
+
+
+class AttendanceStatistics(BaseModel):
+    """Attendance statistics aggregated by date and month."""
+
+    total_records: int = Field(..., description="Total number of attendance records")
+    total_students: int = Field(..., description="Total number of unique students")
+    first_date: str | None = Field(None, description="First attendance date (ISO format)")
+    last_date: str | None = Field(None, description="Last attendance date (ISO format)")
+    daily_stats: list[DailyStatistic] = Field(..., description="Attendance grouped by day")
+    monthly_stats: list[MonthlyStatistic] = Field(..., description="Attendance grouped by month")

@@ -385,3 +385,130 @@ async def get_attendance_summary(
 
     return summary, total
 
+
+async def get_attendance_statistics(
+    db: AsyncSession,
+    class_id: UUID,
+) -> dict:
+    """
+    Get daily and monthly attendance statistics for a class.
+
+    Uses database aggregation for efficient queries.
+    Compatible with both PostgreSQL (date_trunc) and SQLite (date).
+
+    Args:
+        db: Database session
+        class_id: Class UUID
+
+    Returns:
+        Dictionary with statistics including daily and monthly aggregations
+    """
+    # Total records count
+    total_result = await db.execute(
+        select(func.count(AttendanceRecord.id))
+        .where(AttendanceRecord.class_id == class_id)
+    )
+    total_records = total_result.scalar() or 0
+
+    # Total unique students count
+    students_result = await db.execute(
+        select(func.count(func.distinct(AttendanceRecord.student_id)))
+        .where(AttendanceRecord.class_id == class_id)
+    )
+    total_students = students_result.scalar() or 0
+
+    # Check database dialect
+    dialect = db.bind.dialect.name
+
+    if dialect == 'postgresql':
+        # PostgreSQL: use date_trunc for efficient aggregation
+        # Daily aggregation
+        date_col = func.date_trunc('day', AttendanceRecord.timestamp)
+        daily_result = await db.execute(
+            select(
+                date_col.label('date'),
+                func.count(AttendanceRecord.id).label('count')
+            ).where(
+                AttendanceRecord.class_id == class_id
+            ).group_by(
+                date_col
+            ).order_by(
+                date_col
+            )
+        )
+        daily_stats = [
+            {"date": row.date.date().isoformat(), "count": row.count}
+            for row in daily_result.all()
+        ]
+
+        # Monthly aggregation
+        month_col = func.date_trunc('month', AttendanceRecord.timestamp)
+        monthly_result = await db.execute(
+            select(
+                month_col.label('month'),
+                func.count(AttendanceRecord.id).label('count')
+            ).where(
+                AttendanceRecord.class_id == class_id
+            ).group_by(
+                month_col
+            ).order_by(
+                month_col
+            )
+        )
+        monthly_stats = [
+            {"year_month": row.month.strftime('%Y-%m'), "count": row.count}
+            for row in monthly_result.all()
+        ]
+    else:
+        # SQLite: use date() and strftime() functions
+        # Daily aggregation
+        date_col = func.date(AttendanceRecord.timestamp)
+        daily_result = await db.execute(
+            select(
+                date_col.label('date'),
+                func.count(AttendanceRecord.id).label('count')
+            ).where(
+                AttendanceRecord.class_id == class_id
+            ).group_by(
+                date_col
+            ).order_by(
+                date_col
+            )
+        )
+        daily_stats = [
+            {"date": row.date, "count": row.count}
+            for row in daily_result.all()
+        ]
+
+        # Monthly aggregation
+        month_col = func.strftime('%Y-%m', AttendanceRecord.timestamp)
+        monthly_result = await db.execute(
+            select(
+                month_col.label('month'),
+                func.count(AttendanceRecord.id).label('count')
+            ).where(
+                AttendanceRecord.class_id == class_id
+            ).group_by(
+                month_col
+            ).order_by(
+                month_col
+            )
+        )
+        monthly_stats = [
+            {"year_month": row.month, "count": row.count}
+            for row in monthly_result.all()
+        ]
+
+    # Date range
+    first_date = daily_stats[0]["date"] if daily_stats else None
+    last_date = daily_stats[-1]["date"] if daily_stats else None
+
+    return {
+        "total_records": total_records,
+        "total_students": total_students,
+        "first_date": first_date,
+        "last_date": last_date,
+        "daily_stats": daily_stats,
+        "monthly_stats": monthly_stats,
+    }
+

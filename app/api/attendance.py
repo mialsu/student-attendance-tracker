@@ -11,6 +11,7 @@ from app.dependencies import CurrentUser
 from app.schemas.attendance import (
     AttendanceRecordCreate,
     AttendanceRecordResponse,
+    AttendanceStatistics,
     AttendanceSummary,
     PaginatedAttendanceResponse,
     PaginatedAttendanceSummaryResponse,
@@ -18,6 +19,47 @@ from app.schemas.attendance import (
 from app.services import attendance_service
 
 router = APIRouter()
+
+
+@router.get(
+    "/classes/{class_id}/attendance/statistics",
+    response_model=AttendanceStatistics,
+)
+async def get_attendance_statistics(
+    class_id: UUID,
+    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+) -> AttendanceStatistics:
+    """
+    Get attendance statistics grouped by date and month.
+
+    Returns aggregated statistics including:
+    - Total attendance records and unique students
+    - First and last attendance dates
+    - Daily attendance counts
+    - Monthly attendance counts
+
+    Uses database aggregation for efficient queries.
+
+    Args:
+        class_id: Class UUID
+        current_user: Current authenticated user
+        db: Database session
+
+    Returns:
+        Attendance statistics with daily and monthly aggregations
+
+    Raises:
+        404: If class not found
+        403: If user doesn't own the class
+    """
+    # Verify class access
+    await attendance_service.verify_class_access(db, class_id, current_user)
+
+    # Get statistics
+    stats = await attendance_service.get_attendance_statistics(db, class_id)
+
+    return AttendanceStatistics(**stats)
 
 
 @router.get("/classes/{class_id}/attendance", response_model=PaginatedAttendanceResponse)
