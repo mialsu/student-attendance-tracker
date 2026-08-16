@@ -143,7 +143,7 @@ backend/
 │ id (UUID, PK)       │
 │ email (unique)      │
 │ password_hash       │
-│ acctive             │
+│ active              │
 │ created_at          │
 │ updated_at          │
 └──────────┬──────────┘
@@ -151,31 +151,47 @@ backend/
            │ 1:N
            │
            ▼
-┌─────────────────────┐
-│      Class          │
-│  (Course/Kurssi)    │
-├─────────────────────┤
-│ id (UUID, PK)       │
-│ name                │
-│ description         │
-│ teacher_id (FK)     │◄───┐
-│ created_at          │    │
-│ updated_at          │    │
-└──────────┬──────────┘    │
-           │                │
-           │ 1:N            │
-           │                │
-           ▼                │
-┌─────────────────────┐    │
-│ AttendanceRecord    │    │
-├─────────────────────┤    │
-│ id (UUID, PK)       │    │
-│ class_id (FK)       │────┘
-│ student_first_name  │
-│ student_last_name   │
-│ timestamp           │
-│ created_at          │
-└─────────────────────┘
+┌─────────────────────────────┐
+│      Class                  │
+│  (Course/Kurssi)            │
+├─────────────────────────────┤
+│ id (UUID, PK)               │
+│ name                        │
+│ description                 │
+│ teacher_id (FK → User.id)   │
+│ active                      │
+│ created_at                  │
+│ updated_at                  │
+└──────────┬──────────────────┘
+           │
+           │ 1:N
+           │
+           ▼
+┌──────────────────────────────────┐
+│      Student                     │
+├──────────────────────────────────┤
+│ id (UUID, PK)                    │
+│ name                             │
+│ class_id (FK → Class.id)         │
+│ course_credit_received (boolean) │
+│ created_at                       │
+│ updated_at                       │
+└──────────┬───────────────────────┘
+           │
+           │ 1:N
+           │
+           ▼
+┌─────────────────────────────┐
+│ AttendanceRecord            │
+├─────────────────────────────┤
+│ id (UUID, PK)               │
+│ class_id (FK → Class.id)    │
+│ student_id (FK → Student.id)│
+│ timestamp                   │
+│ created_at                  │
+└─────────────────────────────┘
+
+Unique Index: LOWER(Student.name), Student.class_id
 ```
 
 ### SQLAlchemy Models
@@ -205,12 +221,36 @@ class Class(Base):
     name = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
     teacher_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    active = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
     # Relationships
     teacher = relationship("User", back_populates="classes")
+    students = relationship("Student", back_populates="class_", cascade="all, delete-orphan")
     attendance_records = relationship("AttendanceRecord", back_populates="class_", cascade="all, delete-orphan")
+```
+
+#### Student
+```python
+class Student(Base):
+    __tablename__ = "students"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name = Column(String(200), nullable=False)
+    class_id = Column(UUID(as_uuid=True), ForeignKey("classes.id", ondelete="CASCADE"), nullable=False, index=True)
+    course_credit_received = Column(Boolean, default=False, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    # Relationships
+    class_ = relationship("Class", back_populates="students")
+    attendance_records = relationship("AttendanceRecord", back_populates="student", cascade="all, delete-orphan")
+
+    # Indexes for case-insensitive uniqueness
+    __table_args__ = (
+        Index('ix_students_name_class_unique', func.lower(name), class_id, unique=True),
+    )
 ```
 
 #### AttendanceRecord
@@ -219,21 +259,14 @@ class AttendanceRecord(Base):
     __tablename__ = "attendance_records"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    class_id = Column(UUID(as_uuid=True), ForeignKey("classes.id", ondelete="CASCADE"), nullable=False)
-    student_first_name = Column(String(100), nullable=False)
-    student_last_name = Column(String(100), nullable=False)
-    timestamp = Column(DateTime(timezone=True), nullable=False)
+    class_id = Column(UUID(as_uuid=True), ForeignKey("classes.id", ondelete="CASCADE"), nullable=False, index=True)
+    student_id = Column(UUID(as_uuid=True), ForeignKey("students.id", ondelete="CASCADE"), nullable=False, index=True)
+    timestamp = Column(DateTime(timezone=True), nullable=False, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     # Relationships
     class_ = relationship("Class", back_populates="attendance_records")
-
-    # Indexes for performance
-    __table_args__ = (
-        Index('ix_attendance_class_id', 'class_id'),
-        Index('ix_attendance_timestamp', 'timestamp'),
-        Index('ix_attendance_student_name', 'student_last_name', 'student_first_name'),
-    )
+    student = relationship("Student", back_populates="attendance_records")
 ```
 
 ### Database Constraints
@@ -241,13 +274,18 @@ class AttendanceRecord(Base):
 1. **Primary Keys**: UUIDs for all entities (better for distributed systems)
 2. **Foreign Keys**:
    - `Class.teacher_id` → `User.id` (CASCADE DELETE)
+   - `Student.class_id` → `Class.id` (CASCADE DELETE)
    - `AttendanceRecord.class_id` → `Class.id` (CASCADE DELETE)
-3. **Unique Constraints**: `User.email`
+   - `AttendanceRecord.student_id` → `Student.id` (CASCADE DELETE)
+3. **Unique Constraints**:
+   - `User.email`
+   - Composite unique index: `LOWER(Student.name)`, `Student.class_id` (case-insensitive uniqueness per class)
 4. **Indexes**:
    - `User.email` (for login lookups)
-   - `AttendanceRecord.class_id` (for filtering)
-   - `AttendanceRecord.timestamp` (for sorting)
-   - Composite index on student names (for searching)
+   - `Student.class_id` (for filtering students by class)
+   - `AttendanceRecord.class_id` (for filtering attendance by class)
+   - `AttendanceRecord.student_id` (for filtering attendance by student)
+   - `AttendanceRecord.timestamp` (for sorting by date)
 
 ## API Architecture
 
@@ -346,15 +384,39 @@ DELETE /api/classes/{id}         - Delete class (cascade deletes attendance)
   Response: { message }
 ```
 
+#### Students (`/api/students`)
+```
+GET    /api/classes/{id}/students          - List students for a class
+  Query: ?skip=0&limit=100&search=&credit_status=
+  Response: { items: [{ id, name, course_credit_received, ... }], total, skip, limit }
+
+GET    /api/classes/{id}/students/summary  - List students with attendance counts
+  Response: [{ id, name, course_credit_received, total_attendance }]
+
+GET    /api/classes/{id}/students/autocomplete - Autocomplete student names
+  Query: ?q=john&limit=10
+  Response: [{ id, name, total_attendance }]
+
+GET    /api/students/{id}                  - Get student details
+  Response: { id, name, class_id, course_credit_received, created_at, updated_at }
+
+PUT    /api/students/{id}                  - Update student
+  Request: { name?, course_credit_received? }
+  Response: { id, name, course_credit_received, updated_at }
+
+DELETE /api/students/{id}                  - Delete student (cascade deletes attendance)
+  Response: { message }
+```
+
 #### Attendance (`/api/attendance`)
 ```
 GET    /api/classes/{id}/attendance        - List attendance records
-  Query: ?skip=0&limit=100&student_name=&date_from=&date_to=
-  Response: [{ id, student_first_name, student_last_name, timestamp }]
+  Query: ?skip=0&limit=100&student_name=&date_from=&date_to=&legacy=
+  Response: { items: [{ id, student_id, student_name, timestamp }], total, skip, limit }
 
-POST   /api/classes/{id}/attendance        - Log attendance
-  Request: { student_first_name, student_last_name, timestamp }
-  Response: { id, class_id, student_first_name, student_last_name, timestamp }
+POST   /api/classes/{id}/attendance        - Log attendance (with bulk support)
+  Request: { student_name, timestamp, quantity? (1-50, default 1) }
+  Response: { id, class_id, student_id, student_name, timestamp, quantity_created }
 
 DELETE /api/attendance/{id}                - Delete attendance record
   Response: { message }
@@ -362,8 +424,9 @@ DELETE /api/attendance/{id}                - Delete attendance record
 GET    /api/classes/{id}/attendance/summary - Get attendance summary by student
   Response: [
     {
-      student_first_name,
-      student_last_name,
+      student_id,
+      student_name,
+      course_credit_received,
       total_attendance,
       records: [{ id, timestamp }]
     }
@@ -580,16 +643,23 @@ nano .env  # Edit secrets
 # 5. Start Services
 docker-compose up -d
 
-# 6. Setup SSL (Certbot)
-# Use Certbot with Nginx for Let's Encrypt SSL
+# 6. Setup SSL (Certbot, webroot + automatic renewal)
+sudo ./deployment/scripts/setup-ssl.sh
+sudo ./deployment/scripts/setup-ssl-monitoring.sh
+# See SSL_SETUP.md. Note: nginx runs ONLY as a container here — never enable the
+# host nginx service, it steals port 80 at boot and the container cannot start.
 ```
 
 ### Data Persistence
 - **Database**: Docker volume `postgres_data`
-- **Backups**:
-  - Daily automated backups with `pg_dump`
-  - Store in Hetzner Volume or S3-compatible storage
-  - Retention: 7 daily, 4 weekly, 12 monthly
+- **Backups**: ⚠️ **manual only — not yet automated**
+  - `./deployment/scripts/backup-db.sh production` runs `pg_dump` and keeps the
+    last 7 archives in `deployment/production/backups/`
+  - **Nothing schedules it.** Verified 2026-08-16: no cron entry and no systemd
+    timer exists, and the server held exactly one backup. Treat the target state
+    below as a TODO, not as description of reality.
+  - *Target*: daily automated run, off-box storage (Hetzner Volume or
+    S3-compatible), retention 7 daily / 4 weekly / 12 monthly
 
 ### Monitoring
 - **Docker Logs**: `docker-compose logs -f`
