@@ -1,0 +1,8 @@
+[Unit]
+Description=Record that an automatic certbot renewal failed
+
+[Service]
+Type=oneshot
+# Refresh the cached status immediately so the login banner reflects the
+# failure right away rather than waiting for the next daily check.
+ExecStart=/bin/sh -c 'logger -t ssl-cert-check -p daemon.err "CRITICAL: certbot.service FAILED - certificate will not renew. See: journalctl -u certbot.service"; /usr/local/bin/ssl-cert-check.sh || true'

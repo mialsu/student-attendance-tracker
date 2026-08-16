@@ -1,0 +1,11 @@
+[Unit]
+Description=Check SSL certificate health (disk vs. wire) and update the login banner
+Documentation=file:///root/student-attendance-tracker/deployment/scripts/check-ssl.sh
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/ssl-cert-check.sh
+# A WARN exit (1) or CRIT exit (2) is information, not a unit failure — the
+# banner and the journal carry the signal. Keep the unit itself green so that a
+# genuinely failed *run* stands out.
+SuccessExitStatus=0 1 2

@@ -268,20 +268,43 @@ crontab -e
 ./deployment/scripts/setup-ssl.sh
 ```
 
-### Renewal (every 60 days)
+This is idempotent — it is also the **repair** path if renewal ever breaks.
 
+### Renewal — automatic, nothing to do
+
+`certbot.timer` (installed with the certbot package) runs twice a day and renews
+inside the last 30 days of validity. Two pieces make that actually work here:
+
+- **webroot, not standalone.** The challenge file is written to `/var/www/certbot`,
+  which nginx already serves at `/.well-known/acme-challenge/`. nginx never stops.
+- **a deploy hook.** `/etc/letsencrypt/renewal-hooks/deploy/reload-nginx.sh` runs
+  after a successful renewal and issues a graceful `nginx -s reload`. nginx
+  bind-mounts `/etc/letsencrypt` read-only and reads the live cert directly, so
+  there are no copies to keep in sync.
+
+Do **not** add a cron job for this, and do **not** re-copy certs into `production/ssl/`.
+
+Verify at any time:
 ```bash
-# Renew certificate
-sudo certbot renew
-
-# Update certificate files
-./deployment/scripts/setup-ssl.sh
+./deployment/scripts/check-ssl.sh      # compares cert on disk vs. cert on the wire
+sudo certbot renew --dry-run           # simulates a real unattended renewal
 ```
 
-Add to crontab for automatic renewal:
-```bash
-0 3 1 * * sudo certbot renew --quiet && /path/to/deployment/scripts/setup-ssl.sh
-```
+### Monitoring
+
+`./deployment/scripts/setup-ssl-monitoring.sh` installs local alerting (no external
+services):
+
+- **Login banner** — every SSH login prints cert status, red if expiring or stale.
+- **Daily check** — `ssl-cert-check.timer` logs to the journal (`journalctl -t ssl-cert-check`).
+- **Renewal failure** — `certbot.service` has an `OnFailure` hook that logs CRITICAL
+  and refreshes the banner immediately.
+
+> **History:** the certificate expired on 2026-05-28 and stayed expired for 80 days.
+> Renewal was configured with `--standalone`, which needs to bind port 80 — but the
+> nginx container holds it, so every unattended renewal failed. Nothing alerted,
+> because Let's Encrypt [discontinued expiration emails in June 2025](https://letsencrypt.org/2025/06/26/expiration-notification-service-has-ended).
+> The webroot switch fixes the renewal; the monitoring above fixes the silence.
 
 ## Monitoring
 

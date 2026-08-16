@@ -1,0 +1,12 @@
+[Unit]
+Description=Daily SSL certificate health check
+
+[Timer]
+OnCalendar=daily
+# Run shortly after boot too, so the banner is never stale on a fresh VM.
+OnBootSec=5min
+RandomizedDelaySec=30min
+Persistent=true
+
+[Install]
+WantedBy=timers.target
