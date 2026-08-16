@@ -548,6 +548,269 @@ The `active` boolean field controls whether new attendance records can be create
 
 ---
 
+## Students API
+
+### GET /api/classes/{class_id}/students
+List all students for a class with pagination and filters.
+
+**Headers:**
+```
+Authorization: Bearer <access_token>
+```
+
+**Query Parameters:**
+- `skip` (optional): Number of records to skip (default: 0)
+- `limit` (optional): Maximum records to return (1-100, default: 100)
+- `search` (optional): Search by student name (case-insensitive, partial match)
+- `credit_status` (optional): Filter by course credit received (`true`, `false`, or omit for all)
+
+**Response (200 OK):**
+```json
+{
+  "items": [
+    {
+      "id": "123e4567-e89b-12d3-a456-426614174000",
+      "name": "John Doe",
+      "class_id": "123e4567-e89b-12d3-a456-426614174001",
+      "course_credit_received": true,
+      "created_at": "2025-10-26T12:00:00Z",
+      "updated_at": "2025-11-05T14:30:00Z"
+    }
+  ],
+  "total": 25,
+  "skip": 0,
+  "limit": 100
+}
+```
+
+**Errors:**
+- `401 Unauthorized`: Invalid or missing token
+- `403 Forbidden`: You don't own this class
+- `404 Not Found`: Class not found
+
+---
+
+### GET /api/classes/{class_id}/students/summary
+List students with their total attendance counts.
+
+**Headers:**
+```
+Authorization: Bearer <access_token>
+```
+
+**Response (200 OK):**
+```json
+[
+  {
+    "id": "123e4567-e89b-12d3-a456-426614174000",
+    "name": "John Doe",
+    "course_credit_received": true,
+    "total_attendance": 15
+  },
+  {
+    "id": "123e4567-e89b-12d3-a456-426614174001",
+    "name": "Jane Smith",
+    "course_credit_received": false,
+    "total_attendance": 12
+  }
+]
+```
+
+**Errors:**
+- `401 Unauthorized`: Invalid or missing token
+- `403 Forbidden`: You don't own this class
+- `404 Not Found`: Class not found
+
+---
+
+### GET /api/classes/{class_id}/students/autocomplete
+Autocomplete student names for quick entry. Returns students ordered by attendance frequency.
+
+**Headers:**
+```
+Authorization: Bearer <access_token>
+```
+
+**Query Parameters:**
+- `q` (required): Search query (minimum 2 characters)
+- `limit` (optional): Maximum results to return (1-50, default: 10)
+
+**Response (200 OK):**
+```json
+[
+  {
+    "id": "123e4567-e89b-12d3-a456-426614174000",
+    "name": "John Doe",
+    "total_attendance": 15
+  },
+  {
+    "id": "123e4567-e89b-12d3-a456-426614174001",
+    "name": "Johnny Smith",
+    "total_attendance": 8
+  }
+]
+```
+
+**Features:**
+- Case-insensitive partial matching
+- Results ordered by attendance count (most frequent first)
+- Minimum 2-character query required
+
+**Errors:**
+- `400 Bad Request`: Query too short (< 2 characters)
+- `401 Unauthorized`: Invalid or missing token
+- `403 Forbidden`: You don't own this class
+- `404 Not Found`: Class not found
+
+---
+
+### GET /api/students/{student_id}
+Get details of a specific student.
+
+**Headers:**
+```
+Authorization: Bearer <access_token>
+```
+
+**Response (200 OK):**
+```json
+{
+  "id": "123e4567-e89b-12d3-a456-426614174000",
+  "name": "John Doe",
+  "class_id": "123e4567-e89b-12d3-a456-426614174001",
+  "course_credit_received": true,
+  "created_at": "2025-10-26T12:00:00Z",
+  "updated_at": "2025-11-05T14:30:00Z"
+}
+```
+
+**Errors:**
+- `401 Unauthorized`: Invalid or missing token
+- `403 Forbidden`: You don't own the class this student belongs to
+- `404 Not Found`: Student not found
+
+---
+
+### PUT /api/students/{student_id}
+Update a student's name or course credit status.
+
+**Headers:**
+```
+Authorization: Bearer <access_token>
+```
+
+**Request Body:**
+```json
+{
+  "name": "John M. Doe",
+  "course_credit_received": true
+}
+```
+
+Note: All fields are optional. Only provided fields will be updated.
+
+**Response (200 OK):**
+```json
+{
+  "id": "123e4567-e89b-12d3-a456-426614174000",
+  "name": "John M. Doe",
+  "class_id": "123e4567-e89b-12d3-a456-426614174001",
+  "course_credit_received": true,
+  "created_at": "2025-10-26T12:00:00Z",
+  "updated_at": "2025-11-05T15:00:00Z"
+}
+```
+
+**Errors:**
+- `400 Bad Request`: Duplicate name (another student in the same class has this name)
+- `401 Unauthorized`: Invalid or missing token
+- `403 Forbidden`: You don't own the class this student belongs to
+- `404 Not Found`: Student not found
+- `422 Unprocessable Entity`: Validation error
+
+---
+
+### DELETE /api/students/{student_id}
+Delete a student and all their attendance records.
+
+**Headers:**
+```
+Authorization: Bearer <access_token>
+```
+
+**Response (204 No Content):**
+No response body.
+
+**Errors:**
+- `401 Unauthorized`: Invalid or missing token
+- `403 Forbidden`: You don't own the class this student belongs to
+- `404 Not Found`: Student not found
+
+**Warning:** This action cascades and deletes all attendance records for this student. This cannot be undone.
+
+---
+
+## Students API - Testing with cURL
+
+### List Students
+```bash
+curl -X GET http://localhost:8000/api/classes/{class_id}/students \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
+
+# With search filter
+curl -X GET "http://localhost:8000/api/classes/{class_id}/students?search=john&limit=10" \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
+
+# Filter by course credit status
+curl -X GET "http://localhost:8000/api/classes/{class_id}/students?credit_status=true" \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
+```
+
+### Get Students Summary
+```bash
+curl -X GET http://localhost:8000/api/classes/{class_id}/students/summary \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
+```
+
+### Autocomplete Student Names
+```bash
+curl -X GET "http://localhost:8000/api/classes/{class_id}/students/autocomplete?q=john&limit=5" \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
+```
+
+### Get Student Details
+```bash
+curl -X GET http://localhost:8000/api/students/{student_id} \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
+```
+
+### Update Student
+```bash
+# Update name
+curl -X PUT http://localhost:8000/api/students/{student_id} \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "John M. Doe"
+  }'
+
+# Toggle course credit
+curl -X PUT http://localhost:8000/api/students/{student_id} \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "course_credit_received": true
+  }'
+```
+
+### Delete Student
+```bash
+curl -X DELETE http://localhost:8000/api/students/{student_id} \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
+```
+
+---
+
 ## Attendance API
 
 ### GET /api/classes/{class_id}/attendance
@@ -568,16 +831,21 @@ Authorization: Bearer <access_token>
 
 **Response (200 OK):**
 ```json
-[
-  {
-    "id": "123e4567-e89b-12d3-a456-426614174000",
-    "class_id": "123e4567-e89b-12d3-a456-426614174000",
-    "student_first_name": "John",
-    "student_last_name": "Doe",
-    "timestamp": "2025-10-26T14:30:00Z",
-    "created_at": "2025-10-26T14:30:05Z"
-  }
-]
+{
+  "items": [
+    {
+      "id": "123e4567-e89b-12d3-a456-426614174000",
+      "class_id": "123e4567-e89b-12d3-a456-426614174000",
+      "student_id": "123e4567-e89b-12d3-a456-426614174001",
+      "student_name": "John Doe",
+      "timestamp": "2025-10-26T14:30:00Z",
+      "created_at": "2025-10-26T14:30:05Z"
+    }
+  ],
+  "total": 150,
+  "skip": 0,
+  "limit": 100
+}
 ```
 
 **Errors:**
@@ -588,7 +856,7 @@ Authorization: Bearer <access_token>
 ---
 
 ### POST /api/classes/{class_id}/attendance
-Log attendance for a student.
+Log attendance for a student. Supports bulk logging (multiple records at once).
 
 **Headers:**
 ```
@@ -598,32 +866,47 @@ Authorization: Bearer <access_token>
 **Request Body:**
 ```json
 {
-  "student_first_name": "john",
-  "student_last_name": "DOE",
-  "timestamp": "2025-10-26T14:30:00Z"
+  "student_name": "john doe",
+  "timestamp": "2025-10-26T14:30:00Z",
+  "quantity": 1
 }
 ```
 
+**Fields:**
+- `student_name` (required): Student's full name (case-insensitive, automatically normalized)
+- `timestamp` (required): When the attendance occurred (ISO 8601 format)
+- `quantity` (optional): Number of attendance records to create (1-50, default: 1)
+
 **Name Normalization:**
 Student names are automatically normalized to proper case:
-- "john" → "John"
-- "MARY" → "Mary"
-- "jean-paul" → "Jean-paul"
+- "john doe" → "John Doe"
+- "MARY SMITH" → "Mary Smith"
+- "jean-paul jones" → "Jean-paul Jones"
+
+**Bulk Logging:**
+When `quantity > 1`, multiple attendance records are created with the same timestamp:
+- All records created in a single transaction
+- Student is created/looked up only once (efficient)
+- Useful for recording multiple class sessions at once
 
 **Response (201 Created):**
 ```json
 {
   "id": "123e4567-e89b-12d3-a456-426614174000",
   "class_id": "123e4567-e89b-12d3-a456-426614174000",
-  "student_first_name": "John",
-  "student_last_name": "Doe",
+  "student_id": "123e4567-e89b-12d3-a456-426614174001",
+  "student_name": "John Doe",
   "timestamp": "2025-10-26T14:30:00Z",
-  "created_at": "2025-10-26T14:30:05Z"
+  "created_at": "2025-10-26T14:30:05Z",
+  "quantity_created": 1
 }
 ```
 
+**Student Auto-Creation:**
+If a student with the given name (case-insensitive) doesn't exist in the class, they are automatically created.
+
 **Errors:**
-- `400 Bad Request`: Class is not active (archived)
+- `400 Bad Request`: Class is not active (archived) OR quantity out of range (1-50)
 - `401 Unauthorized`: Invalid or missing token
 - `403 Forbidden`: You don't own this class
 - `404 Not Found`: Class not found
@@ -661,8 +944,9 @@ Authorization: Bearer <access_token>
 ```json
 [
   {
-    "student_first_name": "John",
-    "student_last_name": "Doe",
+    "student_id": "123e4567-e89b-12d3-a456-426614174000",
+    "student_name": "John Doe",
+    "course_credit_received": true,
     "total_attendance": 15,
     "records": [
       {
@@ -676,8 +960,9 @@ Authorization: Bearer <access_token>
     ]
   },
   {
-    "student_first_name": "Jane",
-    "student_last_name": "Smith",
+    "student_id": "123e4567-e89b-12d3-a456-426614174001",
+    "student_name": "Jane Smith",
+    "course_credit_received": false,
     "total_attendance": 12,
     "records": [...]
   }
@@ -685,9 +970,9 @@ Authorization: Bearer <access_token>
 ```
 
 **Features:**
-- Students grouped case-insensitively ("john doe" and "John Doe" are the same)
-- Display name uses proper capitalization from most recent record
-- Sorted by last name, then first name
+- Each student appears only once (no duplicates from different capitalizations)
+- Includes course credit status for each student
+- Sorted by student name
 - Includes all attendance records for each student
 
 **Errors:**
@@ -720,13 +1005,23 @@ curl -X GET "http://localhost:8000/api/classes/{class_id}/attendance?date_from=2
 
 ### Create Attendance Record
 ```bash
+# Single attendance record
 curl -X POST http://localhost:8000/api/classes/{class_id}/attendance \
   -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
-    "student_first_name": "John",
-    "student_last_name": "Doe",
+    "student_name": "John Doe",
     "timestamp": "2025-10-26T14:30:00Z"
+  }'
+
+# Bulk logging (create 5 records at once)
+curl -X POST http://localhost:8000/api/classes/{class_id}/attendance \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "student_name": "John Doe",
+    "timestamp": "2025-10-26T14:30:00Z",
+    "quantity": 5
   }'
 ```
 
@@ -744,42 +1039,53 @@ curl -X GET http://localhost:8000/api/classes/{class_id}/attendance/summary \
 
 ---
 
-## Name Normalization Rules
+## Name Normalization & Student Management
 
 ### How It Works
 
-When logging attendance, student names are automatically normalized:
+When logging attendance, student names are automatically normalized and Students are created/updated:
 
-1. **Capitalization**: First letter capitalized, rest lowercase
-   - Input: `"john"` → Stored: `"John"`
-   - Input: `"MARY"` → Stored: `"Mary"`
-   - Input: `"jOhN"` → Stored: `"John"`
+1. **Name Capitalization**: Each word capitalized (Title Case)
+   - Input: `"john doe"` → Stored: `"John Doe"`
+   - Input: `"MARY SMITH"` → Stored: `"Mary Smith"`
+   - Input: `"jean-paul"` → Stored: `"Jean-paul"`
 
 2. **Whitespace**: Leading/trailing spaces removed
-   - Input: `"  John  "` → Stored: `"John"`
+   - Input: `"  John Doe  "` → Stored: `"John Doe"`
 
-3. **Case-Insensitive Matching**: 
+3. **Case-Insensitive Uniqueness**:
    - `"john doe"` and `"John Doe"` are treated as the same student
-   - Summary groups them together
+   - Database enforces uniqueness using `LOWER(name)` index per class
+   - Attempting to create duplicate students fails gracefully
+
+4. **Auto-Creation**:
+   - If student doesn't exist, they're automatically created when logging attendance
+   - Student entity persists across attendance records
+   - Course credit defaults to `false`, can be updated later
 
 ### Examples
 
 ```json
-// These all create the same student "John Doe":
-{"student_first_name": "john", "student_last_name": "doe"}
-{"student_first_name": "JOHN", "student_last_name": "DOE"}
-{"student_first_name": "JoHn", "student_last_name": "DoE"}
+// These all refer to the same student:
+{"student_name": "john doe"}
+{"student_name": "JOHN DOE"}
+{"student_name": "John Doe"}
 
-// Stored as:
-{"student_first_name": "John", "student_last_name": "Doe"}
+// All create/reference one Student entity:
+{
+  "id": "123e4567-e89b-12d3-a456-426614174000",
+  "name": "John Doe",
+  "course_credit_received": false
+}
 ```
 
 ### Why This Matters
 
+- **No Duplicates**: StudentLogs view shows each student only once
 - **Consistency**: All names stored in the same format
-- **Deduplication**: Prevents duplicate students with different capitalizations
+- **Course Credit Tracking**: Can mark which students received credit
+- **Autocomplete**: Quickly find existing students while typing
 - **Professional**: Names always display properly
-- **Search**: Case-insensitive search works naturally
 
 ### Limitations
 
@@ -788,8 +1094,8 @@ When logging attendance, student names are automatically normalized:
 - `"Smith"` and `"Smyth"` are different students
 
 **Manual correction required for:**
-- Typos in names
-- Different spellings of the same name
+- Typos in names (use `PUT /api/students/{id}` to update)
+- Different spellings of the same name (merge manually if needed)
 
 ---
 
