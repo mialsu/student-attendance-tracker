@@ -300,6 +300,23 @@ services):
 - **Renewal failure** — `certbot.service` has an `OnFailure` hook that logs CRITICAL
   and refreshes the banner immediately.
 
+### ⚠️ Never enable a host-level nginx
+
+nginx runs **only as a container** here. If the Ubuntu `nginx` package service is
+ever enabled, it grabs port 80 at boot and the container fails to start with:
+
+```
+failed to bind host port 0.0.0.0:80/tcp: address already in use
+```
+
+This failure is **latent** — the site keeps working for as long as the box stays
+up, then dies on the next reboot. It cost an outage on 2026-08-16 after 40 weeks
+of uptime. `check-ssl.sh` now flags it as CRITICAL.
+
+```bash
+sudo systemctl disable --now nginx     # host nginx must stay disabled
+```
+
 > **History:** the certificate expired on 2026-05-28 and stayed expired for 80 days.
 > Renewal was configured with `--standalone`, which needs to bind port 80 — but the
 > nginx container holds it, so every unattended renewal failed. Nothing alerted,

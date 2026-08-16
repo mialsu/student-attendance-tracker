@@ -82,6 +82,16 @@ if command -v systemctl >/dev/null 2>&1 && [ -d /etc/letsencrypt ]; then
         echo "  ⚠️  WARNING: deploy hook missing — renewals will not reach nginx."
         [ "$status" -lt 1 ] && status=1
     fi
+
+    # A host-level nginx package will win the race for port 80 on boot and keep
+    # the container from starting at all. This is latent — everything looks fine
+    # until the next reboot, which is exactly how it bit us on 2026-08-16.
+    if systemctl is-enabled --quiet nginx 2>/dev/null; then
+        echo "  ❌ CRITICAL: the HOST nginx service is enabled."
+        echo "     It will grab port 80 on boot and the nginx CONTAINER will fail to start."
+        echo "     Fix: sudo systemctl disable --now nginx"
+        status=2
+    fi
 fi
 
 exit $status

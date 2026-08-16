@@ -63,6 +63,14 @@ if ! systemctl is-active --quiet certbot.timer; then
     message="${message} certbot.timer is NOT active — nothing will renew this cert."
 fi
 
+# --- A host nginx package steals port 80 on boot ---
+# Latent by nature: the site keeps working until the next reboot, at which point
+# the host service wins the race and the container cannot bind. Surface it now.
+if systemctl is-enabled --quiet nginx 2>/dev/null; then
+    status="CRIT"
+    message="${message} HOST nginx service is enabled — it will break the container on next reboot. Fix: systemctl disable --now nginx"
+fi
+
 # Values are quoted: MESSAGE contains spaces, and an unquoted assignment would
 # be truncated at the first word by anything reading this file.
 {
