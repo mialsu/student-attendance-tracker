@@ -187,6 +187,44 @@ async def auth_headers(client: AsyncClient, test_user: User) -> dict[str, str]:
 
 
 @pytest_asyncio.fixture
+async def other_teacher(db: AsyncSession) -> User:
+    """A second, fully legitimate teacher who owns nothing in this fixture set.
+
+    Exists for the denied side of INV-1: every authorization test authenticates as this
+    user and asserts the API refuses. See tests/test_authorization.py.
+    """
+    user = User(
+        email="other-teacher@example.com",
+        password_hash=hash_password("testpassword123"),
+        active=True,
+    )
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
+    return user
+
+
+@pytest_asyncio.fixture
+async def other_teacher_headers(
+    client: AsyncClient, other_teacher: User
+) -> dict[str, str]:
+    """Real bearer token for `other_teacher`, obtained through the login route.
+
+    Deliberately logs in rather than minting a token directly, so the test exercises the
+    same authentication path a real second teacher would.
+    """
+    response = await client.post(
+        "/api/auth/login",
+        json={
+            "email": "other-teacher@example.com",
+            "password": "testpassword123",
+        },
+    )
+    assert response.status_code == 200
+    return {"Authorization": f"Bearer {response.json()['access_token']}"}
+
+
+@pytest_asyncio.fixture
 async def test_class(db: AsyncSession, test_user: User) -> Class:
     """Create a test class."""
     class_obj = Class(

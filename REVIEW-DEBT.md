@@ -6,6 +6,81 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 
 <!-- Newest first. -->
 
+## 2026-09-01 — INV-1 has seven enforcement sites, not one
+- **What:** "only a teacher associated with a Class may read or change it" is implemented seven
+  times: `verify_class_ownership` in `class_service.py:202`, a near-identical **second copy** in
+  `student_service.py:553`, a **third under a different name** (`verify_class_access`) in
+  `attendance_service.py:56`, and four inline `teacher_id != teacher.id` comparisons at
+  `class_service.py:151`, `:194`, `attendance_service.py:286`, plus the list filter at
+  `class_service.py:54`. `INVARIANTS.md` rule 4 and `CODING_STANDARDS.md` both require one owner.
+- **Where:** the seven sites above; `INVARIANTS.md` INV-1's *Owner in code* cell, which says so
+- **What green tests do NOT prove here:** the new denial suite proves each site currently works. It
+  does **not** prevent the eighth site being added without a check, and it cannot make the seven
+  agree — three of them raise `ForbiddenException` with three different messages.
+- **Named cost:** the Owner intends **shared Classes** (two teachers on one Class). That is one edit
+  at one site and seven edits at seven, with the eighth easy to miss. The tests would catch a miss,
+  which is why this is debt and not a defect.
+- **Disposition:** open, deferred by the Owner on 2026-09-01 — they chose the tests today and left
+  consolidation for later. Do it when shared Classes are specced, not before; the seam is
+  `verify_class_ownership(db, class_id, teacher)`, already the right shape.
+
+## 2026-09-01 — whether the superadmin role should exist at all is an open product question
+- **What:** `UserRole` carries `TEACHER` and `SUPERADMIN` (`app/models/user.py:17-18`), and
+  `require_superadmin` (`app/dependencies.py:71`) guards three `/api/admin/codes` routes. Superadmin
+  has **no** reach into teacher data — no ownership check makes a role exception, so a superadmin
+  sees only their own classes. Asked whether that is the intended rule, the Owner said they need to
+  revisit whether the role is needed at all.
+- **Where:** `app/models/user.py:17-18`, `app/dependencies.py:71-93`, `app/api/admin.py`
+- **What green tests do NOT prove here:** nothing about intent. The tests prove the current
+  behaviour; they cannot say whether a support view is wanted, or whether the role should be deleted
+  and registration codes issued another way.
+- **Disposition:** open — Owner question, recorded as `_Unresolved_` on the **Teacher** term in
+  `CONTEXT.md`. Until it is answered the domain dial stays at `on` with **one** context; the
+  `User`-means-two-things collision is the only `mapped` trigger either repo ever claimed, and
+  splitting for a word that may be about to disappear would buy a boundary and no benefit.
+
+## 2026-09-01 — the five-year legacy filter measures the wrong date and cannot be turned off
+- **What:** attendance listings exclude Students whose row is older than five years. Three problems.
+  (1) It filters `Student.created_at` (`app/services/attendance_service.py:124-128`) while this
+  repo's own docs, `CLAUDE.md`, and the frontend's type comment all say *first attendance* — and for
+  every Student the `01edea317e5e` migration created, `created_at` is the **migration date**.
+  (2) The `legacy` query parameter defaults to `None` = filter on (`app/api/attendance.py:84`), and
+  **no frontend code ever sets it**, so it cannot be disabled from the app. (3) It has never fired:
+  the app launched in November 2025, so the first silent disappearance is due around November 2030.
+- **Where:** `app/services/attendance_service.py:124-128`, `app/api/attendance.py:84`,
+  `client-app/src/api/attendance.ts:20`
+- **What green tests do NOT prove here:** no test advances the clock five years, so no test
+  exercises the filter firing at all.
+- **Disposition:** open → spec owed. The Owner's decision (2026-09-01): **keep the cutoff on by
+  default, and add a way to reveal old Students so they can be deleted.** So this becomes a small
+  feature, not a removal. Fix the date field in the same slice.
+
+## 2026-09-01 — get_attendance_statistics takes no teacher, so its only check is in the route
+- **What:** every other read in the service layer takes a `teacher: User` and verifies ownership
+  itself. `get_attendance_statistics` (`app/services/attendance_service.py:389`) takes only
+  `db, class_id, exclude_dates`; the ownership check for that endpoint lives in the route
+  (`app/api/attendance.py:59`). Any future caller reaching the service directly — a second route, a
+  script, a background job — gets no check and no error.
+- **Where:** `app/services/attendance_service.py:389`, `app/api/attendance.py:59`
+- **What green tests do NOT prove here:** `test_authorization.py` exercises the **route**, so it
+  passes. Nothing tests the service function's own contract, and nothing prevents a second caller.
+- **Disposition:** open — fold into the INV-1 consolidation above; the fix is to take `teacher` and
+  call the one owner, matching every sibling function.
+
+## 2026-09-01 — CLAUDE.md's Data Model and endpoint lists are stale
+- **What:** the root `CLAUDE.md` documents four entities. The code has **seven**: it omits
+  `UserRole` (TEACHER/SUPERADMIN), `RegistrationCode`, and `RefreshToken` entirely, along with the
+  `merge_students` operation and the attendance `statistics` endpoint. It also advertises
+  `GET /classes/{id}/students/summary`, which **does not exist** — the route list is Students 7 (not
+  6) and Attendance 5 (not 4), enumerated from `app.routes` directly.
+- **Where:** root `CLAUDE.md`, "Data Model" and "Endpoints Summary"; verified against
+  `app/main.py:127-131` and the live route table
+- **What green tests do NOT prove here:** documentation. This is the same "trusting status over
+  code" defect the 2026-09-01 measured-status table was written to correct, one section lower down.
+- **Disposition:** fixed in the same commit — the Data Model, endpoint counts and the phantom
+  `summary` route corrected, with a pointer to `INVARIANTS.md`.
+
+
 ## 2026-09-01 — the deploy job was unverified; it has now run successfully (VERIFIED)
 - **What:** every gate in this repo was proven by breaking it and watching it go red. The `deploy`
   job in `.github/workflows/deploy.yml` was **not**, because the only way to exercise it is to deploy
@@ -56,7 +131,7 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 - **Disposition:** accepted with reason. If a new doc adds a placeholder shape the allowlist misses,
   the fix is another value regex — never a path exclusion.
 
-## 2026-09-01 — 262 green tests do not prove authorization: ownership can be removed undetected
+## 2026-09-01 — 262 green tests did not prove authorization; a denied-side suite now does (PARTIAL)
 - **What:** during `/harness` install the teacher-ownership filter was deleted from
   `get_classes_by_teacher` — `.where(Class.teacher_id == teacher_id)` replaced with an always-true
   predicate, so **every teacher would see every teacher's classes**. The full suite was then run.
@@ -69,9 +144,14 @@ cut (`/confess`), read first by any architecture or review session, dispositione
   ownership test in the suite checks the owner's happy path, so the suite is blind to exactly the
   bug class a solo web app actually ships (`/audit`: "broken object-level authorization"). Coverage
   is affirmatively misleading here — 77% is unchanged by removing an authorization check.
-- **Disposition:** open — **highest priority in this ledger.** Needs (a) a denied-side test per
-  teacher-scoped endpoint, and (b) `INVARIANTS.md` with `INV-n` rows naming those tests as
-  enforcers. `/audit` should start here, and `/crunch-domain` should precede it.
+- **Disposition:** **PARTIAL, 2026-09-01** (`/crunch-domain`). Item (a) done: `tests/test_authorization.py`
+  adds 17 denial tests plus 7 positive controls, all authenticating as a second real teacher
+  (`other_teacher`) through the login route. Item (b) done: `INVARIANTS.md` exists and `INV-1` names
+  that file as its enforcer. Each of the **seven** ownership sites was neutered individually and the
+  suite watched go red — `class_service.py:54`→1 failure, `:151`→1, `:194`→1, `:226`→1,
+  `student_service.py:579`→8, `attendance_service.py:80`→4, `attendance_service.py:286`→1. Every
+  denial test maps to exactly one site and every site is covered, so the probe that started this
+  entry now fails loudly. **Still open:** the seven sites themselves — see the entry above.
 
 ## 2026-09-01 — no type gate exists in this repo
 - **What:** the `justfile` declared `typecheck: mypy app`, `lint: flake8 app tests` and
@@ -124,7 +204,7 @@ cut (`/confess`), read first by any architecture or review session, dispositione
   `student_service.py` is a core service that is effectively untested.
 - **Disposition:** open — `/verify-claim` per assertion, then correct `CLAUDE.md`.
 
-## 2026-09-01 — CONTEXT.md is a gate seed, not an Owner-authored domain model
+## 2026-09-01 — CONTEXT.md was a gate seed; the Owner has now crunched it (RESOLVED)
 - **What:** seeded by `/harness` from evidence in the code so the drift gate's vocabulary check has
   something to enforce. Every `_Avoid_` term was verified to have zero hits before being added.
 - **Where:** `CONTEXT.md`
@@ -133,7 +213,13 @@ cut (`/confess`), read first by any architecture or review session, dispositione
   Classes, whether `User` means different things to the auth code and the admin endpoints (the only
   valid trigger for the domain dial's `mapped` setting), and the lifecycle of a registration code.
   `INVARIANTS.md` does not exist, so drift-check's invariant check is inert.
-- **Disposition:** open → `/crunch-domain`, before `/audit`
+- **Disposition:** **RESOLVED 2026-09-01** by `/crunch-domain`. The Owner answered five questions;
+  `CONTEXT.md` now records what they decided and `INVARIANTS.md` carries six `INV-n` rows, each
+  naming a real enforcer. Two of the three `_Unresolved_` questions are closed: a Student is a
+  per-Class row (Owner's call), and the registration-code lifecycle was answered from the code. The
+  third — whether `User` means two things — stays open **because the Owner is reconsidering whether
+  the superadmin role should exist at all**; see the dedicated entry above. The invariant check in
+  drift-check is now live in this repo.
 
 ## 2026-09-01 — the root .github/ workflow can never run
 - **What:** `../.github/workflows/backend-tests.yml` sits at the project root, which is **not a git
