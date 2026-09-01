@@ -53,7 +53,7 @@ cheap enforcers are all unwired. This is confessed, not accepted.
   then write the code. `[script]` (`_Avoid_` words), `[review-only]` (missing terms)
 - `studentFirstName` / `studentLastName` / `student_first_name` are dead vocabulary — the Student
   entity replaced them with a single normalized `name`. They must not return. `[script]`
-  (`npm run vocab` — a **separate** enforcer, because `drift-check.sh` matches identifier
+  (`npm run drift:extra` — a **separate** enforcer, because `drift-check.sh` matches identifier
   *segments* and structurally cannot ban a camelCase compound. Found by breaking it on purpose.)
 - `_Avoid_` entries in `CONTEXT.md` must be **single words**. A compound written there is silently
   dead. `[review-only]`
@@ -136,6 +136,6 @@ recorded the same day. That is an Owner call, not an agent's.
 - Boundaries: `npm run lint:boundaries`
 - Tests: `npm run gate:tests` (ratchet, baseline 25)
 - Drift: `npm run drift`
-- Compound vocabulary: `npm run vocab`
+- Compound vocabulary + repo-specific checks: `npm run drift:extra`
 - Build: `npm run build`
 - All of it: `npm run check`

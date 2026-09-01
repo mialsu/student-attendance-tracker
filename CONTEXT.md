@@ -54,7 +54,7 @@ another to the admin screens, that is the word collision that would justify the 
   Verified working entries fire like `src/api/students.ts:57 -> pupilName(pupil)`.
 - Every term above was verified to have **zero hits in `src/`** before being added, so the list is
   purely preventive and fires on no current code path.
-- **Compound identifiers are enforced separately** by `scripts/vocab-check.sh`, because the segment
+- **Compound identifiers are enforced separately** by `scripts/drift-extra.sh`, because the segment
   matcher structurally cannot express them. That is where `studentFirstName` / `studentLastName`
   live — the vocabulary the Student-entity migration replaced with a single `name`.
 - `course` / `courseCredit` is deliberately absent: it names a real, distinct concept (the

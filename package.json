@@ -19,9 +19,9 @@
     "gate:tests": "scripts/baseline-guard.sh tests npx vitest run --reporter=dot",
     "lint:boundaries": "depcruise src --config .dependency-cruiser.cjs",
     "drift": "scripts/drift-check.sh",
-    "check": "npm run gate:typecheck && npm run gate:lint && npm run lint:boundaries && npm run gate:tests && npm run drift && npm run vocab && npm run build",
+    "check": "npm run gate:typecheck && npm run gate:lint && npm run lint:boundaries && npm run gate:tests && npm run drift && npm run drift:extra && npm run build",
     "prepare": "husky",
-    "vocab": "scripts/vocab-check.sh"
+    "drift:extra": "scripts/drift-extra.sh"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

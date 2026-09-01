@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
-# vocab-check.sh — the half of the vocabulary rule that drift-check.sh structurally cannot enforce.
+# drift-extra.sh — the checks devkit's drift-check.sh cannot express for THIS repo.
+#
+# Named to match student-attendance-tracker-api/scripts/drift-extra.sh, so a cold session finds the
+# same shape in either repo.
 #
 # WHY THIS EXISTS. drift-check.sh's vocabulary check splits every identifier into segments
 # (`pupilName` -> `pupil` + `name`) and compares each segment against CONTEXT.md's `_Avoid_` list.
@@ -15,8 +18,8 @@
 #
 # Escape hatch: `drift-ok` in a comment on the line, same convention as drift-check.sh.
 #
-# Usage: scripts/vocab-check.sh [<git range>]   (default: working tree + staged vs HEAD)
-#        scripts/vocab-check.sh --cached        (staged only — the pre-commit form)
+# Usage: scripts/drift-extra.sh [<git range>]   (default: working tree + staged vs HEAD)
+#        scripts/drift-extra.sh --cached        (staged only — the pre-commit form)
 
 set -uo pipefail
 cd "$(git rev-parse --show-toplevel)" || exit 2
@@ -58,7 +61,7 @@ if [ -n "$LINES" ]; then
     if [ -n "$hits" ]; then
       violations=$((violations + 1))
       echo
-      echo "VOCAB · banned compound identifier matching /$rx/"
+      echo "EXTRA · banned compound identifier matching /$rx/"
       echo "  ↳ anti-pattern: two words for one thing — the project's language forks silently"
       echo "  ↳ fix: $guidance"
       printf '%s\n' "$hits" | head -10 | awk -F'\t' '{ printf "     %s:%s  ->  %s\n", $1, $2, substr($3,1,90) }'
@@ -68,7 +71,7 @@ fi
 
 echo
 if [ "$violations" -gt 0 ]; then
-  echo "vocab-check: $violations violation(s)."
+  echo "drift-extra: $violations violation(s)."
   exit 1
 fi
-echo "vocab-check: clean (range: ${RANGE[*]})."
+echo "drift-extra: clean (range: ${RANGE[*]})."

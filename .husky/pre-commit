@@ -16,7 +16,7 @@ set -e
 
 echo "▸ boundaries";          npm run --silent lint:boundaries
 echo "▸ drift (staged)";      ./scripts/drift-check.sh --cached
-echo "▸ vocab (staged)";      ./scripts/vocab-check.sh --cached
+echo "▸ drift-extra (staged)";./scripts/drift-extra.sh --cached
 echo "▸ typecheck (ratchet)"; npm run --silent gate:typecheck
 echo "▸ lint (ratchet)";      npm run --silent gate:lint
 echo "▸ tests (ratchet)";     npm run --silent gate:tests
