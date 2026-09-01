@@ -124,7 +124,19 @@ jobs:
   deploy:
     name: Deploy to Vercel (production)
     needs: [gates, security]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # DEPLOY SWITCH — off until the repository variable DEPLOY_ENABLED is set to 'true'
+    # (Settings -> Secrets and variables -> Actions -> Variables). Gates and security run on
+    # every push regardless; this job SKIPS (it does not fail) while the switch is off.
+    #
+    # It is off because two things must happen first, and neither can be enforced from the repo:
+    #   1. Vercel's Connected Git Repository must be disconnected, or it and this job both deploy
+    #      and race. NOTE: "Deploy Hooks" being empty does NOT mean auto-deploy is off — the
+    #      connection at the top of Settings -> Git is what deploys on push.
+    #   2. VERCEL_TOKEN / VERCEL_ORG_ID / VERCEL_PROJECT_ID must exist as repo secrets.
+    if: |
+      github.event_name == 'push'
+      && github.ref == 'refs/heads/main'
+      && vars.DEPLOY_ENABLED == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment: production

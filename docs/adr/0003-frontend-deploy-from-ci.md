@@ -9,10 +9,24 @@ exits 2.
 So the deploy moved into `.github/workflows/ci.yml`: gates and security run first, and only on green
 does the `deploy` job run `vercel pull` → `vercel build --prod` → `vercel deploy --prebuilt --prod`.
 
-**This requires one manual step outside the repo:** turn OFF the Vercel project's git auto-deploy
-(Project → Settings → Git → disconnect, or set "Ignored Build Step" to exit 0). Until that is done
-**both** paths deploy and they race — CI's gate is advisory, and whichever finishes last wins. The
-gate is not real until that switch is flipped.
+**This requires one manual step outside the repo:** turn OFF the Vercel project's git auto-deploy.
+Until that is done **both** paths deploy and they race — CI's gate is advisory, and whichever
+finishes last wins. The gate is not real until that switch is flipped, so the workflow's `deploy`
+job is held behind a `DEPLOY_ENABLED` repository variable in the meantime.
+
+Two things about that setting are genuinely confusing and cost time to establish, so they are
+recorded here:
+
+- **"Deploy Hooks" is not auto-deploy.** Deploy Hooks are URLs you POST to in order to *trigger* a
+  deployment; an empty Deploy Hooks list says nothing about auto-deploy. The behaviour comes from
+  **Connected Git Repository** at the top of Project → Settings → Git. If a repository is connected
+  there, pushes deploy. Disconnect it, or set an Ignored Build Step that exits 0.
+- **The Vercel connection may show a stale repository name.** This project's Vercel connection reads
+  `mialsu/student-attendance-tracker-client-app` while the git remote is
+  `student-attendance-tracker/client-app`. Verified 2026-09-01 that these are the **same
+  repository** — identical ref lists over SSH — reached through GitHub's post-rename/transfer
+  redirect. So the connection is live and does watch the branch we push. A name mismatch here is not
+  evidence that auto-deploy is inert; check the ref lists, not the label.
 
 Secrets required: `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`. The org and project ids are
 in `.vercel/project.json`, which is gitignored, so they must be copied into GitHub secrets by hand.

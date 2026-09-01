@@ -13,11 +13,18 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 - **Where:** `.github/workflows/ci.yml` (`deploy` job); Vercel Project → Settings → Git
 - **What green tests do NOT prove here:** until git auto-deploy is disabled in the Vercel dashboard,
   **both paths deploy on every push to main and they race** — whichever finishes last wins, and a red
-  CI still ships. This is a manual step outside the repo that no gate can enforce, so it is written
-  down here instead. Three secrets are also required and cannot be set from here: `VERCEL_TOKEN`,
-  `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID` (the latter two live in the gitignored `.vercel/project.json`).
-- **Disposition:** open — blocking. The workflow is inert-but-harmless without the secrets (the
-  deploy job fails), and actively misleading if the secrets are set while auto-deploy stays on.
+  CI still ships. This is a manual step outside the repo that no gate can enforce. Three secrets are
+  also required and cannot be set from here: `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`
+  (the latter two live in the gitignored `.vercel/project.json`).
+- **Verified 2026-09-01, because both points were initially misread:**
+  (a) auto-deploy is **on** — it comes from *Connected Git Repository*, not from *Deploy Hooks*, and
+  an empty Deploy Hooks list is not evidence of anything;
+  (b) the Vercel connection names `mialsu/student-attendance-tracker-client-app` while the remote is
+  `student-attendance-tracker/client-app` — these are the **same repo** (identical ref lists over
+  SSH, GitHub post-rename redirect), so the connection really does watch the branch we push.
+- **Disposition:** open, and de-fanged for now. The `deploy` job is held behind the `DEPLOY_ENABLED`
+  repository variable, so pushing runs gates only. Vercel keeps deploying as it always has —
+  unchanged from today, now with CI signal beside it.
 
 ## 2026-09-01 — the frontend deploy job is UNVERIFIED
 - **What:** the `gates` and `security` job commands were all run locally; the `deploy` job was not,
