@@ -26,3 +26,8 @@ aiosqlite>=0.19.0  # For in-memory test database
 
 # Development
 python-dotenv>=1.0.0
+
+# Standards harness (see docs/adr/0001-*.md)
+# Replaces the flake8 + black + mypy recipes the justfile used to declare but never had installed.
+ruff>=0.16.0              # lint + format, one tool
+import-linter>=2.14       # boundary gate: the app.api > app.services > app.models layering

@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# Fast gate set for student-attendance-tracker-api — /harness step 6.
+# Every gate here was proven by breaking it on purpose before being wired.
+#
+# This runs `just check-fast`: boundaries + drift + lint. ~3 seconds, no database, no network.
+#
+# The TEST SUITE IS NOT HERE, deliberately: it takes ~3.5 minutes and needs a running postgres with
+# TEST_DATABASE_URL set. A hook that slow gets bypassed, and a bypassed hook is worse than an honest
+# split. Run `just check` (fast set + 262 tests) before pushing.
+#
+# And read this before trusting either: the suite is green, but during install the teacher-ownership
+# filter was removed from app/services/class_service.py:54 and all 262 tests still passed. Green
+# here does not mean authorization holds. See REVIEW-DEBT.md.
+#
+# Bypassing with `--no-verify` is a confession: it needs a REVIEW-DEBT.md entry.
+set -e
+cd "$(git rev-parse --show-toplevel)"
+
+if ! command -v just >/dev/null 2>&1; then
+  echo "pre-commit: \`just\` not found — running the gates directly." >&2
+  ./venv/bin/lint-imports
+  ./scripts/drift-check.sh --cached
+  ./scripts/drift-extra.sh --cached
+  ./scripts/baseline-guard.sh ruff ./venv/bin/ruff check app tests
+  echo "✓ fast gates green"
+  exit 0
+fi
+
+echo "▸ boundaries"; ./venv/bin/lint-imports >/dev/null && echo "  4 contracts kept"
+echo "▸ drift (staged)"; ./scripts/drift-check.sh --cached; ./scripts/drift-extra.sh --cached
+echo "▸ lint (ratchet)"; ./scripts/baseline-guard.sh ruff ./venv/bin/ruff check app tests
+echo "✔ fast gates green"

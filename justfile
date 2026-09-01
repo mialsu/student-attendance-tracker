@@ -19,8 +19,14 @@ run:
 run-port port:
     uvicorn app.main:app --reload --host 0.0.0.0 --port {{port}}
 
-# Run all tests
+# Run all tests. Requires TEST_DATABASE_URL to be set — the fixtures DROP tables, so the target
+# database is named explicitly and never guessed from a default port (see tests/conftest.py).
 test:
+    @if [ -z "${TEST_DATABASE_URL:-}" ]; then \
+        echo "TEST_DATABASE_URL is not set. These tests create and DROP tables."; \
+        echo "  export TEST_DATABASE_URL=postgresql+asyncpg://attendance_user:PW@localhost:5433/attendance_tracker_test"; \
+        echo "See .env.test.example."; exit 1; \
+    fi
     pytest -v
 
 # Run tests with coverage report
@@ -67,28 +73,48 @@ superadmin:
 seed:
     python scripts/seed_db.py
 
-# Format code with black
+# Install the git hooks (one-off per clone — core.hooksPath is local config, not committed)
+install-hooks:
+    git config core.hooksPath .githooks
+    @echo "✓ core.hooksPath -> .githooks  (pre-commit runs \`just check-fast\`)"
+
+# Format code with ruff. NOT a gate: 33 of 51 files would change, so running this is a deliberate
+# formatting commit of its own, not something to fold into a feature diff.
 fmt:
-    black app tests
+    ./venv/bin/ruff format app tests
     @echo "✓ Code formatted"
 
-# Lint code with flake8
+# Lint with ruff (RATCHET against .harness-baseline — fails when the count grows, not when >0)
 lint:
-    flake8 app tests
-    @echo "✓ Linting complete"
+    ./scripts/baseline-guard.sh ruff ./venv/bin/ruff check app tests
 
-# Type check with mypy
-typecheck:
-    mypy app
-    @echo "✓ Type checking complete"
+# Lint, showing every finding rather than just the count
+lint-verbose:
+    ./venv/bin/ruff check app tests
 
-# Run all quality checks (format, lint, test)
+# Boundary gate: app.api > app.services > app.models, plus the leaf contracts
+boundaries:
+    ./venv/bin/lint-imports
+
+# Drift gate (devkit) + this repo's extra checks
+drift:
+    ./scripts/drift-check.sh
+    ./scripts/drift-extra.sh
+
+# The FAST gate set — what the pre-commit hook runs. No database, no network, ~3 seconds.
+# There is deliberately no typecheck step: no Python type gate is installed. See REVIEW-DEBT.md.
+check-fast:
+    @echo "▸ boundaries"; just boundaries
+    @echo "▸ drift";      just drift
+    @echo "▸ lint";       just lint
+    @echo "✓ fast gates green"
+
+# THE full umbrella gate set. Needs TEST_DATABASE_URL and a running postgres. The suite takes
+# ~3.5 minutes, which is why it is not in the pre-commit hook — run this before pushing.
 check:
-    @echo "Running code quality checks..."
-    just fmt
-    just lint
-    just test
-    @echo "✓ All checks passed!"
+    just check-fast
+    @echo "▸ tests"; just test
+    @echo "✓ all gates green"
 
 # Clean up Python cache files
 clean:

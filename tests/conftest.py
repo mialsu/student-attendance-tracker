@@ -20,13 +20,29 @@ from app.models.student import Student
 from app.models.user import User, UserRole
 
 
-# Test database URL - PostgreSQL by default
-# For local testing with Docker Compose: postgresql+asyncpg://attendance_user:test_password_123@localhost:5433/attendance_tracker_test
-# Override with TEST_DATABASE_URL environment variable if needed
-TEST_DATABASE_URL = os.getenv(
-    "TEST_DATABASE_URL",
-    "postgresql+asyncpg://attendance_user:test_password_123@localhost:5433/attendance_tracker_test"
-)
+# Test database URL — MUST be provided explicitly. There is deliberately no default.
+#
+# This used to default to `...@localhost:5433/attendance_tracker_test`. The db_engine fixture below
+# calls `Base.metadata.drop_all`, so that default pointed a schema-dropping fixture at whatever
+# happens to be listening on port 5433 — on this machine, another project's PostgreSQL container.
+# The credentials did not match, so it failed to connect rather than doing damage, but "the wrong
+# database refused us" is not a safety mechanism.
+#
+# Set it explicitly, e.g.:
+#   export TEST_DATABASE_URL=postgresql+asyncpg://attendance_user:pw@localhost:5433/attendance_tracker_test
+# See .env.test.example. CI sets it in .github/workflows/deploy.yml.
+TEST_DATABASE_URL = os.getenv("TEST_DATABASE_URL")
+
+if not TEST_DATABASE_URL:
+    raise RuntimeError(
+        "TEST_DATABASE_URL is not set.\n"
+        "These tests create and DROP tables, so the target database must be named explicitly "
+        "rather than guessed from a default port.\n"
+        "Example:\n"
+        "  export TEST_DATABASE_URL="
+        "postgresql+asyncpg://attendance_user:PASSWORD@localhost:5433/attendance_tracker_test\n"
+        "See .env.test.example."
+    )
 
 
 @pytest.fixture(scope="session")
