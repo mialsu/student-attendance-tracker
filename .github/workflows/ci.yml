@@ -139,6 +139,7 @@ jobs:
     env:
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
       VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
     steps:
       - uses: actions/checkout@v4
 
@@ -149,8 +150,54 @@ jobs:
       - name: Install Vercel CLI
         run: npm i -g vercel@latest
 
+      # `vercel pull` fails with a single unhelpful line ("Could not retrieve Project Settings")
+      # for THREE different causes: a missing secret, a rejected token, or a project the token's
+      # scope cannot see. This separates them before the CLI gets a chance to conflate them.
+      # No secret values are printed — lengths and non-secret id prefixes only.
+      - name: Preflight — resolve Vercel credentials
+        run: |
+          set -uo pipefail
+          fail=0
+          if [ -z "${VERCEL_TOKEN:-}" ]; then
+            echo "✖ VERCEL_TOKEN is empty or not set"; fail=1
+          else
+            echo "✔ VERCEL_TOKEN present (${#VERCEL_TOKEN} chars)"
+          fi
+          for v in VERCEL_ORG_ID VERCEL_PROJECT_ID; do
+            val="$(eval printf '%s' "\${$v:-}")"
+            if [ -z "$val" ]; then
+              echo "✖ $v is empty or not set"; fail=1
+            else
+              # Org/project ids are identifiers, not credentials — a prefix is safe and tells us
+              # whether this is a team scope (team_…) or a personal account.
+              echo "✔ $v present (${#val} chars, prefix '$(printf '%s' "$val" | cut -c1-5)…')"
+            fi
+          done
+          if [ "$fail" -ne 0 ]; then
+            echo
+            echo "Add the missing repo secrets: Settings → Secrets and variables → Actions →"
+            echo "Repository secrets. VERCEL_ORG_ID and VERCEL_PROJECT_ID come from the Vercel"
+            echo "dashboard (Project → Settings → General for the project id; Account/Team →"
+            echo "Settings for the org id). A stale local .vercel/project.json can disagree with"
+            echo "the dashboard if the project was ever moved between a personal account and a team."
+            exit 1
+          fi
+          echo
+          echo "── token identity ──"
+          if ! vercel whoami --token="$VERCEL_TOKEN"; then
+            echo "✖ the token itself was rejected — regenerate it at vercel.com/account/tokens"
+            exit 1
+          fi
+          echo
+          echo "── projects visible to this token ──"
+          vercel project ls --token="$VERCEL_TOKEN" 2>&1 | head -30 || true
+          echo
+          echo "If the target project is NOT listed above, the token's scope is wrong: a token"
+          echo "scoped to your personal account cannot see a team's project (or vice versa)."
+          echo "VERCEL_ORG_ID must match the scope the token belongs to."
+
       - name: Pull Vercel project settings
-        run: vercel pull --yes --environment=production --token="${{ secrets.VERCEL_TOKEN }}"
+        run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
 
       - name: Build
         run: vercel build --prod --token="${{ secrets.VERCEL_TOKEN }}"
