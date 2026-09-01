@@ -6,6 +6,26 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 
 <!-- Newest first. -->
 
+## 2026-09-01 — the documented way to get a test database pointed at another project's container
+- **What:** `CLAUDE.md` and the `justfile`'s `test` recipe both told you to
+  `export TEST_DATABASE_URL=...@localhost:5433/attendance_tracker_test`. On this machine port 5433 is
+  `platform-postgres`, a **different project's** PostGIS container. The fixtures call
+  `Base.metadata.drop_all`. So the documented instruction aimed a schema-dropping test suite at
+  someone else's database — the same hazard the removed `conftest.py` default created, surviving in
+  the docs after the code was fixed.
+- **Where:** root `CLAUDE.md` (corrected), `justfile`'s `test` recipe (corrected),
+  `deployment/local/docker-compose.yml`'s `db-test` service (**not** corrected — see below)
+- **What green tests do NOT prove here:** nothing catches a wrong `TEST_DATABASE_URL`. The guard in
+  `conftest.py` only refuses an *unset* variable; a set-but-wrong one is obeyed.
+- **Disposition:** **fixed 2026-09-01** for this repo. `scripts/test-db.sh` now starts a disposable
+  database on port 5439 and prints the export line, wired as `just test-db-up` / `just test-db-down`.
+  Its port-in-use guard was proven by pointing a copy at 5433 and watching it refuse before touching
+  docker. **Still open:** `deployment/local/docker-compose.yml`'s `db-test` is configured for host
+  port 5433 and therefore cannot start on this machine. That file is in the `deployment` repo, which
+  the Owner scoped out of the harness work, so it is reported rather than changed — the one-line fix
+  is a different port.
+
+
 ## 2026-09-01 — INV-1 has seven enforcement sites, not one
 - **What:** "only a teacher associated with a Class may read or change it" is implemented seven
   times: `verify_class_ownership` in `class_service.py:202`, a near-identical **second copy** in

@@ -19,13 +19,23 @@ run:
 run-port port:
     uvicorn app.main:app --reload --host 0.0.0.0 --port {{port}}
 
+# Start a throwaway test database and print the export line. Port 5439, deliberately NOT the 5433
+# that deployment/local's db-test is configured for — 5433 is taken by another project's container
+# on this machine, so aiming a schema-dropping suite there would hit someone else's data.
+test-db-up:
+    @./scripts/test-db.sh up
+
+# Destroy the throwaway test database (it holds nothing worth keeping — no volume, --rm).
+test-db-down:
+    @./scripts/test-db.sh down
+
 # Run all tests. Requires TEST_DATABASE_URL to be set — the fixtures DROP tables, so the target
 # database is named explicitly and never guessed from a default port (see tests/conftest.py).
 test:
     @if [ -z "${TEST_DATABASE_URL:-}" ]; then \
         echo "TEST_DATABASE_URL is not set. These tests create and DROP tables."; \
-        echo "  export TEST_DATABASE_URL=postgresql+asyncpg://attendance_user:PW@localhost:5433/attendance_tracker_test"; \
-        echo "See .env.test.example."; exit 1; \
+        echo "  eval \"$(just test-db-up)\"    # throwaway database on port 5439"; \
+        echo "Do NOT point this at port 5433 — that is another project's container."; exit 1; \
     fi
     pytest -v
 
