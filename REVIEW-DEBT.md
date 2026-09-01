@@ -6,7 +6,7 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 
 <!-- Newest first. -->
 
-## 2026-09-01 — the deploy job is UNVERIFIED: it has never run
+## 2026-09-01 — the deploy job was unverified; it has now run successfully (VERIFIED)
 - **What:** every gate in this repo was proven by breaking it and watching it go red. The `deploy`
   job in `.github/workflows/deploy.yml` was **not**, because the only way to exercise it is to deploy
   to production. What *was* verified: the YAML parses, all embedded shell blocks pass `bash -n`, the
@@ -20,9 +20,13 @@ cut (`/confess`), read first by any architecture or review session, dispositione
   `$COMPOSE images -q backend` returns an image id on this docker version; that
   `deployment/scripts/backup-db.sh production` finds `deployment/production/.env` when invoked from
   `$PROJECT_PATH`; and that `restart: always` does not race the explicit migration step.
-- **Disposition:** open — **the first deploy after this lands is the verification.** Prefer
-  triggering it via `workflow_dispatch` at a quiet moment over discovering it on a feature push.
-  Rollback restores CODE only; the schema path is manual by design.
+- **Disposition:** VERIFIED 2026-09-01. The workflow ran on push to `main` and production came
+  back healthy (`/health` → 200). Caveat kept deliberately: this first run carried **no application
+  code change** (harness scripts, workflow, docs, `tests/conftest.py`), so it exercised the deploy
+  *mechanism* — backup, migrations, swap, health check — but not a real code transition, and the
+  **rollback branch has still never executed**. A 200 from `/health` cannot distinguish "deployed"
+  from "rolled back", so the Actions log is the only record of which path ran. Re-open this if the
+  rollback ever fires.
 
 ## 2026-09-01 — a real bug in the CI security step, found only by running it
 - **What:** the gitleaks step originally piped `curl` straight into `grep -m1` to resolve the latest
