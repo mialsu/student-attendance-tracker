@@ -28,15 +28,21 @@ cut (`/confess`), read first by any architecture or review session, dispositione
   gate silently becomes advisory again — that is the thing to remember, because nothing in the repo
   can detect it.
 
-## 2026-09-01 — the frontend deploy job is UNVERIFIED
+## 2026-09-01 — the frontend deploy job was unverified; it has now run successfully (VERIFIED)
 - **What:** the `gates` and `security` job commands were all run locally; the `deploy` job was not,
   because it needs the Vercel token and deploys to production. YAML parses and every embedded shell
   block passes `bash -n`.
 - **Where:** `.github/workflows/ci.yml`, the `deploy` job
-- **What green tests do NOT prove here:** that `vercel pull/build/deploy --prebuilt` succeeds with
-  this project's settings, or that the post-deploy check against `https://app-attendance.kotoio.fi`
-  reflects the new deployment rather than a cached edge response. The first run is the verification.
-- **Disposition:** open
+- **What green tests do NOT prove here:** the post-deploy check against
+  `https://app-attendance.kotoio.fi` asserts a 200, which does not prove the *new* bundle is being
+  served rather than a cached edge response. It is a liveness check, not a version check.
+- **Verified 2026-09-01:** `vercel pull` → `build` → `deploy --prebuilt --prod` succeeded and the
+  site returns 200. Getting there required adding a preflight step, because `vercel pull` reports
+  the same opaque "Could not retrieve Project Settings" for a missing secret, a rejected token, and
+  an out-of-scope project alike — the real cause was `VERCEL_ORG_ID` / `VERCEL_PROJECT_ID` not yet
+  being set.
+- **Disposition:** verified. Remaining gap: no version assertion. Emitting the commit SHA into the
+  build and checking for it would turn the liveness check into a real one.
 
 ## 2026-09-01 — the test ratchet may be flaky in CI
 - **What:** `npm run gate:tests` absorbs 25 failing tests as its baseline, and one of them makes a
