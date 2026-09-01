@@ -6,6 +6,35 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 
 <!-- Newest first. -->
 
+## 2026-09-01 — this repo has no INVARIANTS.md by design, so drift-check's invariant gate is inert here
+- **What:** `/crunch-domain` produced six invariants and put them in
+  `../student-attendance-tracker-api/INVARIANTS.md`, because **every enforcer is server-side** — a
+  DB constraint, a route test, an ownership check. None lives in this repo. Writing a second
+  `INVARIANTS.md` here would be two files for one artifact (ANTI-PATTERNS: *two formats for one
+  artifact*), so this repo has none.
+- **Where:** `scripts/drift-check.sh` check 7, which matches `INVARIANTS.md` rows and therefore never
+  fires in this repo; `CONTEXT.md`'s pointer block
+- **What green tests do NOT prove here:** that the UI respects any invariant. It does not enforce
+  them and is not trusted to — the API refuses regardless of what a screen shows. A future session
+  must not read "no INVARIANTS.md" as "no rules".
+- **Disposition:** accepted-with-reason. Revisit only if a rule appears whose enforcer is genuinely
+  client-side; then this repo gets its own file and the gate becomes live.
+
+## 2026-09-01 — the legacy-student filter cannot be turned off from the UI
+- **What:** `legacy` is declared in this repo's API types (`src/api/attendance.ts:20`, commented
+  "Include students with first attendance > 5 years ago") and **no component ever sets it**. The
+  backend therefore always applies its default, which is filter-on. Two further problems: the
+  backend measures `Student.created_at`, not first attendance, so the comment here is wrong; and the
+  filter has never fired, since the app launched in November 2025.
+- **Where:** `src/api/attendance.ts:20`; backend at
+  `../student-attendance-tracker-api/app/services/attendance_service.py:124-128`
+- **What green tests do NOT prove here:** no frontend test touches `legacy`, and none could — the
+  parameter reaches no component.
+- **Disposition:** open → spec owed, and the **frontend half is this repo's**. The Owner's decision
+  (2026-09-01): keep the cutoff on by default and add a way to reveal old Students so they can be
+  deleted. That is a real screen, so it wants `/design-brief` before `/implement`.
+
+
 ## 2026-09-01 — the Vercel deploy gate is not real until auto-deploy is switched off
 - **What:** `.github/workflows/ci.yml` now gates the frontend deploy behind the harness gates and
   runs `vercel deploy --prebuilt --prod` itself (ADR-0003). Vercel's git integration deploys on push
@@ -137,7 +166,7 @@ cut (`/confess`), read first by any architecture or review session, dispositione
   The fix is to move the toast types down to `src/types`.
 - **Disposition:** open
 
-## 2026-09-01 — CONTEXT.md is a gate seed, not an Owner-authored domain model
+## 2026-09-01 — CONTEXT.md was a gate seed; the Owner has now crunched it (RESOLVED)
 - **What:** the drift gate's vocabulary check needs `_Avoid_` lines to enforce, so `/harness`
   seeded `CONTEXT.md` from evidence in the committed code. Exactly one `_Avoid_` list is claimed
   (`studentFirstName` / `studentLastName`), verified to have zero live-code hits before being added.
@@ -147,7 +176,11 @@ cut (`/confess`), read first by any architecture or review session, dispositione
   including whether a Student is one person across Classes or a per-Class row, and whether `User`
   means different things to the auth code and the admin screens. Citing this file as a settled model
   would make it the pseudo-artifact `ANTI-PATTERNS.md` warns about (PRINCIPLES #11).
-- **Disposition:** open → `/crunch-domain`
+- **Disposition:** **RESOLVED 2026-09-01** by `/crunch-domain`. The Owner answered five questions and
+  `CONTEXT.md` now records their decisions, including the one this entry called out: a Student is a
+  **per-Class row**, deliberately. The `User`-means-two-things question stays open because the Owner
+  is reconsidering whether the superadmin role should exist at all. The rules themselves live in
+  `../student-attendance-tracker-api/INVARIANTS.md` — see the entry above for why not here.
 
 ## 2026-09-01 — no accessibility enforcer exists, so every A11Y rule is review-only
 - **What:** the web profile names three cheap a11y enforcers (`eslint-plugin-jsx-a11y`, `axe` in a
