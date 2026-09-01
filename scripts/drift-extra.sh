@@ -32,7 +32,7 @@ student_(first|last)_name	same: use `name`
 EOT
 )
 
-SKIP='(^|/)(CHANGELOG|README|REVIEW-DEBT|CODING_STANDARDS|CONTEXT|CONTEXT-MAP)\.md$|\.(md|txt|snap|svg|png|jpg|lock)$|(^|/)(vendor|node_modules|dist|build|coverage)/|-lock\.(json|yaml)$|(^|/)bun\.lockb$|(^|/)scripts/vocab-check\.sh$'
+SKIP='(^|/)(CHANGELOG|README|REVIEW-DEBT|CODING_STANDARDS|CONTEXT|CONTEXT-MAP)\.md$|\.(md|txt|snap|svg|png|jpg|lock)$|(^|/)(vendor|node_modules|dist|build|coverage)/|-lock\.(json|yaml)$|(^|/)bun\.lockb$|(^|/)scripts/drift-extra\.sh$'
 
 RANGE=("$@")
 if [ ${#RANGE[@]} -eq 0 ]; then RANGE=(HEAD); fi

@@ -6,6 +6,39 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 
 <!-- Newest first. -->
 
+## 2026-09-01 — the Vercel deploy gate is not real until auto-deploy is switched off
+- **What:** `.github/workflows/ci.yml` now gates the frontend deploy behind the harness gates and
+  runs `vercel deploy --prebuilt --prod` itself (ADR-0003). Vercel's git integration deploys on push
+  independently, and it is **still enabled**.
+- **Where:** `.github/workflows/ci.yml` (`deploy` job); Vercel Project → Settings → Git
+- **What green tests do NOT prove here:** until git auto-deploy is disabled in the Vercel dashboard,
+  **both paths deploy on every push to main and they race** — whichever finishes last wins, and a red
+  CI still ships. This is a manual step outside the repo that no gate can enforce, so it is written
+  down here instead. Three secrets are also required and cannot be set from here: `VERCEL_TOKEN`,
+  `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID` (the latter two live in the gitignored `.vercel/project.json`).
+- **Disposition:** open — blocking. The workflow is inert-but-harmless without the secrets (the
+  deploy job fails), and actively misleading if the secrets are set while auto-deploy stays on.
+
+## 2026-09-01 — the frontend deploy job is UNVERIFIED
+- **What:** the `gates` and `security` job commands were all run locally; the `deploy` job was not,
+  because it needs the Vercel token and deploys to production. YAML parses and every embedded shell
+  block passes `bash -n`.
+- **Where:** `.github/workflows/ci.yml`, the `deploy` job
+- **What green tests do NOT prove here:** that `vercel pull/build/deploy --prebuilt` succeeds with
+  this project's settings, or that the post-deploy check against `https://app-attendance.kotoio.fi`
+  reflects the new deployment rather than a cached edge response. The first run is the verification.
+- **Disposition:** open
+
+## 2026-09-01 — the test ratchet may be flaky in CI
+- **What:** `npm run gate:tests` absorbs 25 failing tests as its baseline, and one of them makes a
+  real HTTP request to `http://localhost:8000`.
+- **Where:** `src/contexts/__tests__/AuthContext.test.tsx`; surfaces via `src/api/auth.ts:19`
+- **What green tests do NOT prove here:** the failure **count** may differ on a runner where nothing
+  listens on port 8000 — connection-refused can yield a different number of failures than a local
+  timeout. If the count moves, the ratchet fails for a reason unrelated to the diff. The fix is to
+  mock at the `src/api` seam, or quarantine the file with a confession — **not** to raise the baseline.
+- **Disposition:** open — watch the first few CI runs.
+
 ## 2026-09-01 — devkit's vocabulary check cannot express compound identifiers
 - **What:** `scripts/drift-check.sh`'s vocabulary check splits each identifier into segments
   (`pupilName` → `pupil` + `name`) and compares each segment against `CONTEXT.md`'s `_Avoid_` list.

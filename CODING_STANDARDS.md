@@ -139,3 +139,6 @@ recorded the same day. That is an Owner call, not an agent's.
 - Compound vocabulary + repo-specific checks: `npm run drift:extra`
 - Build: `npm run build`
 - All of it: `npm run check`
+- In CI: `.github/workflows/ci.yml` — the same set with `BASELINE_FROZEN=1`, plus gitleaks and
+  `npm audit`. The drift gate runs via `scripts/drift-ci.sh`, which resolves a real diff range;
+  a bare `drift-check.sh` on a clean CI checkout compares nothing and falsely reports clean.
