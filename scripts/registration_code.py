@@ -20,16 +20,31 @@ import argparse
 import asyncio
 import sys
 from pathlib import Path
+from urllib.parse import urlparse
 
 # Add parent directory to path to import app modules
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from asyncpg.exceptions import PostgresError
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.config import settings
 from app.core.exceptions import BadRequestException, NotFoundError
 from app.services import registration_code_service
+
+
+def target() -> str:
+    """Name the database this run will write to, without its password.
+
+    Printed on every run and in every failure. This machine has run several PostgreSQL
+    containers at once and this repo has already been bitten twice by a command aimed at the
+    wrong one (REVIEW-DEBT.md). A tool that writes to whatever DATABASE_URL happens to say
+    should say what that is.
+    """
+    parsed = urlparse(settings.database_url)
+    return f"{parsed.username}@{parsed.hostname}:{parsed.port}{parsed.path}"
 
 
 async def issue(session: AsyncSession, email: str) -> None:
@@ -59,6 +74,9 @@ async def revoke(session: AsyncSession, email: str) -> None:
 
 async def run(command: str, email: str) -> None:
     """Open a session against the configured database and run one command."""
+    # stderr: this is context, not output. It keeps stdout to the code itself, and keeps this
+    # line ahead of any error rather than behind it in a buffer.
+    print(f"Database: {target()}", file=sys.stderr)
     engine = create_async_engine(settings.database_url, echo=False)
     async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
@@ -99,6 +117,17 @@ def main() -> None:
     except (BadRequestException, NotFoundError) as e:
         # A refusal, not a crash: an address that already has a live code, or has none to revoke.
         print(f"Error: {e.detail}", file=sys.stderr)
+        sys.exit(1)
+    except (OSError, PostgresError, SQLAlchemyError) as e:
+        # Unreachable, wrong credentials, or a schema that has not been migrated. An operator
+        # reading a traceback learns nothing a one-line message cannot tell them better.
+        print(f"Error: cannot use the database at {target()}", file=sys.stderr)
+        # First line only: SQLAlchemy appends the full statement, which is noise to an operator.
+        detail = str(e).split("\n")[0]
+        print(f"       {type(e).__name__}: {detail}", file=sys.stderr)
+        print(file=sys.stderr)
+        print("       Check DATABASE_URL in .env, and that the database is running and", file=sys.stderr)
+        print("       migrated (just migrate).", file=sys.stderr)
         sys.exit(1)
     except KeyboardInterrupt:
         sys.exit(1)
