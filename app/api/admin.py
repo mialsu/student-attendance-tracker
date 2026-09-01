@@ -32,7 +32,6 @@ async def create_registration_code(
     """
     code = await registration_code_service.create_registration_code(
         db=db,
-        creator=current_user,
         email_restriction=request.email_restriction,
     )
     return CodeResponse.model_validate(code)

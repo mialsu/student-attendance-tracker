@@ -164,7 +164,6 @@ async def valid_registration_code(db: AsyncSession, superadmin_for_tests: User) 
         email_restriction=None,
         used=False,
         revoked=False,
-        created_by_user_id=superadmin_for_tests.id,
         expires_at=datetime.now(timezone.utc) + registration_code_service.CODE_LIFETIME,
     )
     db.add(code)

@@ -54,11 +54,6 @@ class User(Base):
         foreign_keys="RegistrationCode.used_by_user_id",
         back_populates="used_by",
     )
-    created_codes: Mapped[list["RegistrationCode"]] = relationship(
-        "RegistrationCode",
-        foreign_keys="RegistrationCode.created_by_user_id",
-        back_populates="created_by",
-    )
     refresh_tokens: Mapped[list["RefreshToken"]] = relationship(
         "RefreshToken", back_populates="user", cascade="all, delete-orphan"
     )

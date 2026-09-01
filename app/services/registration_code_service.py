@@ -32,15 +32,16 @@ def generate_code() -> str:
 
 async def create_registration_code(
     db: AsyncSession,
-    creator: User,
     email_restriction: str | None = None,
 ) -> RegistrationCode:
     """
-    Create a new registration code.
+    Issue a new registration code.
+
+    This is the seam the command-line tool calls. There is no creator: codes are issued by
+    whoever has database access, not by a user (ADR-0003).
 
     Args:
         db: Database session
-        creator: User creating the code (must be superadmin)
         email_restriction: Email that can use this code (None = universal code)
 
     Returns:
@@ -72,7 +73,6 @@ async def create_registration_code(
     code = RegistrationCode(
         code=generate_code(),
         email_restriction=email_restriction,
-        created_by_user_id=creator.id,
         expires_at=now + CODE_LIFETIME,
     )
     db.add(code)
@@ -214,6 +214,45 @@ async def revoke_code(
     code = result.scalar_one_or_none()
     if not code:
         raise NotFoundError("Registration code not found")
+
+    code.revoked = True
+    await db.commit()
+    await db.refresh(code)
+    return code
+
+
+async def revoke_code_for_email(
+    db: AsyncSession,
+    email: str,
+) -> RegistrationCode:
+    """
+    Revoke the outstanding registration code for an email address.
+
+    An address has at most one code that is still redeemable, so the address is a sufficient
+    handle — which is why there is no listing command to find an id with.
+
+    Args:
+        db: Database session
+        email: The address whose code should be revoked
+
+    Returns:
+        The revoked registration code
+
+    Raises:
+        NotFoundError: If the address has no code that is still redeemable. Deliberately an
+            error rather than silent success: a mistyped address must not look like it worked.
+    """
+    result = await db.execute(
+        select(RegistrationCode).where(
+            RegistrationCode.email_restriction == email,
+            RegistrationCode.used == False,
+            RegistrationCode.revoked == False,
+            RegistrationCode.expires_at > datetime.now(timezone.utc),
+        )
+    )
+    code = result.scalar_one_or_none()
+    if not code:
+        raise NotFoundError(f"No valid registration code for {email}")
 
     code.revoked = True
     await db.commit()

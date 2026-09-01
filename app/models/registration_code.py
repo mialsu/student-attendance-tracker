@@ -32,9 +32,6 @@ class RegistrationCode(Base):
     used_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
-    created_by_user_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
-    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
@@ -48,9 +45,6 @@ class RegistrationCode(Base):
     # Relationships
     used_by: Mapped["User"] = relationship(
         "User", foreign_keys=[used_by_user_id], back_populates="used_codes"
-    )
-    created_by: Mapped["User"] = relationship(
-        "User", foreign_keys=[created_by_user_id], back_populates="created_codes"
     )
 
     def __repr__(self) -> str:

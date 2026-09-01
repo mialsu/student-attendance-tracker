@@ -21,7 +21,9 @@ cut (`/confess`), read first by any architecture or review session, dispositione
   that is being deleted three slices later is work with a known expiry of its own. If Slice 4 is
   ever dropped or deferred, this becomes a real defect and the one-line fix is to add
   `expires_at: datetime` to `CodeResponse`.
-- **Disposition:** open, accepted for the length of this spec. Re-read it if Slice 4 slips.
+- **Disposition:** **fixed 2026-09-01**, in Slice 2. That slice edits `CodeResponse` anyway to drop
+  `created_by_user_id`, so adding `expires_at: datetime` alongside cost one line rather than the
+  three slices of waiting this entry assumed. Recorded as a spec delta.
 
 ## 2026-09-01 — AC-16 is proven on seeded rows, not on production's
 - **What:** the spec proves the expiry backfill by restoring the pre-deploy production backup into a

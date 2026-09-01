@@ -79,6 +79,17 @@ migrate-history:
 superadmin:
     python scripts/create_superadmin.py
 
+# Authorized by database access, not by a role (ADR-0003): it runs wherever DATABASE_URL points
+# at the database you mean.
+# Issue a registration code for an email address, valid 24 hours
+code-issue email:
+    @./scripts/registration-code.sh issue {{email}}
+
+# Fails if there is no outstanding code, so a typo does not look like success.
+# Revoke the outstanding registration code for an email address
+code-revoke email:
+    @./scripts/registration-code.sh revoke {{email}}
+
 # Seed database with test data
 seed:
     python scripts/seed_db.py

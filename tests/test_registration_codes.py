@@ -63,33 +63,32 @@ class TestRegistrationCodeService:
         # URL-safe base64 uses A-Z, a-z, 0-9, -, _
         assert all(c.isalnum() or c in ["-", "_"] for c in code)
 
-    async def test_create_registration_code(self, db: AsyncSession, superadmin_user: User):
+    async def test_create_registration_code(self, db: AsyncSession):
         """Test creating a registration code."""
-        code = await registration_code_service.create_registration_code(db, superadmin_user)
+        code = await registration_code_service.create_registration_code(db)
 
         assert code.id is not None
         assert len(code.code) == 16
         assert code.email_restriction is None
         assert code.used is False
         assert code.revoked is False
-        assert code.created_by_user_id == superadmin_user.id
         assert code.created_at is not None
 
     async def test_create_registration_code_with_email_restriction(
-        self, db: AsyncSession, superadmin_user: User
+        self, db: AsyncSession
     ):
         """Test creating code with email restriction."""
         email = "specific@example.com"
         code = await registration_code_service.create_registration_code(
-            db, superadmin_user, email_restriction=email
+            db, email_restriction=email
         )
 
         assert code.email_restriction == email
 
-    async def test_get_registration_code(self, db: AsyncSession, superadmin_user: User):
+    async def test_get_registration_code(self, db: AsyncSession):
         """Test retrieving a registration code by code string."""
         created_code = await registration_code_service.create_registration_code(
-            db, superadmin_user
+            db
         )
 
         retrieved_code = await registration_code_service.get_registration_code(
@@ -106,11 +105,11 @@ class TestRegistrationCodeService:
         assert code is None
 
     async def test_validate_registration_code_success(
-        self, db: AsyncSession, superadmin_user: User
+        self, db: AsyncSession
     ):
         """Test validating a valid unused code."""
         created_code = await registration_code_service.create_registration_code(
-            db, superadmin_user
+            db
         )
 
         validated_code = await registration_code_service.validate_registration_code(
@@ -127,10 +126,10 @@ class TestRegistrationCodeService:
             )
 
     async def test_validate_registration_code_already_used(
-        self, db: AsyncSession, superadmin_user: User, test_user: User
+        self, db: AsyncSession, test_user: User
     ):
         """Test validating already used code raises exception."""
-        code = await registration_code_service.create_registration_code(db, superadmin_user)
+        code = await registration_code_service.create_registration_code(db)
 
         # Mark code as used
         await registration_code_service.mark_code_as_used(db, code, test_user)
@@ -142,10 +141,10 @@ class TestRegistrationCodeService:
             )
 
     async def test_validate_registration_code_revoked(
-        self, db: AsyncSession, superadmin_user: User
+        self, db: AsyncSession
     ):
         """Test validating revoked code raises exception."""
-        code = await registration_code_service.create_registration_code(db, superadmin_user)
+        code = await registration_code_service.create_registration_code(db)
 
         # Revoke the code
         code.revoked = True
@@ -158,11 +157,11 @@ class TestRegistrationCodeService:
             )
 
     async def test_validate_registration_code_email_mismatch(
-        self, db: AsyncSession, superadmin_user: User
+        self, db: AsyncSession
     ):
         """Test validating code with wrong email raises exception."""
         code = await registration_code_service.create_registration_code(
-            db, superadmin_user, email_restriction="allowed@example.com"
+            db, email_restriction="allowed@example.com"
         )
 
         with pytest.raises(BadRequestException, match="not valid for your email"):
@@ -171,12 +170,12 @@ class TestRegistrationCodeService:
             )
 
     async def test_validate_registration_code_email_match(
-        self, db: AsyncSession, superadmin_user: User
+        self, db: AsyncSession
     ):
         """Test validating code with correct email succeeds."""
         email = "allowed@example.com"
         code = await registration_code_service.create_registration_code(
-            db, superadmin_user, email_restriction=email
+            db, email_restriction=email
         )
 
         validated_code = await registration_code_service.validate_registration_code(
@@ -186,10 +185,10 @@ class TestRegistrationCodeService:
         assert validated_code.id == code.id
 
     async def test_mark_code_as_used(
-        self, db: AsyncSession, superadmin_user: User, test_user: User
+        self, db: AsyncSession, test_user: User
     ):
         """Test marking a code as used."""
-        code = await registration_code_service.create_registration_code(db, superadmin_user)
+        code = await registration_code_service.create_registration_code(db)
 
         await registration_code_service.mark_code_as_used(db, code, test_user)
 
@@ -200,9 +199,9 @@ class TestRegistrationCodeService:
         assert code.used_by_user_id == test_user.id
         assert code.used_at is not None
 
-    async def test_revoke_code(self, db: AsyncSession, superadmin_user: User):
+    async def test_revoke_code(self, db: AsyncSession):
         """Test revoking a registration code."""
-        code = await registration_code_service.create_registration_code(db, superadmin_user)
+        code = await registration_code_service.create_registration_code(db)
 
         revoked_code = await registration_code_service.revoke_code(db, str(code.id))
 
@@ -216,11 +215,11 @@ class TestRegistrationCodeService:
         with pytest.raises(NotFoundError, match="not found"):
             await registration_code_service.revoke_code(db, fake_id)
 
-    async def test_list_registration_codes(self, db: AsyncSession, superadmin_user: User):
+    async def test_list_registration_codes(self, db: AsyncSession):
         """Test listing all registration codes."""
         # Create multiple codes
-        code1 = await registration_code_service.create_registration_code(db, superadmin_user)
-        code2 = await registration_code_service.create_registration_code(db, superadmin_user)
+        code1 = await registration_code_service.create_registration_code(db)
+        code2 = await registration_code_service.create_registration_code(db)
 
         codes = await registration_code_service.list_registration_codes(db)
 
@@ -230,12 +229,12 @@ class TestRegistrationCodeService:
         assert code2.id in code_ids
 
     async def test_list_registration_codes_with_pagination(
-        self, db: AsyncSession, superadmin_user: User
+        self, db: AsyncSession
     ):
         """Test listing codes with pagination."""
         # Create 5 codes
         for _ in range(5):
-            await registration_code_service.create_registration_code(db, superadmin_user)
+            await registration_code_service.create_registration_code(db)
 
         # Get first 3
         codes_page1 = await registration_code_service.list_registration_codes(
@@ -250,46 +249,73 @@ class TestRegistrationCodeService:
         assert len(codes_page2) >= 2
 
     async def test_create_registration_code_expires_in_24_hours(
-        self, db: AsyncSession, superadmin_user: User
+        self, db: AsyncSession
     ):
         """AC-1: a code issued now stops being redeemable exactly 24 hours later."""
         before = datetime.now(timezone.utc)
-        code = await registration_code_service.create_registration_code(db, superadmin_user)
+        code = await registration_code_service.create_registration_code(db)
         after = datetime.now(timezone.utc)
 
         assert before + timedelta(hours=24) <= code.expires_at <= after + timedelta(hours=24)
 
     async def test_expired_code_does_not_block_a_new_one_for_that_email(
-        self, db: AsyncSession, superadmin_user: User
+        self, db: AsyncSession
     ):
         """AC-6: a recipient who missed the window can simply be sent another code."""
         email = "missed-the-window@example.com"
         first = await registration_code_service.create_registration_code(
-            db, superadmin_user, email_restriction=email
+            db, email_restriction=email
         )
         await expire(db, first)
 
         second = await registration_code_service.create_registration_code(
-            db, superadmin_user, email_restriction=email
+            db, email_restriction=email
         )
 
         assert second.id != first.id
         assert second.email_restriction == email
 
     async def test_live_code_blocks_a_second_one_for_that_email(
-        self, db: AsyncSession, superadmin_user: User
+        self, db: AsyncSession
     ):
         """AC-7: two valid codes for one address cannot exist at the same time."""
         email = "already-invited@example.com"
         await registration_code_service.create_registration_code(
-            db, superadmin_user, email_restriction=email
+            db, email_restriction=email
         )
 
         with pytest.raises(BadRequestException, match="already exists"):
             await registration_code_service.create_registration_code(
-                db, superadmin_user, email_restriction=email
+                db, email_restriction=email
             )
 
+    async def test_revoke_code_for_email(self, db: AsyncSession):
+        """AC-9: revoking by email revokes that address's outstanding code."""
+        email = "invited-by-mistake@example.com"
+        code = await registration_code_service.create_registration_code(
+            db, email_restriction=email
+        )
+
+        revoked = await registration_code_service.revoke_code_for_email(db, email)
+
+        assert revoked.id == code.id
+        assert revoked.revoked is True
+
+    async def test_revoke_code_for_email_with_nothing_to_revoke(self, db: AsyncSession):
+        """AC-10: a mistyped address must not look like success."""
+        with pytest.raises(NotFoundError, match="No valid registration code"):
+            await registration_code_service.revoke_code_for_email(db, "typo@example.com")
+
+    async def test_revoke_code_for_email_ignores_an_expired_code(self, db: AsyncSession):
+        """AC-10: outstanding means live. An expired code is already dead, not revocable."""
+        email = "missed-the-window@example.com"
+        code = await registration_code_service.create_registration_code(
+            db, email_restriction=email
+        )
+        await expire(db, code)
+
+        with pytest.raises(NotFoundError, match="No valid registration code"):
+            await registration_code_service.revoke_code_for_email(db, email)
 
 # TDD: Admin API Endpoint Tests
 @pytest.mark.asyncio
@@ -441,11 +467,11 @@ class TestSignupWithRegistrationCode:
     """Test signup endpoint requiring registration code."""
 
     async def test_signup_with_valid_code(
-        self, client: AsyncClient, db: AsyncSession, superadmin_user: User
+        self, client: AsyncClient, db: AsyncSession
     ):
         """Can signup with valid registration code."""
         # Create code
-        code = await registration_code_service.create_registration_code(db, superadmin_user)
+        code = await registration_code_service.create_registration_code(db)
 
         # Signup with code
         response = await client.post(
@@ -475,11 +501,11 @@ class TestSignupWithRegistrationCode:
         assert "Invalid" in response.json()["detail"]
 
     async def test_signup_with_used_code(
-        self, client: AsyncClient, db: AsyncSession, superadmin_user: User
+        self, client: AsyncClient, db: AsyncSession
     ):
         """Cannot reuse a code."""
         # Create and use code
-        code = await registration_code_service.create_registration_code(db, superadmin_user)
+        code = await registration_code_service.create_registration_code(db)
 
         # First signup
         await client.post(
@@ -504,10 +530,10 @@ class TestSignupWithRegistrationCode:
         assert "already used" in response.json()["detail"].lower()
 
     async def test_signup_with_revoked_code(
-        self, client: AsyncClient, db: AsyncSession, superadmin_user: User
+        self, client: AsyncClient, db: AsyncSession
     ):
         """Cannot use revoked code."""
-        code = await registration_code_service.create_registration_code(db, superadmin_user)
+        code = await registration_code_service.create_registration_code(db)
 
         # Revoke the code
         await registration_code_service.revoke_code(db, str(code.id))
@@ -525,12 +551,12 @@ class TestSignupWithRegistrationCode:
         assert "revoked" in response.json()["detail"].lower()
 
     async def test_signup_with_email_restricted_code_wrong_email(
-        self, client: AsyncClient, db: AsyncSession, superadmin_user: User
+        self, client: AsyncClient, db: AsyncSession
     ):
         """Email-restricted codes only work for specific email."""
         # Create code for specific email
         code = await registration_code_service.create_registration_code(
-            db, superadmin_user, "allowed@example.com"
+            db, "allowed@example.com"
         )
 
         # Try with wrong email
@@ -546,12 +572,12 @@ class TestSignupWithRegistrationCode:
         assert "not valid for your email" in response.json()["detail"]
 
     async def test_signup_with_email_restricted_code_correct_email(
-        self, client: AsyncClient, db: AsyncSession, superadmin_user: User
+        self, client: AsyncClient, db: AsyncSession
     ):
         """Email-restricted code works with correct email."""
         email = "allowed@example.com"
         code = await registration_code_service.create_registration_code(
-            db, superadmin_user, email_restriction=email
+            db, email_restriction=email
         )
 
         # Try with correct email
@@ -567,10 +593,10 @@ class TestSignupWithRegistrationCode:
         assert "access_token" in response.json()
 
     async def test_signup_with_expired_code(
-        self, client: AsyncClient, db: AsyncSession, superadmin_user: User
+        self, client: AsyncClient, db: AsyncSession
     ):
         """AC-2: an expired code is refused, and the message says so."""
-        code = await registration_code_service.create_registration_code(db, superadmin_user)
+        code = await registration_code_service.create_registration_code(db)
         await expire(db, code)
 
         response = await client.post(
@@ -583,6 +609,27 @@ class TestSignupWithRegistrationCode:
         )
         assert response.status_code == 400
         assert "expired" in response.json()["detail"].lower()
+
+    async def test_signup_with_a_code_revoked_by_email(
+        self, client: AsyncClient, db: AsyncSession
+    ):
+        """AC-9: after revoking by email, signup with that code fails."""
+        email = "changed-my-mind@example.com"
+        code = await registration_code_service.create_registration_code(
+            db, email_restriction=email
+        )
+        await registration_code_service.revoke_code_for_email(db, email)
+
+        response = await client.post(
+            "/api/auth/signup",
+            json={
+                "email": email,
+                "password": "password123",
+                "registration_code": code.code,
+            },
+        )
+        assert response.status_code == 400
+        assert "revoked" in response.json()["detail"].lower()
 
     async def test_signup_without_registration_code_fails(self, client: AsyncClient):
         """Signup without registration code should fail with validation error."""

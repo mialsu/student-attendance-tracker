@@ -82,8 +82,9 @@ _Planned_: the Owner intends **shared Classes** â€” two Teachers on one Class â€
 ones. `INV-1` is worded "associated with" for that reason.
 
 **Registration code**:
-A code a superadmin issues that lets someone create a Teacher account. Optional email restriction,
-plus a used-by / created-by pair. **Redeemable for 24 hours** from the moment it is issued
+A code the Owner issues from the command line that lets someone create a Teacher account. Optional
+email restriction, plus a record of who redeemed it. **There is no creator**: authorization to issue
+one is having database access, not holding a role (ADR-0003), so there is no user to record. **Redeemable for 24 hours** from the moment it is issued
 (`CODE_LIFETIME`, `registration_code_service.py:18`); after that it is *expired* and no longer
 redeemable, though the row stays for the record.
 _Resolved 2026-09-01, from code_: single-use (`registration_code_service.py:130`), revocable

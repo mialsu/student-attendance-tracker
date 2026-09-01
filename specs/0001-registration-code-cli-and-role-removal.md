@@ -274,8 +274,9 @@ Recorded rather than assumed. None of them blocks Slice 1.
 1. **How the tool gets run on the production server.** Scripts do reach the image, so executing
    inside the running container works. No deployment document describes that path today. Does this
    want a documented one-liner in the deployment README, or is working it out at the time fine?
-2. **What revoking should do when the address has no outstanding code.** AC-10 currently assumes a
-   clear error, on the reasoning that silence would hide a typo. Confirm or overturn.
+2. ~~**What revoking should do when the address has no outstanding code.**~~ **Answered
+   2026-09-01: a clear error.** The Owner confirmed AC-10 as written. `revoke` prints
+   `No valid registration code for <address>` and exits 1.
 3. **Whether `/prune` runs inside this slice** to remove the two newly-dead service functions and
    their tests, or as a named follow-up immediately after.
 
@@ -286,4 +287,7 @@ lands here, dated, with what the build taught us.
 
 | Date | What changed | Why |
 |---|---|---|
-| — | — | — |
+| 2026-09-01 | **Dropping the creator reference moved from Slice 4 into Slice 2.** | The tool has no user, and `created_by_user_id` was `NOT NULL`, so Slice 2 could not insert a row at all until the column went. The alternatives were recording a false creator — which ADR-0003 rejects by name — or building Slices 3 and 4 first. Owner chose the move on 2026-09-01. Slice 4 keeps roles and the admin surface; it no longer touches the creator. |
+| 2026-09-01 | **One new service function, not two.** | The spec said "two new service functions: one to issue a code for an email, one to revoke". Once the creator argument was gone, `create_registration_code(db, email_restriction)` *is* the issue function, so a second name for it would be two words for one thing (ANTI-PATTERNS). Only `revoke_code_for_email` is new. |
+| 2026-09-01 | **`CodeResponse` gained `expires_at`.** | Slice 1 confessed that the admin surface showed codes with no hint they expire. Slice 2 edits that schema anyway to remove `created_by_user_id`, so the fix cost one line here instead of staying debt until Slice 4. The REVIEW-DEBT entry is closed. |
+| 2026-09-01 | **Open question 2 answered: revoking a nothing is an error.** | Owner confirmed AC-10 as written on 2026-09-01. `revoke` exits 1 and names the address when there is no live code. Silence would hide a typo (US-6). |

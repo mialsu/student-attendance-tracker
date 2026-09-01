@@ -24,5 +24,5 @@ class CodeResponse(BaseModel):
     revoked: bool
     used_by_user_id: UUID | None
     used_at: datetime | None
-    created_by_user_id: UUID
     created_at: datetime
+    expires_at: datetime
