@@ -1,5 +1,7 @@
 """Tests for registration code functionality."""
 
+from datetime import datetime, timedelta, timezone
+
 import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,6 +11,13 @@ from app.core.security import hash_password
 from app.models.registration_code import RegistrationCode
 from app.models.user import User, UserRole
 from app.services import registration_code_service
+
+
+async def expire(db: AsyncSession, code: RegistrationCode) -> None:
+    """Age a code past its expiry, the way waiting 24 hours would."""
+    code.expires_at = datetime.now(timezone.utc) - timedelta(minutes=1)
+    db.add(code)
+    await db.commit()
 
 
 # Fixtures for superadmin user
@@ -239,6 +248,47 @@ class TestRegistrationCodeService:
             db, skip=3, limit=3
         )
         assert len(codes_page2) >= 2
+
+    async def test_create_registration_code_expires_in_24_hours(
+        self, db: AsyncSession, superadmin_user: User
+    ):
+        """AC-1: a code issued now stops being redeemable exactly 24 hours later."""
+        before = datetime.now(timezone.utc)
+        code = await registration_code_service.create_registration_code(db, superadmin_user)
+        after = datetime.now(timezone.utc)
+
+        assert before + timedelta(hours=24) <= code.expires_at <= after + timedelta(hours=24)
+
+    async def test_expired_code_does_not_block_a_new_one_for_that_email(
+        self, db: AsyncSession, superadmin_user: User
+    ):
+        """AC-6: a recipient who missed the window can simply be sent another code."""
+        email = "missed-the-window@example.com"
+        first = await registration_code_service.create_registration_code(
+            db, superadmin_user, email_restriction=email
+        )
+        await expire(db, first)
+
+        second = await registration_code_service.create_registration_code(
+            db, superadmin_user, email_restriction=email
+        )
+
+        assert second.id != first.id
+        assert second.email_restriction == email
+
+    async def test_live_code_blocks_a_second_one_for_that_email(
+        self, db: AsyncSession, superadmin_user: User
+    ):
+        """AC-7: two valid codes for one address cannot exist at the same time."""
+        email = "already-invited@example.com"
+        await registration_code_service.create_registration_code(
+            db, superadmin_user, email_restriction=email
+        )
+
+        with pytest.raises(BadRequestException, match="already exists"):
+            await registration_code_service.create_registration_code(
+                db, superadmin_user, email_restriction=email
+            )
 
 
 # TDD: Admin API Endpoint Tests
@@ -515,6 +565,24 @@ class TestSignupWithRegistrationCode:
         )
         assert response.status_code == 201
         assert "access_token" in response.json()
+
+    async def test_signup_with_expired_code(
+        self, client: AsyncClient, db: AsyncSession, superadmin_user: User
+    ):
+        """AC-2: an expired code is refused, and the message says so."""
+        code = await registration_code_service.create_registration_code(db, superadmin_user)
+        await expire(db, code)
+
+        response = await client.post(
+            "/api/auth/signup",
+            json={
+                "email": "too-late@example.com",
+                "password": "password123",
+                "registration_code": code.code,
+            },
+        )
+        assert response.status_code == 400
+        assert "expired" in response.json()["detail"].lower()
 
     async def test_signup_without_registration_code_fails(self, client: AsyncClient):
         """Signup without registration code should fail with validation error."""

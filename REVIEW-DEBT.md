@@ -6,6 +6,36 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 
 <!-- Newest first. -->
 
+## 2026-09-01 — a code's expiry exists in the data and appears on no surface
+- **What:** Slice 1 of `specs/0001-registration-code-cli-and-role-removal.md` added
+  `registration_codes.expires_at` and the refusal that reads it, but `CodeResponse`
+  (`app/schemas/registration_code.py:16`) does not carry the field. So the only place a code is
+  visible today — `GET /api/admin/codes` and the admin screen over it — shows a code with no hint
+  that it dies in 24 hours. Anyone reading that surface would reasonably assume codes are still
+  valid forever.
+- **Where:** `app/schemas/registration_code.py:16-29`
+- **What green tests do NOT prove here:** nothing asserts what the admin response contains. The new
+  tests cover the service and the signup route; the admin surface is untouched by them.
+- **Deliberate, with a date on it:** Slice 2 prints code and expiry together from the command line
+  (US-4), and Slice 4 deletes the admin routes and screens entirely. Adding the field to a schema
+  that is being deleted three slices later is work with a known expiry of its own. If Slice 4 is
+  ever dropped or deferred, this becomes a real defect and the one-line fix is to add
+  `expires_at: datetime` to `CodeResponse`.
+- **Disposition:** open, accepted for the length of this spec. Re-read it if Slice 4 slips.
+
+## 2026-09-01 — AC-16 is proven on seeded rows, not on production's
+- **What:** the spec proves the expiry backfill by restoring the pre-deploy production backup into a
+  scratch database and migrating that. What was actually run is the same recipe against a scratch
+  database seeded by hand with two 200-day-old codes (one unused, one redeemed): both came out
+  expired, both survived, `NOT NULL` landed, and `downgrade` put the table back with no row lost.
+- **Where:** `alembic/versions/d9a611615af9_add_registration_code_expiry.py`
+- **What green tests do NOT prove here:** the suite never runs migrations at all — `conftest.py`
+  builds the schema with `Base.metadata.create_all`. No test would notice if this migration were
+  deleted.
+- **Disposition:** open until `/verify-live` runs AC-16 against the real backup. The seeded run
+  raises confidence in the SQL; it says nothing about production's actual rows, which is exactly the
+  distinction AC-16 was written to insist on.
+
 ## 2026-09-01 — the documented way to get a test database pointed at another project's container
 - **What:** `CLAUDE.md` and the `justfile`'s `test` recipe both told you to
   `export TEST_DATABASE_URL=...@localhost:5433/attendance_tracker_test`. On this machine port 5433 is

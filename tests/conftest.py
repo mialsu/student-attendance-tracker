@@ -2,6 +2,7 @@
 
 import asyncio
 import os
+from datetime import datetime, timezone
 from typing import AsyncGenerator
 
 import pytest
@@ -18,6 +19,7 @@ from app.models.class_ import Class
 from app.models.registration_code import RegistrationCode
 from app.models.student import Student
 from app.models.user import User, UserRole
+from app.services import registration_code_service
 
 
 # Test database URL — MUST be provided explicitly. There is deliberately no default.
@@ -163,6 +165,7 @@ async def valid_registration_code(db: AsyncSession, superadmin_for_tests: User) 
         used=False,
         revoked=False,
         created_by_user_id=superadmin_for_tests.id,
+        expires_at=datetime.now(timezone.utc) + registration_code_service.CODE_LIFETIME,
     )
     db.add(code)
     await db.commit()

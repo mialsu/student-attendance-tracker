@@ -83,10 +83,15 @@ ones. `INV-1` is worded "associated with" for that reason.
 
 **Registration code**:
 A code a superadmin issues that lets someone create a Teacher account. Optional email restriction,
-plus a used-by / created-by pair.
-_Resolved 2026-09-01, from code_: single-use (`registration_code_service.py:115`), revocable
-(`:118`), and a used code cannot be deleted (`:169`). Revoking a code does **not** affect an account
-already created with it, because validation runs only at signup (`INV-6`).
+plus a used-by / created-by pair. **Redeemable for 24 hours** from the moment it is issued
+(`CODE_LIFETIME`, `registration_code_service.py:18`); after that it is *expired* and no longer
+redeemable, though the row stays for the record.
+_Resolved 2026-09-01, from code_: single-use (`registration_code_service.py:130`), revocable
+(`:133`), expiring (`:136`), and a used code cannot be deleted (`:187`). Revoking a code does **not**
+affect an account already created with it, because validation runs only at signup (`INV-6`).
+_Note_: **expired** is not **revoked**. Revoked is the Owner's deliberate act on one code; expired
+happens to every code on its own. The duplicate guard treats only a *live* code as blocking, so an
+address whose code expired can simply be sent another one.
 
 ## How this file is enforced
 

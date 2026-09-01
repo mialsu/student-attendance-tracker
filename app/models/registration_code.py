@@ -40,6 +40,10 @@ class RegistrationCode(Base):
         server_default=func.now(),
         default=lambda: datetime.now(timezone.utc),
     )
+    # INV-6: past this moment the code can never be redeemed. NOT NULL and no default, so a
+    # code path that forgets to set a lifetime is refused by the database rather than by review.
+    # The lifetime itself lives in registration_code_service.CODE_LIFETIME.
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
     # Relationships
     used_by: Mapped["User"] = relationship(

@@ -1,7 +1,7 @@
 """Registration code service for controlled user signup."""
 
 import secrets
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,6 +9,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.exceptions import BadRequestException, NotFoundError
 from app.models.registration_code import RegistrationCode
 from app.models.user import User
+
+# How long a registration code stays redeemable, from the moment it is issued.
+#
+# Deliberately a constant and not configuration: a security-relevant window that differs per
+# environment, invisibly, is worse than one that takes a commit to change (ADR-0003's spec,
+# `specs/0001-registration-code-cli-and-role-removal.md`).
+CODE_LIFETIME = timedelta(hours=24)
 
 
 def generate_code() -> str:
@@ -40,27 +47,33 @@ async def create_registration_code(
         Created RegistrationCode instance
 
     Raises:
-        BadRequestException: If email already has an unused code
+        BadRequestException: If email already has a code that is still redeemable
     """
-    # Check if email already has an unused code (only for email-restricted codes)
+    now = datetime.now(timezone.utc)
+
+    # Refuse a second live code for one address (only for email-restricted codes). An EXPIRED
+    # code is still unused and unrevoked, so it must be excluded here or one expired code would
+    # block that address forever.
     if email_restriction is not None:
         result = await db.execute(
             select(RegistrationCode).where(
                 RegistrationCode.email_restriction == email_restriction,
                 RegistrationCode.used == False,
                 RegistrationCode.revoked == False,
+                RegistrationCode.expires_at > now,
             )
         )
         existing_code = result.scalar_one_or_none()
         if existing_code:
             raise BadRequestException(
-                f"An unused registration code already exists for {email_restriction}"
+                f"A valid registration code already exists for {email_restriction}"
             )
 
     code = RegistrationCode(
         code=generate_code(),
         email_restriction=email_restriction,
         created_by_user_id=creator.id,
+        expires_at=now + CODE_LIFETIME,
     )
     db.add(code)
     await db.commit()
@@ -105,18 +118,23 @@ async def validate_registration_code(
         Valid RegistrationCode instance
 
     Raises:
-        BadRequestException: If code is invalid, used, revoked, or email doesn't match
+        BadRequestException: If code is invalid, used, revoked, expired, or email doesn't match
     """
     reg_code = await get_registration_code(db, code)
 
     if not reg_code:
         raise BadRequestException("Invalid registration code")
 
+    # INV-6: used, revoked and expired are the three states a code never comes back from. This
+    # is the one place that decides whether a code may be redeemed.
     if reg_code.used:
         raise BadRequestException("Registration code already used")
 
     if reg_code.revoked:
         raise BadRequestException("Registration code has been revoked")
+
+    if reg_code.expires_at <= datetime.now(timezone.utc):
+        raise BadRequestException("Registration code has expired")
 
     # Check email restriction (None = universal code)
     if reg_code.email_restriction is not None and reg_code.email_restriction != email:
