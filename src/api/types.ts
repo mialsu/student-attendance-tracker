@@ -3,7 +3,6 @@
 export interface User {
   id: string;
   email: string;
-  role: 'teacher' | 'superadmin';
   active: boolean;
   created_at: string;
 }
@@ -114,17 +113,6 @@ export interface SignupRequest {
   email: string;
   password: string;
   registration_code: string;
-}
-
-export interface RegistrationCode {
-  id: string;
-  code: string;
-  email_restriction: string;
-  used: boolean;
-  revoked: boolean;
-  used_by_user_id: string | null;
-  used_at: string | null;
-  created_at: string;
 }
 
 export interface APIError {

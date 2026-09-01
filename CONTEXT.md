@@ -68,10 +68,10 @@ a way to reveal old Students in order to delete them. Owed as a spec — this is
 **Teacher**:
 The authenticated party who records attendance for a Class. Modelled as `User` in the API, and a
 User is **only** ever a Teacher — there is no other kind of user.
-_Resolved 2026-09-01 — decided, NOT yet implemented_: the Owner has decided to remove the superadmin
-role entirely, along with the admin screens. This app will have exactly one kind of signed-in person,
-so no screen needs to branch on who they are.
-⚠ The code still branches on a role in two places until that slice lands.
+_Resolved 2026-09-01 — implemented_: the superadmin role is gone, along with the admin screens
+(ADR-0003 in the API repo). There is exactly one kind of signed-in person, so no screen branches on
+who they are: `Index.tsx` sends every signed-in user to the teacher dashboard, and `User` carries no
+`role` field at all.
 _Planned_: **shared Classes** — two Teachers on one Class — alongside individual ones.
 
 ## How this file is enforced
