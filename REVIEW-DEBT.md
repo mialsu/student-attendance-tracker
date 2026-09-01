@@ -22,9 +22,11 @@ cut (`/confess`), read first by any architecture or review session, dispositione
   (b) the Vercel connection names `mialsu/student-attendance-tracker-client-app` while the remote is
   `student-attendance-tracker/client-app` — these are the **same repo** (identical ref lists over
   SSH, GitHub post-rename redirect), so the connection really does watch the branch we push.
-- **Disposition:** open, and de-fanged for now. The `deploy` job is held behind the `DEPLOY_ENABLED`
-  repository variable, so pushing runs gates only. Vercel keeps deploying as it always has —
-  unchanged from today, now with CI signal beside it.
+- **Disposition:** the Owner disconnected Vercel's git integration on 2026-09-01 and chose to have
+  every green push deploy, with no opt-in switch. The race is therefore resolved by the disconnect
+  rather than by a gate. **If the git integration is ever reconnected, the race returns** and CI's
+  gate silently becomes advisory again — that is the thing to remember, because nothing in the repo
+  can detect it.
 
 ## 2026-09-01 — the frontend deploy job is UNVERIFIED
 - **What:** the `gates` and `security` job commands were all run locally; the `deploy` job was not,

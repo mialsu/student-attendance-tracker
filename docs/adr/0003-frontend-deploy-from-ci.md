@@ -9,10 +9,11 @@ exits 2.
 So the deploy moved into `.github/workflows/ci.yml`: gates and security run first, and only on green
 does the `deploy` job run `vercel pull` → `vercel build --prod` → `vercel deploy --prebuilt --prod`.
 
-**This requires one manual step outside the repo:** turn OFF the Vercel project's git auto-deploy.
-Until that is done **both** paths deploy and they race — CI's gate is advisory, and whichever
-finishes last wins. The gate is not real until that switch is flipped, so the workflow's `deploy`
-job is held behind a `DEPLOY_ENABLED` repository variable in the meantime.
+**This required one manual step outside the repo:** turning OFF the Vercel project's git
+auto-deploy. Done by the Owner on 2026-09-01 (Connected Git Repository → Disconnect). Until that
+happened **both** paths deployed and raced — CI's gate was advisory, and whichever finished last
+won. If the integration is ever reconnected the race returns, and nothing in the repo can detect
+it.
 
 Two things about that setting are genuinely confusing and cost time to establish, so they are
 recorded here:
