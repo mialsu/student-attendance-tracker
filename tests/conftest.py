@@ -2,7 +2,6 @@
 
 import asyncio
 import os
-from datetime import datetime, timezone
 from typing import AsyncGenerator
 
 import pytest
@@ -157,19 +156,20 @@ async def superadmin_for_tests(db: AsyncSession) -> User:
 
 
 @pytest_asyncio.fixture
-async def valid_registration_code(db: AsyncSession, superadmin_for_tests: User) -> RegistrationCode:
-    """Create a valid registration code for tests."""
-    code = RegistrationCode(
-        code="testcode1234567",  # exactly 16 characters
-        email_restriction=None,
-        used=False,
-        revoked=False,
-        expires_at=datetime.now(timezone.utc) + registration_code_service.CODE_LIFETIME,
-    )
-    db.add(code)
-    await db.commit()
-    await db.refresh(code)
-    return code
+async def registration_code_for(db: AsyncSession):
+    """Issue a live registration code for one address.
+
+    A factory rather than a fixed code, because INV-7 means there is no such thing as "a valid
+    code" on its own: a code is valid *for an address*. Each caller names the address it is
+    about to sign up with.
+    """
+
+    async def issue(email: str) -> RegistrationCode:
+        return await registration_code_service.create_registration_code(
+            db, email_restriction=email
+        )
+
+    return issue
 
 
 @pytest_asyncio.fixture
@@ -302,13 +302,15 @@ async def test_attendance(
     return record
 
 
-@pytest.fixture
-def sample_user_data(valid_registration_code: RegistrationCode) -> dict:
-    """Sample user data for testing."""
+@pytest_asyncio.fixture
+async def sample_user_data(registration_code_for) -> dict:
+    """Sample user data for testing, with a code issued for exactly that address."""
+    email = "newuser@example.com"
+    code = await registration_code_for(email)
     return {
-        "email": "newuser@example.com",
+        "email": email,
         "password": "newpassword123",
-        "registration_code": valid_registration_code.code,
+        "registration_code": code.code,
     }
 
 

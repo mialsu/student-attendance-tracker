@@ -6,6 +6,24 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 
 <!-- Newest first. -->
 
+## 2026-09-01 — a mandatory email is NOT NULL, which is not the same as "a real address"
+- **What:** INV-7 / AC-8. The constraint Slice 3 lands is `NOT NULL`, so `email_restriction = ''`
+  is still storable. The migration itself writes `''` into every legacy row that named no address,
+  which is exactly why a stricter `CHECK (email_restriction <> '')` cannot be added on top: it
+  would fail on the rows the Owner chose to keep rather than delete. Every path that exists today
+  refuses a blank — `create_registration_code` requires the argument, `CreateCodeRequest` types it
+  `EmailStr`, the CLI exits 1 on an empty string — but those are three service-layer checks, and
+  `CODING_STANDARDS.md` prefers a constraint precisely because it holds for the path that forgets.
+- **Where:** `app/models/registration_code.py:28`,
+  `alembic/versions/7c081032bae3_make_registration_code_email_mandatory.py`
+- **What green tests do NOT prove here:** `test_a_code_cannot_be_stored_without_an_address` proves
+  the database refuses NULL. Nothing refuses `''` at the database.
+  `test_signup_with_a_code_that_names_no_address` proves such a row cannot be redeemed — which is
+  the harm — but the row can still be written.
+- **Disposition:** accepted with reason, 2026-09-01. An empty address is inert: it equals no
+  address a signup can present, and the legacy rows carrying it are revoked as well. Revisit when
+  the legacy rows are purged — with them gone, `CHECK (email_restriction <> '')` costs one line.
+
 ## 2026-09-01 — a code's expiry exists in the data and appears on no surface
 - **What:** Slice 1 of `specs/0001-registration-code-cli-and-role-removal.md` added
   `registration_codes.expires_at` and the refusal that reads it, but `CodeResponse`
@@ -30,7 +48,14 @@ cut (`/confess`), read first by any architecture or review session, dispositione
   scratch database and migrating that. What was actually run is the same recipe against a scratch
   database seeded by hand with two 200-day-old codes (one unused, one redeemed): both came out
   expired, both survived, `NOT NULL` landed, and `downgrade` put the table back with no row lost.
-- **Where:** `alembic/versions/d9a611615af9_add_registration_code_expiry.py`
+- **Also, Slice 3:** `7c081032bae3` (mandatory email) was exercised the same way — a scratch
+  database seeded with three rows: an unused code naming no address, a redeemed code naming no
+  address, and a live code naming one. Upgrade left all three present, revoked both nameless ones
+  with `email_restriction = ''`, kept the redeemer reference, landed `NOT NULL`, and refused a NULL
+  insert; downgrade and re-upgrade both preserved all three rows. Again: seeded rows, not
+  production's.
+- **Where:** `alembic/versions/d9a611615af9_add_registration_code_expiry.py`,
+  `alembic/versions/7c081032bae3_make_registration_code_email_mandatory.py`
 - **What green tests do NOT prove here:** the suite never runs migrations at all — `conftest.py`
   builds the schema with `Base.metadata.create_all`. No test would notice if this migration were
   deleted.

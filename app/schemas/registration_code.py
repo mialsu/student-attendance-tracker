@@ -9,7 +9,8 @@ from pydantic import BaseModel, ConfigDict, EmailStr
 class CreateCodeRequest(BaseModel):
     """Schema for creating a registration code."""
 
-    email_restriction: EmailStr | None = None
+    # Required — INV-7. There is no universal code, so there is no default to fall back to.
+    email_restriction: EmailStr
 
 
 class CodeResponse(BaseModel):
@@ -19,7 +20,7 @@ class CodeResponse(BaseModel):
 
     id: UUID
     code: str
-    email_restriction: str | None
+    email_restriction: str
     used: bool
     revoked: bool
     used_by_user_id: UUID | None

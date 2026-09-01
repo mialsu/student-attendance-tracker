@@ -26,14 +26,16 @@ class TestSignup:
         cookie = response.cookies["refresh_token"]
         assert cookie is not None
 
-    async def test_signup_duplicate_email(self, client: AsyncClient, test_user: User, valid_registration_code):
+    async def test_signup_duplicate_email(self, client: AsyncClient, test_user: User, registration_code_for):
         """Test signup with duplicate email fails."""
+        code = await registration_code_for(test_user.email)
+
         response = await client.post(
             "/api/auth/signup",
             json={
                 "email": test_user.email,
                 "password": "password123",
-                "registration_code": valid_registration_code.code,
+                "registration_code": code.code,
             },
         )
 
@@ -112,15 +114,17 @@ class TestLogin:
 class TestTokenRefresh:
     """Tests for token refresh."""
 
-    async def test_refresh_token_success(self, client: AsyncClient, valid_registration_code):
+    async def test_refresh_token_success(self, client: AsyncClient, registration_code_for):
         """Test successful token refresh."""
+        code = await registration_code_for("refresh@example.com")
+
         # First signup
         signup_response = await client.post(
             "/api/auth/signup",
             json={
                 "email": "refresh@example.com",
                 "password": "password123",
-                "registration_code": valid_registration_code.code,
+                "registration_code": code.code,
             },
         )
 
@@ -150,15 +154,17 @@ class TestTokenRefresh:
 
         assert response.status_code == 401
 
-    async def test_token_rotation_revokes_old_token(self, client: AsyncClient, valid_registration_code):
+    async def test_token_rotation_revokes_old_token(self, client: AsyncClient, registration_code_for):
         """Test that using refresh token revokes the old one (token rotation)."""
+        code = await registration_code_for("rotation@example.com")
+
         # Login
         login_response = await client.post(
             "/api/auth/signup",
             json={
                 "email": "rotation@example.com",
                 "password": "password123",
-                "registration_code": valid_registration_code.code,
+                "registration_code": code.code,
             },
         )
         old_token = login_response.cookies.get("refresh_token")
@@ -249,16 +255,18 @@ class TestUpdateEmail:
         assert response.status_code == 401
 
     async def test_update_email_duplicate(
-        self, client: AsyncClient, auth_headers: dict, test_user: User, valid_registration_code
+        self, client: AsyncClient, auth_headers: dict, test_user: User, registration_code_for
     ):
         """Test email update to existing email."""
+        code = await registration_code_for("another@example.com")
+
         # First, create another user with a different email
         await client.post(
             "/api/auth/signup",
             json={
                 "email": "another@example.com",
                 "password": "testpassword123",
-                "registration_code": valid_registration_code.code,
+                "registration_code": code.code,
             },
         )
         
@@ -477,14 +485,18 @@ class TestAuthEdgeCases:
         )
         assert new_login.status_code == 200
 
-    async def test_signup_with_whitespace_in_email(self, client: AsyncClient, valid_registration_code):
+    async def test_signup_with_whitespace_in_email(self, client: AsyncClient, registration_code_for):
         """Test signup with email containing whitespace gets trimmed."""
+        # The code names the TRIMMED address: Pydantic trims before the code is validated
+        # against it, so a code issued for the padded string would not match.
+        code = await registration_code_for("whitespace@example.com")
+
         response = await client.post(
             "/api/auth/signup",
             json={
                 "email": "  whitespace@example.com  ",
                 "password": "password123",
-                "registration_code": valid_registration_code.code,
+                "registration_code": code.code,
             },
         )
 

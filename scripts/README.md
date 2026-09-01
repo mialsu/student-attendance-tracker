@@ -147,29 +147,18 @@ python scripts/script_name.py
 
 ### Creating Registration Codes
 
-Registration codes can only be created by superadmin users via the API:
+From the command line, against the database `DATABASE_URL` names. Authorization is having
+database access, not holding a role (ADR-0003), so there is no account to create first and no
+token to fetch:
 
 ```bash
-# 1. First, create a superadmin
-./scripts/create-superadmin.sh
-
-# 2. Login and get access token
-curl -X POST http://localhost:8000/api/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"admin@example.com","password":"your-password"}'
-
-# 3. Create registration code
-curl -X POST http://localhost:8000/api/admin/codes \
-  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"email_restriction":null}'
-
-# Or with email restriction
-curl -X POST http://localhost:8000/api/admin/codes \
-  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"email_restriction":"teacher@school.com"}'
+just code-issue  teacher@school.com     # prints the code and when it expires
+just code-revoke teacher@school.com     # exits 1 if that address has no live code
 ```
+
+Every code names exactly one address (INV-7) and is redeemable for 24 hours. There is no
+universal code: an address is required, because a code that anybody can redeem is a code that
+whoever finds it can redeem.
 
 ---
 

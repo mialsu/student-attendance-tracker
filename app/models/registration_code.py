@@ -21,8 +21,12 @@ class RegistrationCode(Base):
     code: Mapped[str] = mapped_column(
         String(16), unique=True, nullable=False, index=True
     )
-    email_restriction: Mapped[str | None] = mapped_column(
-        String(255), nullable=True, index=True
+    # INV-7: a code names the one address that may redeem it. NOT NULL because a constraint holds
+    # for the code path written next year, and a signature only for the ones written today.
+    # Codes that predate the rule carry '' — see the mandatory-email migration: an empty address
+    # equals no address a signup can present, so it matches nobody rather than everybody.
+    email_restriction: Mapped[str] = mapped_column(
+        String(255), nullable=False, index=True
     )
     used: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     revoked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)

@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import BadRequestException, NotFoundError
@@ -64,31 +65,27 @@ class TestRegistrationCodeService:
         assert all(c.isalnum() or c in ["-", "_"] for c in code)
 
     async def test_create_registration_code(self, db: AsyncSession):
-        """Test creating a registration code."""
-        code = await registration_code_service.create_registration_code(db)
+        """Test creating a registration code for one address.
 
-        assert code.id is not None
-        assert len(code.code) == 16
-        assert code.email_restriction is None
-        assert code.used is False
-        assert code.revoked is False
-        assert code.created_at is not None
-
-    async def test_create_registration_code_with_email_restriction(
-        self, db: AsyncSession
-    ):
-        """Test creating code with email restriction."""
+        This used to be two tests, one with an address and one without. There is no "without"
+        any more (INV-7), so the second asserted a strict subset of this one.
+        """
         email = "specific@example.com"
         code = await registration_code_service.create_registration_code(
             db, email_restriction=email
         )
 
+        assert code.id is not None
+        assert len(code.code) == 16
         assert code.email_restriction == email
+        assert code.used is False
+        assert code.revoked is False
+        assert code.created_at is not None
 
     async def test_get_registration_code(self, db: AsyncSession):
         """Test retrieving a registration code by code string."""
         created_code = await registration_code_service.create_registration_code(
-            db
+            db, email_restriction="lookup@example.com"
         )
 
         retrieved_code = await registration_code_service.get_registration_code(
@@ -108,12 +105,13 @@ class TestRegistrationCodeService:
         self, db: AsyncSession
     ):
         """Test validating a valid unused code."""
+        email = "holder@example.com"
         created_code = await registration_code_service.create_registration_code(
-            db
+            db, email_restriction=email
         )
 
         validated_code = await registration_code_service.validate_registration_code(
-            db, created_code.code, "any@example.com"
+            db, created_code.code, email
         )
 
         assert validated_code.id == created_code.id
@@ -129,7 +127,9 @@ class TestRegistrationCodeService:
         self, db: AsyncSession, test_user: User
     ):
         """Test validating already used code raises exception."""
-        code = await registration_code_service.create_registration_code(db)
+        code = await registration_code_service.create_registration_code(
+            db, email_restriction="used-once@example.com"
+        )
 
         # Mark code as used
         await registration_code_service.mark_code_as_used(db, code, test_user)
@@ -144,7 +144,9 @@ class TestRegistrationCodeService:
         self, db: AsyncSession
     ):
         """Test validating revoked code raises exception."""
-        code = await registration_code_service.create_registration_code(db)
+        code = await registration_code_service.create_registration_code(
+            db, email_restriction="revoked@example.com"
+        )
 
         # Revoke the code
         code.revoked = True
@@ -188,7 +190,9 @@ class TestRegistrationCodeService:
         self, db: AsyncSession, test_user: User
     ):
         """Test marking a code as used."""
-        code = await registration_code_service.create_registration_code(db)
+        code = await registration_code_service.create_registration_code(
+            db, email_restriction=test_user.email
+        )
 
         await registration_code_service.mark_code_as_used(db, code, test_user)
 
@@ -201,7 +205,9 @@ class TestRegistrationCodeService:
 
     async def test_revoke_code(self, db: AsyncSession):
         """Test revoking a registration code."""
-        code = await registration_code_service.create_registration_code(db)
+        code = await registration_code_service.create_registration_code(
+            db, email_restriction="revoke-by-id@example.com"
+        )
 
         revoked_code = await registration_code_service.revoke_code(db, str(code.id))
 
@@ -217,9 +223,14 @@ class TestRegistrationCodeService:
 
     async def test_list_registration_codes(self, db: AsyncSession):
         """Test listing all registration codes."""
-        # Create multiple codes
-        code1 = await registration_code_service.create_registration_code(db)
-        code2 = await registration_code_service.create_registration_code(db)
+        # Create multiple codes. Distinct addresses: two live codes for one address is
+        # refused by the duplicate guard (AC-7).
+        code1 = await registration_code_service.create_registration_code(
+            db, email_restriction="listed-one@example.com"
+        )
+        code2 = await registration_code_service.create_registration_code(
+            db, email_restriction="listed-two@example.com"
+        )
 
         codes = await registration_code_service.list_registration_codes(db)
 
@@ -232,9 +243,11 @@ class TestRegistrationCodeService:
         self, db: AsyncSession
     ):
         """Test listing codes with pagination."""
-        # Create 5 codes
-        for _ in range(5):
-            await registration_code_service.create_registration_code(db)
+        # Create 5 codes, one address each (AC-7 refuses a second live code per address)
+        for n in range(5):
+            await registration_code_service.create_registration_code(
+                db, email_restriction=f"paged-{n}@example.com"
+            )
 
         # Get first 3
         codes_page1 = await registration_code_service.list_registration_codes(
@@ -253,7 +266,9 @@ class TestRegistrationCodeService:
     ):
         """AC-1: a code issued now stops being redeemable exactly 24 hours later."""
         before = datetime.now(timezone.utc)
-        code = await registration_code_service.create_registration_code(db)
+        code = await registration_code_service.create_registration_code(
+            db, email_restriction="expiry@example.com"
+        )
         after = datetime.now(timezone.utc)
 
         assert before + timedelta(hours=24) <= code.expires_at <= after + timedelta(hours=24)
@@ -317,6 +332,32 @@ class TestRegistrationCodeService:
         with pytest.raises(NotFoundError, match="No valid registration code"):
             await registration_code_service.revoke_code_for_email(db, email)
 
+    async def test_issuing_a_code_requires_an_address(self, db: AsyncSession):
+        """AC-8: the default that meant "any address may redeem this" is gone from the signature."""
+        with pytest.raises(TypeError):
+            await registration_code_service.create_registration_code(db)
+
+    async def test_a_code_cannot_be_stored_without_an_address(self, db: AsyncSession):
+        """AC-8 / INV-7: the DATABASE refuses it, not the signature.
+
+        A signature holds for the call sites that exist; a constraint holds for the one written
+        next year by someone who has not read this file (CODING_STANDARDS: prefer a database
+        constraint to a service-layer check).
+        """
+        db.add(
+            RegistrationCode(
+                code="noaddress1234567",
+                email_restriction=None,
+                expires_at=datetime.now(timezone.utc)
+                + registration_code_service.CODE_LIFETIME,
+            )
+        )
+
+        with pytest.raises(IntegrityError):
+            await db.commit()
+
+        await db.rollback()
+
 # TDD: Admin API Endpoint Tests
 @pytest.mark.asyncio
 class TestAdminAPI:
@@ -329,7 +370,7 @@ class TestAdminAPI:
         response = await client.post(
             "/api/admin/codes",
             headers=superadmin_headers,
-            json={"email_restriction": None},
+            json={"email_restriction": "created@example.com"},
         )
         assert response.status_code == 201
         data = response.json()
@@ -359,7 +400,7 @@ class TestAdminAPI:
         response = await client.post(
             "/api/admin/codes",
             headers=auth_headers,
-            json={},
+            json={"email_restriction": "denied@example.com"},
         )
         assert response.status_code == 403
         assert "Superadmin" in response.json()["detail"]
@@ -368,7 +409,7 @@ class TestAdminAPI:
         """Unauthenticated requests fail (401)."""
         response = await client.post(
             "/api/admin/codes",
-            json={},
+            json={"email_restriction": "anonymous@example.com"},
         )
         assert response.status_code == 401
 
@@ -380,12 +421,12 @@ class TestAdminAPI:
         await client.post(
             "/api/admin/codes",
             headers=superadmin_headers,
-            json={},
+            json={"email_restriction": "listed-one@example.com"},
         )
         await client.post(
             "/api/admin/codes",
             headers=superadmin_headers,
-            json={},
+            json={"email_restriction": "listed-two@example.com"},
         )
 
         response = await client.get(
@@ -415,7 +456,7 @@ class TestAdminAPI:
         create_response = await client.post(
             "/api/admin/codes",
             headers=superadmin_headers,
-            json={},
+            json={"email_restriction": "revoked-by-admin@example.com"},
         )
         code_id = create_response.json()["id"]
 
@@ -436,7 +477,7 @@ class TestAdminAPI:
         create_response = await client.post(
             "/api/admin/codes",
             headers=superadmin_headers,
-            json={},
+            json={"email_restriction": "not-yours@example.com"},
         )
         code_id = create_response.json()["id"]
 
@@ -471,7 +512,9 @@ class TestSignupWithRegistrationCode:
     ):
         """Can signup with valid registration code."""
         # Create code
-        code = await registration_code_service.create_registration_code(db)
+        code = await registration_code_service.create_registration_code(
+            db, email_restriction="newuser@example.com"
+        )
 
         # Signup with code
         response = await client.post(
@@ -503,9 +546,15 @@ class TestSignupWithRegistrationCode:
     async def test_signup_with_used_code(
         self, client: AsyncClient, db: AsyncSession
     ):
-        """Cannot reuse a code."""
+        """Cannot reuse a code.
+
+        The code names user1, so user2 would be refused on the address anyway — but `used` is
+        checked first (INV-6), which is what this asserts.
+        """
         # Create and use code
-        code = await registration_code_service.create_registration_code(db)
+        code = await registration_code_service.create_registration_code(
+            db, email_restriction="user1@example.com"
+        )
 
         # First signup
         await client.post(
@@ -533,7 +582,9 @@ class TestSignupWithRegistrationCode:
         self, client: AsyncClient, db: AsyncSession
     ):
         """Cannot use revoked code."""
-        code = await registration_code_service.create_registration_code(db)
+        code = await registration_code_service.create_registration_code(
+            db, email_restriction="user@example.com"
+        )
 
         # Revoke the code
         await registration_code_service.revoke_code(db, str(code.id))
@@ -596,7 +647,9 @@ class TestSignupWithRegistrationCode:
         self, client: AsyncClient, db: AsyncSession
     ):
         """AC-2: an expired code is refused, and the message says so."""
-        code = await registration_code_service.create_registration_code(db)
+        code = await registration_code_service.create_registration_code(
+            db, email_restriction="too-late@example.com"
+        )
         await expire(db, code)
 
         response = await client.post(
@@ -630,6 +683,33 @@ class TestSignupWithRegistrationCode:
         )
         assert response.status_code == 400
         assert "revoked" in response.json()["detail"].lower()
+
+    async def test_signup_with_a_code_that_names_no_address(
+        self, client: AsyncClient, db: AsyncSession
+    ):
+        """AC-5: an empty address matches nobody — it is not a wildcard.
+
+        This is the shape the mandatory-email migration leaves behind for a legacy code that
+        named no address. Those rows are revoked too, so this is the second lock rather than
+        the only one, but the comparison must refuse rather than wave the code through.
+        """
+        code = await registration_code_service.create_registration_code(
+            db, email_restriction="someone@example.com"
+        )
+        code.email_restriction = ""
+        db.add(code)
+        await db.commit()
+
+        response = await client.post(
+            "/api/auth/signup",
+            json={
+                "email": "anyone@example.com",
+                "password": "password123",
+                "registration_code": code.code,
+            },
+        )
+        assert response.status_code == 400
+        assert "not valid for your email" in response.json()["detail"]
 
     async def test_signup_without_registration_code_fails(self, client: AsyncClient):
         """Signup without registration code should fail with validation error."""

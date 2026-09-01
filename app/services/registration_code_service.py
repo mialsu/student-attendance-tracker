@@ -32,17 +32,19 @@ def generate_code() -> str:
 
 async def create_registration_code(
     db: AsyncSession,
-    email_restriction: str | None = None,
+    email_restriction: str,
 ) -> RegistrationCode:
     """
-    Issue a new registration code.
+    Issue a new registration code for one email address.
 
     This is the seam the command-line tool calls. There is no creator: codes are issued by
     whoever has database access, not by a user (ADR-0003).
 
     Args:
         db: Database session
-        email_restriction: Email that can use this code (None = universal code)
+        email_restriction: The one address that may redeem this code. Required — INV-7. It used
+            to default to None, and None meant *any* address could redeem the code, which is a
+            footgun a default should never load.
 
     Returns:
         Created RegistrationCode instance
@@ -52,23 +54,21 @@ async def create_registration_code(
     """
     now = datetime.now(timezone.utc)
 
-    # Refuse a second live code for one address (only for email-restricted codes). An EXPIRED
-    # code is still unused and unrevoked, so it must be excluded here or one expired code would
-    # block that address forever.
-    if email_restriction is not None:
-        result = await db.execute(
-            select(RegistrationCode).where(
-                RegistrationCode.email_restriction == email_restriction,
-                RegistrationCode.used == False,
-                RegistrationCode.revoked == False,
-                RegistrationCode.expires_at > now,
-            )
+    # Refuse a second live code for one address. An EXPIRED code is still unused and unrevoked,
+    # so it must be excluded here or one expired code would block that address forever.
+    result = await db.execute(
+        select(RegistrationCode).where(
+            RegistrationCode.email_restriction == email_restriction,
+            RegistrationCode.used == False,
+            RegistrationCode.revoked == False,
+            RegistrationCode.expires_at > now,
         )
-        existing_code = result.scalar_one_or_none()
-        if existing_code:
-            raise BadRequestException(
-                f"A valid registration code already exists for {email_restriction}"
-            )
+    )
+    existing_code = result.scalar_one_or_none()
+    if existing_code:
+        raise BadRequestException(
+            f"A valid registration code already exists for {email_restriction}"
+        )
 
     code = RegistrationCode(
         code=generate_code(),
@@ -136,8 +136,10 @@ async def validate_registration_code(
     if reg_code.expires_at <= datetime.now(timezone.utc):
         raise BadRequestException("Registration code has expired")
 
-    # Check email restriction (None = universal code)
-    if reg_code.email_restriction is not None and reg_code.email_restriction != email:
+    # INV-7: a code is redeemable by the one address it names, and by nobody else. There is no
+    # universal code and no wildcard — a legacy code that named no address carries '', which
+    # equals no address a signup can present, so it falls through to the refusal below.
+    if reg_code.email_restriction != email:
         raise BadRequestException("This registration code is not valid for your email")
 
     return reg_code
