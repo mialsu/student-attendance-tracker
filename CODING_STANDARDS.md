@@ -127,3 +127,5 @@ Raising a number in `.harness-baseline` gets the same treatment. `[review-only]`
 - Tests: `just test` (needs `TEST_DATABASE_URL`)
 - Fast set (pre-commit): `just check-fast`
 - Everything: `just check`
+- In CI: `.github/workflows/deploy.yml` — the same set with `BASELINE_FROZEN=1`, plus gitleaks
+  (`.gitleaks.toml`) and `pip-audit`. The drift gate runs via `scripts/drift-ci.sh`.

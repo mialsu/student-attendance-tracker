@@ -63,7 +63,17 @@ else
 fi
 baseline="$(sed -n "s/^${NAME}=//p" "$BASELINE_FILE" | head -1)"
 
+# BASELINE_FROZEN=1 (set by CI): never write to the baseline file. On an ephemeral runner the
+# write is discarded anyway, so doing it silently would make CI look like it ratcheted when it did
+# not. Frozen mode reports and lets the human ratchet locally, where the change can be committed.
+FROZEN="${BASELINE_FROZEN:-0}"
+
 if [ -z "$baseline" ]; then
+  if [ "$FROZEN" = 1 ]; then
+    echo "baseline-guard[$NAME]: FAIL — no baseline recorded for '$NAME' and BASELINE_FROZEN=1."
+    echo "  ↳ Run it locally once to seed $BASELINE_FILE, then commit that file."
+    exit 1
+  fi
   printf '%s=%s\n' "$NAME" "$count" >> "$BASELINE_FILE"
   echo "baseline-guard[$NAME]: no baseline recorded — writing $count. Review and commit $BASELINE_FILE."
   exit 0
@@ -79,6 +89,11 @@ if [ "$count" -gt "$baseline" ]; then
 fi
 
 if [ "$count" -lt "$baseline" ]; then
+  if [ "$FROZEN" = 1 ]; then
+    echo "baseline-guard[$NAME]: improved — $count (was $baseline), but BASELINE_FROZEN=1 so the file"
+    echo "  was NOT rewritten. Run the gate locally to ratchet $BASELINE_FILE down, and commit it."
+    exit 0
+  fi
   sed -i "s/^${NAME}=.*/${NAME}=${count}/" "$BASELINE_FILE"
   echo "baseline-guard[$NAME]: improved — $count (was $baseline). Baseline RATCHETED down; commit $BASELINE_FILE."
   exit 0

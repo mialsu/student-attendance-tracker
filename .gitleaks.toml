@@ -1,0 +1,53 @@
+# gitleaks configuration — student-attendance-tracker-api
+#
+# Baseline measured 2026-09-01 before wiring gitleaks as a CI gate: 108 findings across the full
+# 15-commit history, ALL of them documentation placeholders:
+#
+#   58  API_REFERENCE.md        curl-auth-header  -> "Authorization: Bearer YOUR_ACCESS_TOKEN"
+#   48  docs/API_REFERENCE.md   generic-api-key   -> example JSON bodies ("password": "password123")
+#    2  scripts/README.md       generic-api-key   -> prose describing a password prompt
+#
+# No real credential was found in any of the four repositories. Left unconfigured the gate would
+# have been red on day one, and a gate that is red for a reason nobody acts on gets switched off.
+#
+# The allowlist matches the PLACEHOLDER VALUES, not the files. That distinction is the point: a real
+# token pasted into API_REFERENCE.md tomorrow still fails the build. A path-based exclusion would
+# have made the docs a permanent blind spot — and API docs are exactly where a real token gets
+# pasted by accident.
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Documentation placeholder tokens (literal, uppercase, self-describing)"
+regexTarget = "secret"
+regexes = [
+  '''^YOUR_[A-Z_]*TOKEN(_HERE)?$''',
+  '''^YOUR_[A-Z_]+$''',
+  '''^<[a-z_]+>$''',
+  '''^(your|example|placeholder|changeme|redacted)[-_a-z]*$''',
+]
+
+[[allowlists]]
+description = "Example passwords in API docs — obvious doc fixtures, never used by any environment"
+regexTarget = "secret"
+regexes = [
+  '''^(old|new|secure|newsecure)?password[0-9]{0,4}$''',
+  '''^test[-_]?(secret|password|key)([-_a-z0-9]*)?$''',
+]
+
+[[allowlists]]
+description = "Prose about passwords in scripts/README.md is not a secret"
+paths = ['''^scripts/README\.md$''']
+regexTarget = "match"
+regexes = ['''(minimum|min|hidden input|Confirms|Validates|Prompts)''']
+
+[[allowlists]]
+description = """
+Truncated JWT illustrations in the API docs. The matched value is the standard public HS256 header
+(base64 of {"alg":"HS256","typ":"JWT"}) followed by a LITERAL "..." — there is no payload and no
+signature, so it cannot authenticate anything. A complete JWT has three dot-separated segments and
+does not end in an ellipsis, so a real token pasted here still fails the build.
+"""
+regexTarget = "secret"
+regexes = ['''^eyJ[A-Za-z0-9_-]{8,}\.\.\.$''']

@@ -6,6 +6,52 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 
 <!-- Newest first. -->
 
+## 2026-09-01 — the deploy job is UNVERIFIED: it has never run
+- **What:** every gate in this repo was proven by breaking it and watching it go red. The `deploy`
+  job in `.github/workflows/deploy.yml` was **not**, because the only way to exercise it is to deploy
+  to production. What *was* verified: the YAML parses, all embedded shell blocks pass `bash -n`, the
+  `gates`/`test`/`security` job commands were run locally with tools on PATH, and the gitleaks block
+  was executed verbatim in a clean clone — which found a real bug (see below).
+- **Where:** `.github/workflows/deploy.yml`, the `deploy` job
+- **What green tests do NOT prove here:** that the backup step, the explicit migration step, the
+  `up -d --no-deps backend nginx` swap, the health-check retry loop, or the automatic code rollback
+  behave as written on the real VM. Specific untested assumptions: that `docker compose run --rm
+  backend alembic upgrade head` overrides the container's start command as intended; that
+  `$COMPOSE images -q backend` returns an image id on this docker version; that
+  `deployment/scripts/backup-db.sh production` finds `deployment/production/.env` when invoked from
+  `$PROJECT_PATH`; and that `restart: always` does not race the explicit migration step.
+- **Disposition:** open — **the first deploy after this lands is the verification.** Prefer
+  triggering it via `workflow_dispatch` at a quiet moment over discovering it on a feature push.
+  Rollback restores CODE only; the schema path is manual by design.
+
+## 2026-09-01 — a real bug in the CI security step, found only by running it
+- **What:** the gitleaks step originally piped `curl` straight into `grep -m1` to resolve the latest
+  release tag. `grep -m1` closes the pipe on its first match, `curl` then fails with
+  CURLE_WRITE_ERROR (23), and `set -o pipefail` fails the whole step. It would have broken on the
+  very first CI run. Fixed by capturing the response into a variable before parsing.
+- **Where:** `.github/workflows/deploy.yml` and `client-app/.github/workflows/ci.yml`, gitleaks step
+- **What green tests do NOT prove here:** nothing — this one is fixed and re-verified verbatim in a
+  clean clone. It is recorded because it is the argument for executing CI shell locally rather than
+  only linting it: `bash -n` passed on the broken version.
+- **Disposition:** fixed
+
+## 2026-09-01 — gitleaks: 108 findings in history, all documentation placeholders, allowlisted by value
+- **What:** before wiring gitleaks as a gate, the full history of all four repos was scanned. This
+  repo had 108 findings; `client-app`, `deployment` and `knowledge-base` had none. All 108 are
+  placeholders in `API_REFERENCE.md` (58), `docs/API_REFERENCE.md` (48) and `scripts/README.md` (2):
+  `Bearer YOUR_ACCESS_TOKEN`, example bodies like `"password": "password123"`, prose about a password
+  prompt, and a truncated JWT that is the public HS256 header plus a literal `...`.
+  **No real credential was found in any repo.**
+- **Where:** `.gitleaks.toml`
+- **What green tests do NOT prove here:** the allowlist matches placeholder **values**, not paths, and
+  that was verified by planting both a random high-entropy secret and a complete 3-segment JWT into
+  the allowlisted `API_REFERENCE.md` — both still failed the scan, so the docs are not a blind spot.
+  Not covered: gitleaks' default ruleset is not exhaustive, and a secret in a shape it does not
+  recognise still passes. Separately, the local `.env` does hold a real `SECRET_KEY`; it is correctly
+  gitignored and never committed, which is why CI uses `gitleaks git` (history) and not `dir`.
+- **Disposition:** accepted with reason. If a new doc adds a placeholder shape the allowlist misses,
+  the fix is another value regex — never a path exclusion.
+
 ## 2026-09-01 — 262 green tests do not prove authorization: ownership can be removed undetected
 - **What:** during `/harness` install the teacher-ownership filter was deleted from
   `get_classes_by_teacher` — `.where(Class.teacher_id == teacher_id)` replaced with an always-true
