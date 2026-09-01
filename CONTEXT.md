@@ -69,13 +69,15 @@ order to delete them. That UI does not exist — `legacy` is declared in the fro
 by no code — so the filter is currently unconditional. Owed as a spec.
 
 **Teacher**:
-The authenticated party who records attendance for a Class. Modelled as `User` with
-`UserRole.TEACHER`.
-_Unresolved_: `User` also carries `SUPERADMIN` (`app/models/user.py:17-18`), so "user" means one
-thing to the auth code and another to `/api/admin`. The Owner is **revisiting whether the superadmin
-role is needed at all**, so this collision is not resolved — and until it is, the domain dial stays
-at `on` with one context rather than `mapped`. Splitting for a word that may be about to disappear
-would buy a boundary and no benefit.
+The authenticated party who records attendance for a Class. Modelled as `User`, and a User is
+**only** ever a Teacher — there is no other kind of user.
+_Resolved 2026-09-01 — decided, NOT yet implemented_: the Owner has decided to remove the superadmin
+role entirely, together with the admin dashboard and the admin HTTP routes. Registration codes will
+be issued from a command line with direct database access, so **database access, not a role, is who
+may issue a code**. `User` therefore means exactly one thing, and the word collision that was this
+project's only `mapped` trigger is gone for good — the dial stays `on` with **one** context.
+⚠ The code still carries a role until that slice lands. Until then this entry describes the decision,
+not the schema.
 _Planned_: the Owner intends **shared Classes** — two Teachers on one Class — alongside individual
 ones. `INV-1` is worded "associated with" for that reason.
 
