@@ -184,18 +184,12 @@ jobs:
   deploy:
     name: Deploy to Hetzner (production)
     needs: [gates, test, security]
-    # DEPLOY SWITCH — off until the repository variable DEPLOY_ENABLED is set to 'true'
-    # (Settings -> Secrets and variables -> Actions -> Variables). Gates, tests and security run
-    # on every push regardless; this job SKIPS (it does not fail) while the switch is off.
+    # Every push to main that passes gates + tests + security deploys to the Hetzner VM.
     #
-    # BEHAVIOUR CHANGE, read this: the PREVIOUS workflow deployed on every push to main. With the
-    # switch off, pushing no longer deploys. That is deliberate — this deploy job is rewritten and
-    # has never run, so the first execution should be a watched `workflow_dispatch`, not a
-    # surprise on a feature push. Set the variable when you are ready to deploy again.
-    if: |
-      github.event_name == 'push'
-      && github.ref == 'refs/heads/main'
-      && vars.DEPLOY_ENABLED == 'true'
+    # This job is a rewrite and its first execution IS its verification (REVIEW-DEBT.md) — the
+    # backup, explicit-migration, no-DB-downtime, retry-health-check and code-rollback steps have
+    # never run on the real VM. It can also be triggered manually via workflow_dispatch.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: production
