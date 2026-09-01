@@ -6,6 +6,22 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 
 <!-- Newest first. -->
 
+## 2026-09-01 — devkit's vocabulary check cannot express compound identifiers
+- **What:** `scripts/drift-check.sh`'s vocabulary check splits each identifier into segments
+  (`pupilName` → `pupil` + `name`) and compares each segment against `CONTEXT.md`'s `_Avoid_` list.
+  A camelCase or snake_case **compound** entry therefore never matches: `studentFirstName`
+  lowercases to `studentfirstname`, which equals no single segment. The first `_Avoid_` list written
+  during this install was exactly that, and the gate reported clean while the banned word sat in the
+  diff — a false pass.
+- **Where:** `scripts/drift-check.sh` (check 1, the `seglist`/`banned` awk functions);
+  worked around by `scripts/vocab-check.sh`
+- **What green tests do NOT prove here:** any `_Avoid_` entry of more than one word in any devkit
+  project is decoration, and reports clean. This is a defect in the shared template, not just here —
+  the template's own guidance ("an `_Avoid_` list should hold domain synonyms") does not say the
+  entries must be single words.
+- **Disposition:** worked around locally in `scripts/vocab-check.sh`, kept separate so
+  `drift-check.sh` stays byte-identical to devkit's template. Worth fixing upstream in devkit.
+
 ## 2026-09-01 — harness installed on a red tree: three gates are ratchets, not clean gates
 - **What:** `/harness` was installed with the Owner's explicit "gate forward, confess the baseline"
   decision. Typecheck, lint and tests were all failing on a clean `main`, so each was wired as a
