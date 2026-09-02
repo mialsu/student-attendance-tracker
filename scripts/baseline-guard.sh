@@ -12,8 +12,8 @@
 # Usage: scripts/baseline-guard.sh <name> <cmd...>
 # Baselines live in .harness-baseline (committed, one `name=count` per line).
 #
-# Modes: typecheck/lint = count matching lines; tests = parse vitest's summary; ruff = parse
-# ruff's "Found N errors" line.
+# Modes: typecheck/lint = count matching lines; tests = parse vitest's summary; ruff and mypy =
+# parse each tool's own "Found N errors" line.
 #
 # Honest limits, stated because a false gate is worse than none:
 #   - It counts violations; it does not know WHICH. Fixing one error and adding another nets zero
@@ -36,6 +36,7 @@ case "$NAME" in
   lint)      PATTERN='^[[:space:]]+[0-9]+:[0-9]+[[:space:]]+error' ;;
   tests)     MODE=extract; PATTERN='Tests' ;;
   ruff)      MODE=ruff ;;
+  mypy)      MODE=ruff ;;   # same shape: "Found N errors in M files", or "Success:" when clean
   *)         PATTERN='error' ;;
 esac
 
@@ -44,9 +45,17 @@ out="$("$@" 2>&1)"
 # escape sequence sits BEFORE the leading whitespace in vitest's summary line.
 out="$(printf '%s\n' "$out" | sed -e 's/\x1b\[[0-9;]*m//g')"
 if [ "$MODE" = ruff ]; then
-  # ruff prints "Found N errors." (or nothing at all when clean).
+  # ruff prints "Found N errors." (or nothing when clean); mypy prints "Found N errors in M files"
+  # (or "Success: no issues found"). Same leading phrase, so one parser serves both.
   count="$(printf '%s\n' "$out" | grep -oE 'Found [0-9]+ error' | grep -oE '[0-9]+' | tail -1)"
   count="${count:-0}"
+  # A tool that crashed prints neither phrase and would silently score 0 — which reads as a clean
+  # gate. Demand one of the two known summaries before trusting the number.
+  if [ -z "$(printf '%s\n' "$out" | grep -oE 'Found [0-9]+ error|Success: no issues|All checks passed')" ]; then
+    printf '%s\n' "$out" | tail -20
+    echo "baseline-guard[$NAME]: FAIL — no recognisable summary line; treating this as a crash, not a clean run."
+    exit 1
+  fi
 elif [ "$MODE" = extract ]; then
   # "Tests  25 failed | 65 passed (90)"  -> 25 ; "Tests  90 passed (90)" -> 0
   count="$(printf '%s\n' "$out" \
