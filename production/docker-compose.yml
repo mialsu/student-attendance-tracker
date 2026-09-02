@@ -41,7 +41,11 @@ services:
       REFRESH_TOKEN_EXPIRE_DAYS: 30
       COOKIE_SECURE: "true"
       COOKIE_SAMESITE: lax
-      COOKIE_DOMAIN: .kotoio.fi
+      # COOKIE_DOMAIN is deliberately UNSET, so the refresh cookie is host-only to
+      # attendance-api.kotoio.fi. It used to be `.kotoio.fi`, which sent the 30-day refresh
+      # token to every host under that domain -- including app-attendance.kotoio.fi on Vercel,
+      # which never needed it, and every future backend this VM is documented as able to host.
+      # Removed 2026-09-02 by /audit; guarded by the API's tests/test_config.py::TestCookieScope.
       CORS_ORIGINS: ${CORS_ORIGINS}
       ENVIRONMENT: production
       DEBUG: "false"
