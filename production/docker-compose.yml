@@ -45,6 +45,12 @@ services:
       CORS_ORIGINS: ${CORS_ORIGINS}
       ENVIRONMENT: production
       DEBUG: "false"
+      # Basic auth for /docs, /redoc and /openapi.json. These were ABSENT from this block for
+      # months while sitting correctly set in .env, so the container never received them and the
+      # app fell back to its built-in admin/changeme. app/config.py now refuses to start without
+      # them outside development, so a repeat cannot go unnoticed.
+      DOCS_USERNAME: ${DOCS_USERNAME}
+      DOCS_PASSWORD: ${DOCS_PASSWORD}
     depends_on:
       db:
         condition: service_healthy
