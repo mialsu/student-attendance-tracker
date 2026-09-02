@@ -170,10 +170,17 @@ out expired and that no row was deleted. Cheaper and more honest than simulating
 Each criterion names how it will be proven, before any code is written. Verdicts are filled by
 `/verify-live`, and the slice's verdict is the **worst** of them.
 
-**Filled 2026-09-02 at `/ship`. The slice's verdict is therefore `PENDING`, not `WORKS`** — AC-17
-can only be exercised on the production server, so it is the worst of them until the deploy lands
-and the tool is run there. Everything else is `WORKS` with the evidence named in the row. AC-8 is
-recorded as narrower than its own wording rather than promoted to a pass it does not have.
+**Filled 2026-09-02 at `/ship`, and completed after the deploy. The slice's verdict is `WORKS`** —
+every criterion passed, with two recorded as narrower or harder-won than their wording:
+
+- **AC-17 failed on its first real run** and is the reason this slice shipped a follow-up commit.
+  `target()` parsed `DATABASE_URL` with `urlparse`; production's password contains a `/`, so the
+  tool could not execute on the server at all, and the crash quoted a password fragment into a
+  traceback. This is the single strongest argument in this spec for a `live:` criterion existing:
+  the suite was green, 296 tests passed, and the feature's headline use case did not work.
+- **AC-8** is narrower than its wording — the constraint refuses `NULL`, not `''`.
+- **AC-14** failed twice before passing, for two pre-existing client defects that had to be fixed.
+- **AC-17's** last step (actual account creation) was deliberately not exercised in production.
 
 | # | Criterion | Proven by | Serves | Verdict |
 |---|---|---|---|---|
@@ -193,7 +200,7 @@ recorded as narrower than its own wording rather than promoted to a pass it does
 | AC-14 | A signed-in teacher landing on `/` reaches the teacher dashboard | `live:` browser walk | US-13 | **WORKS** live, headless Chrome over CDP. Failed twice first, for two pre-existing client defects — both fixed (`2e7821e`) |
 | AC-15 | No admin screen is reachable in the client | `live:` browser walk of the three former paths | US-14 | **WORKS** live, all three former paths render the 404 page, signed out **and** signed in |
 | AC-16 | Migrating a restored production backup leaves every pre-existing code expired, and deletes no rows | `live:` scratch-database recipe (Testing Decisions) | US-19 | **WORKS** on production's own rows — its `20260902_055137` backup restored to a scratch DB, 4 migrations up: the one code `expires_at = created_at + 24h`, already expired; counts byte-identical across 6 tables; 4 down and 4 up again lose nothing |
-| AC-17 | The tool issues a working code on the production server, end to end | `live:` issue, then sign up with it | US-1, US-9 | **FAILED then FIXED, re-run pending** — the first run on the server crashed: `target()` parsed `DATABASE_URL` with `urlparse`, and production's password contains a `/`. The tool could not run at all. Fixed with `make_url` + 17 tests (`tests/test_cli_target.py`), confessed, and awaiting a re-run on the server after the follow-up deploy |
+| AC-17 | The tool issues a working code on the production server, end to end | `live:` issue, then sign up with it | US-1, US-9 | **WORKS, after failing first.** Run 1 crashed — `target()` used `urlparse`, production's password contains a `/`, and the tool could not run at all. Fixed (`61270d6`, `make_url` + 17 tests) and re-run on the server: code issued with a 24h expiry and the database named without its password; a **different** address refused 400; the **named** address returned 409 `Email already registered`, which is validation *passing* and creation stopping on the duplicate — so the code is proven redeemable with **no account created** and the row left `used=false`; `revoke` then revoked it, signup with it returned 400 `revoked`, and a second `revoke` exited 1. Caveat kept: the final `create_user` step was deliberately not exercised, to avoid leaving a junk account in production |
 | AC-18 | Both repos' gate sets are green on every commit in this slice | `gate:` `just check` and `npm run check` | — | **WORKS** every commit gated; every CI job also re-run locally, including the suite under CI's exact env (299 pass) and real `gitleaks` (no leaks, both repos) |
 | AC-19 | `INVARIANTS.md` carries the rewritten INV-6 and the new INV-7, each naming a real enforcer | `gate:` drift-check invariant rule + `review-only` | US-18 | **WORKS** INV-6 rewritten for expiry, INV-7 added naming a `constraint:` plus three tests; drift gate's invariant check passed on the row |
 

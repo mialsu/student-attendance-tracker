@@ -32,9 +32,12 @@ cut (`/confess`), read first by any architecture or review session, dispositione
   URL shapes, including the exact production shape and an assertion that no password fragment
   reaches the output. A raw `@` in a password stays ambiguous by the URL format's own rule and is
   documented rather than "fixed".
-- **Still owed:** the password fragment reached a CI-free operator terminal, not a log aggregator,
-  and the password is unchanged. Rotating `POSTGRES_PASSWORD` is the Owner's call; it was exposed
-  only to the operator already holding database access.
+- **Rotation: not needed. Owner's decision, 2026-09-02.** The fragment appeared in a root SSH
+  session on the Owner's own VM, and **the Owner is the only operator there is** — so the
+  disclosure was of their own credential, to themselves. Nothing reached a CI log, an aggregator,
+  the repo, or another person. The database also listens on `127.0.0.1` only, so the credential
+  is not the security boundary; server access is (ADR-0003). `POSTGRES_PASSWORD` is unchanged by
+  choice, not by omission. Revisit if a second operator ever exists.
 
 ## 2026-09-02 — tests read the developer's own environment, so local green is not CI green
 - **What:** `app/config.py` builds a module-level `settings = Settings()` at import, and
