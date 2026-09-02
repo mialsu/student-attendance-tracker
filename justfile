@@ -109,21 +109,35 @@ lint:
 lint-verbose:
     ./venv/bin/ruff check app tests
 
+# Type gate (RATCHET against .harness-baseline — fails when the count grows, not when >0).
+# Configuration lives in pyproject.toml's [tool.mypy], so this recipe and CI cannot drift apart.
+typecheck:
+    ./scripts/baseline-guard.sh mypy ./venv/bin/mypy
+
+# Typecheck, showing every finding rather than just the count
+typecheck-verbose:
+    ./venv/bin/mypy
+
 # Boundary gate: app.api > app.services > app.models, plus the leaf contracts
 boundaries:
     ./venv/bin/lint-imports
 
-# Drift gate (devkit) + this repo's extra checks
-drift:
-    ./scripts/drift-check.sh
-    ./scripts/drift-extra.sh
+# Drift gate (devkit) + this repo's extra checks.
+# `range` is passed straight through: the pre-commit hook calls this with `--cached` so it judges
+# the STAGED diff, while a bare `just drift` judges HEAD. One recipe, so the hook and the gate set
+# cannot drift apart -- they did, before 2026-09-02, and the hook silently ran a shorter list.
+drift range="":
+    ./scripts/drift-check.sh {{range}}
+    ./scripts/drift-extra.sh {{range}}
 
-# The FAST gate set — what the pre-commit hook runs. No database, no network, ~3 seconds.
-# There is deliberately no typecheck step: no Python type gate is installed. See REVIEW-DEBT.md.
-check-fast:
+# The FAST gate set — what the pre-commit hook runs. No database, no network, ~10 seconds.
+# `typecheck` was added 2026-09-02 (ADR-0004); before that this comment said there was no Python
+# type gate at all, which was true and was the biggest hole in this repo's harness.
+check-fast range="":
     @echo "▸ boundaries"; just boundaries
-    @echo "▸ drift";      just drift
+    @echo "▸ drift";      just drift {{range}}
     @echo "▸ lint";       just lint
+    @echo "▸ typecheck";  just typecheck
     @echo "✓ fast gates green"
 
 # THE full umbrella gate set. Needs TEST_DATABASE_URL and a running postgres. The suite takes

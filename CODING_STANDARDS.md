@@ -21,14 +21,20 @@ paid for.
 
 ## Known gaps — read this before trusting a tag
 
-**There is no type gate.** The `justfile` used to declare `typecheck: mypy app`, but mypy was never
-installed, so that gate never existed. `/harness` removed the false recipe rather than leave it;
-mypy was deliberately not added because this codebase has no annotation discipline yet and the
-opening baseline would be large and unmeasured (ADR-0001). `[types]` appears nowhere in this file
-because nothing earns it. This is the biggest remaining hole in this repo's harness.
+**There IS a type gate, since 2026-09-02.** `just typecheck` runs mypy over `app/` as a ratchet
+against `.harness-baseline` (ADR-0004). It is in `just check-fast`, so the pre-commit hook runs it.
 
-**`just lint` is a ratchet, not a clean gate.** ruff reports 95 findings on a clean tree
-(`.harness-baseline`); the gate fails when the count **grows**. It blocks accumulation, not
+This paragraph used to say the opposite, and the history matters: the `justfile` declared
+`typecheck: mypy app` while mypy was not installed, so the gate existed only as prose; `/harness`
+removed the false recipe; ADR-0001 then deferred mypy because "the opening baseline would be large
+and unmeasured". Measured, it is **16 errors across 9 files**, so the deferral expired.
+
+`[types]` rules below are `[gate]` where mypy enforces them and `[review-only]` where it does not
+yet — nothing stricter than `ignore_missing_imports` is enabled, so an unannotated function is
+still legal here.
+
+**`just lint` and `just typecheck` are ratchets, not clean gates.** ruff reports 93 findings and
+mypy 16 on a clean tree (`.harness-baseline`); each gate fails when its count **grows**. It blocks accumulation, not
 substitution. `just lint-verbose` shows the findings.
 
 **Formatting is not gated.** 33 of 51 files would change under `ruff format`. `just fmt` exists and

@@ -64,6 +64,12 @@ jobs:
       - name: Lint (ruff ratchet)
         run: ./scripts/baseline-guard.sh ruff ruff check app tests
 
+      # Baseline 16, ADR-0004. BASELINE_FROZEN=1 is set at workflow level, so a drop in the count
+      # is REPORTED here and ratcheted locally -- CI never rewrites .harness-baseline, because the
+      # write would be discarded on an ephemeral runner and would make CI look like it ratcheted.
+      - name: Typecheck (mypy ratchet)
+        run: ./scripts/baseline-guard.sh mypy mypy
+
   test:
     name: Tests
     runs-on: ubuntu-latest

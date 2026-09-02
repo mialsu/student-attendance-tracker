@@ -6,6 +6,31 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 
 <!-- Newest first. -->
 
+## 2026-09-02 — the API now has a type gate, and 16 findings are baselined rather than fixed
+- **What:** `just typecheck` runs mypy 2.3.1 over `app/` as a ratchet (ADR-0004), closing what
+  `CODING_STANDARDS.md` called "the biggest remaining hole in this repo's harness". The gate starts
+  at a baseline of **16**, so those 16 are blocked from growing and are **not fixed**.
+- **Where:** `.harness-baseline` (`mypy=16`), `pyproject.toml` `[tool.mypy]`, `justfile` `typecheck`
+- **The 16, grouped — none is a live defect:**
+  - **5 × `app/models/*` `name-defined`** — SQLAlchemy string forward refs. The same debt ADR-0001
+    already left visible as 7 `F821` hits; `if TYPE_CHECKING:` imports close both at once.
+  - **4 × `app/api/auth.py` `arg-type`** — `cookie_samesite` is typed `str` where Starlette wants
+    `Literal['lax','strict','none']`. **Worth doing:** `COOKIE_SAMESITE=laxx` is accepted silently
+    today, and a wrong SameSite value is a real weakening of the cookie hardening done the same day.
+  - **3 × `app/services/*`** — `attendance_service.py:179` reuses the name `result` for two
+    different query shapes, which narrows the inferred return type to `list[UUID]`. Not a runtime
+    bug (the tests pass and `db.refresh` would fail loudly), but the fix is a rename.
+  - **2 × `app/config.py` `call-arg`** — `Settings()` with no arguments. pydantic's mypy plugin
+    would clear these; deferred in ADR-0004 because it re-types every model at once.
+  - **2 × `app/main.py` `union-attr`** — `docs_username` is `str | None` and `.encode()` is called
+    on it. The guarantee lives in `_docs_credentials_are_set`, a validator mypy cannot see.
+- **What green tests do NOT prove here:** the ratchet counts violations, it does not know which.
+  Fixing one and adding another nets zero and passes — it stops accumulation, not substitution.
+  Nothing stricter than `ignore_missing_imports` is on, so an entirely unannotated new function is
+  still legal.
+- **Disposition:** open, deliberately. The `app/api/auth.py` cluster is the one with a real
+  behavioural argument behind it and is the obvious next slice.
+
 ## 2026-09-02 — the repo told you to point a schema-dropping fixture at another project's database
 - **What:** `conftest.py` removed the **default** `TEST_DATABASE_URL` on 2026-09-01 because it
   pointed `drop_all` at port 5433 — `platform-postgres`, a different project's container on this

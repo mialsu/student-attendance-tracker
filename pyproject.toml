@@ -60,6 +60,31 @@ extend-immutable-calls = [
 #
 # The web profile names dependency-cruiser, which is TypeScript-only; import-linter 2.14 is the
 # maintained Python equivalent and was verified installable before being chosen (/harness step 1).
+[tool.mypy]
+# The API's type gate, installed 2026-09-02. ADR-0004 supersedes ADR-0001's rejection of mypy:
+# that rejection rested on the opening baseline being "large and unmeasured", and measured it is
+# 16 errors across 35 files.
+#
+# A RATCHET, like ruff -- `just typecheck` fails when the count grows, not when it is above zero.
+# The 16 are real and listed in REVIEW-DEBT.md; none is a live defect.
+python_version = "3.12"
+files = ["app"]
+
+# Third-party packages without type stubs (passlib, jose, and friends) would otherwise drown the
+# real findings in import errors. This is the "cheapest useful slice" setting: it types OUR code
+# and declines to type theirs.
+ignore_missing_imports = true
+
+# Everything below is deliberately NOT enabled yet. Turning on disallow_untyped_defs today would
+# take the baseline from 16 to several hundred and make the number meaningless, which is the trap
+# ADR-0001 was right to avoid. They are the ratchet's future, one at a time, each with its own
+# measured baseline:
+#   disallow_untyped_defs, disallow_incomplete_defs, warn_return_any, strict_optional
+#
+# alembic/versions is generated -- ANTI-PATTERNS forbids touching generated files, so it is not
+# type-checked either.
+exclude = ["^venv/", "^alembic/versions/", "^htmlcov/", "^tests/"]
+
 [tool.importlinter]
 root_package = "app"
 
