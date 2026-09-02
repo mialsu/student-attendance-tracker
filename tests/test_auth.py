@@ -202,6 +202,19 @@ class TestGetCurrentUser:
         assert "id" in data
         assert "active" in data
 
+    async def test_get_current_user_carries_no_role(
+        self, client: AsyncClient, auth_headers: dict
+    ):
+        """AC-11: the profile response tells no client about a role.
+
+        A signed-in person is a teacher and nothing else (ADR-0003), so there is no field for a
+        future screen to branch on.
+        """
+        response = await client.get("/api/auth/me", headers=auth_headers)
+
+        assert response.status_code == 200
+        assert "role" not in response.json()
+
     async def test_get_current_user_no_token(self, client: AsyncClient):
         """Test getting current user without token."""
         response = await client.get("/api/auth/me")

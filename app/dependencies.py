@@ -6,10 +6,10 @@ from fastapi import Depends, Header
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import ForbiddenException, UnauthorizedException
+from app.core.exceptions import UnauthorizedException
 from app.core.security import decode_token
 from app.database import get_db
-from app.models.user import User, UserRole
+from app.models.user import User
 
 
 async def get_current_user(
@@ -68,26 +68,5 @@ async def get_current_user(
     return user
 
 
-async def require_superadmin(
-    current_user: User = Depends(get_current_user),
-) -> User:
-    """
-    Require current user to be a superadmin.
-
-    Args:
-        current_user: Current authenticated user
-
-    Returns:
-        User: Current user (if superadmin)
-
-    Raises:
-        ForbiddenException: If user is not a superadmin
-    """
-    if current_user.role != UserRole.SUPERADMIN.value:
-        raise ForbiddenException(detail="Superadmin access required")
-    return current_user
-
-
 # Type alias for dependency injection
 CurrentUser = Annotated[User, Depends(get_current_user)]
-SuperadminUser = Annotated[User, Depends(require_superadmin)]

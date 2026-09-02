@@ -1,6 +1,6 @@
 # ADR-0003 — No user roles: database access is who may issue a registration code
 
-**Status:** accepted, 2026-09-01. Implemented by `specs/0001-registration-code-cli-and-role-removal.md`.
+**Status:** accepted and **implemented**, 2026-09-01, by `specs/0001-registration-code-cli-and-role-removal.md` (Slice 4). The column is dropped by `alembic/versions/48f396b77446_drop_user_role.py`.
 
 This project had two kinds of user — `TEACHER` and `SUPERADMIN` — and the superadmin's entire power
 was three HTTP endpoints for issuing, listing and revoking registration codes, plus a web interface

@@ -75,10 +75,6 @@ migrate-status:
 migrate-history:
     alembic history
 
-# Create superadmin user interactively
-superadmin:
-    python scripts/create_superadmin.py
-
 # Authorized by database access, not by a role (ADR-0003): it runs wherever DATABASE_URL points
 # at the database you mean.
 # Issue a registration code for an email address, valid 24 hours
@@ -223,7 +219,6 @@ setup:
     @echo "Then run:"
     @echo "  source venv/bin/activate"
     @echo "  just migrate"
-    @echo "  just superadmin"
     @echo "  just run"
 
 # Development workflow: clean, test, and run

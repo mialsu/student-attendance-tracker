@@ -6,6 +6,38 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 
 <!-- Newest first. -->
 
+## 2026-09-01 — production /docs is behind the built-in default credentials
+- **What:** `app/config.py:26-27` defaults `docs_username = "admin"` and
+  `docs_password = "changeme"`. `deployment/production/docker-compose.yml`'s `backend` service
+  lists its environment explicitly, sets no `DOCS_*`, and uses no `env_file`, and
+  `grep -rn "DOCS_USERNAME\|DOCS_PASSWORD" deployment/` finds nothing — so no configuration path
+  can override them as deployed. `curl https://attendance-api.kotoio.fi/docs` returns **401**,
+  confirming Basic auth is live and therefore falling back to those two values. The credentials
+  were not tried against production; the code path does not need testing to be read.
+- **Where:** `app/config.py:26-27`; `deployment/production/docker-compose.yml`, `backend.environment`
+- **What green tests do NOT prove here:** nothing asserts anything about the docs credentials, in
+  either repo. `secret_key` and `database_url` correctly have **no** defaults, so the application
+  refuses to start without them — this is the only secret-shaped setting with a fallback.
+- **Why it surfaced now:** the Owner intends to publish this repo as a reference project. That does
+  not create the weakness, but it removes the last thing standing in front of it.
+- **Disposition:** open — found while answering the spec's open question 1, out of scope for that
+  slice, not fixed here. The fix is two lines: drop the defaults so `Settings` refuses to start
+  without them (matching `secret_key`), and add `DOCS_USERNAME` / `DOCS_PASSWORD` to the production
+  compose. It needs an Owner decision because it changes what production requires to boot.
+
+## 2026-09-01 — three dead service functions removed with proof, one of them dead before this slice
+- **What:** Slice 4 deleted `list_registration_codes`, `revoke_code(db, code_id)` and `delete_code`
+  from `registration_code_service.py`. The spec's Deletion Inventory named two of them; the
+  re-verification it demands found a third and a surprise: **`delete_code` had no caller at all**,
+  not even a test, before this slice started.
+- **Where:** `app/services/registration_code_service.py` (was `:167`, `:196`, `:265`)
+- **What green tests do NOT prove here:** the proof is a call trace, not a test — `grep` over
+  `app/`, `scripts/` and `tests/` for each name, with the admin router already deleted. Five tests
+  went with them, which is correct (a function whose only importer is its own test is dead code
+  wearing a seatbelt) but does mean nothing would now catch it if one were reintroduced unused.
+  The `no-orphans` half of the boundary gate works at file level, not function level.
+- **Disposition:** done, 2026-09-01. Owner chose removal inside Slice 4 over a `/prune` follow-up.
+
 ## 2026-09-01 — a mandatory email is NOT NULL, which is not the same as "a real address"
 - **What:** INV-7 / AC-8. The constraint Slice 3 lands is `NOT NULL`, so `email_restriction = ''`
   is still storable. The migration itself writes `''` into every legacy row that named no address,
@@ -111,10 +143,11 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 - **What green tests do NOT prove here:** nothing about intent. The tests prove the current
   behaviour; they cannot say whether a support view is wanted, or whether the role should be deleted
   and registration codes issued another way.
-- **Disposition:** open — Owner question, recorded as `_Unresolved_` on the **Teacher** term in
-  `CONTEXT.md`. Until it is answered the domain dial stays at `on` with **one** context; the
-  `User`-means-two-things collision is the only `mapped` trigger either repo ever claimed, and
-  splitting for a word that may be about to disappear would buy a boundary and no benefit.
+- **Disposition:** **RESOLVED 2026-09-01** (ADR-0003, Slice 4). The Owner did not decide what a
+  superadmin may see — they removed the role. `UserRole`, the `role` column, `require_superadmin`,
+  the three `/api/admin/codes` routes and the superadmin creation script are all gone; codes are
+  issued from the command line, authorized by database access. `User` now means exactly one thing,
+  so the dial stays at `on` with **one** context for a settled reason rather than a pending one.
 
 ## 2026-09-01 — the five-year legacy filter measures the wrong date and cannot be turned off
 - **What:** attendance listings exclude Students whose row is older than five years. Three problems.

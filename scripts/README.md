@@ -4,55 +4,35 @@ This directory contains utility scripts for managing the Student Attendance Trac
 
 ## Available Scripts
 
-### 1. Create Superadmin User
+### 1. Registration Codes
 
-**Purpose**: Create or update a superadmin user who can manage registration codes.
+**Purpose**: Issue and revoke the codes that let someone create a teacher account. Authorization
+is having access to the database, not holding a role (ADR-0003) — there is no HTTP endpoint and
+no account to create first.
 
 **Usage**:
 ```bash
-# Using shell wrapper (recommended)
-./scripts/create-superadmin.sh
+just code-issue  teacher@school.com     # prints the code and when it expires
+just code-revoke teacher@school.com     # exits 1 if that address has no live code
 
-# Or directly with Python
-python scripts/create_superadmin.py
+# Or without just
+./scripts/registration-code.sh issue teacher@school.com
+```
+
+**On the production server** the image has no virtual environment, so call the Python script
+directly rather than the shell wrapper. `DATABASE_URL` is already set in the container:
+
+```bash
+cd "$PROJECT_PATH"
+docker compose -f deployment/production/docker-compose.yml \
+  exec backend python scripts/registration_code.py issue teacher@school.com
 ```
 
 **What it does**:
-- Prompts for email address and password (hidden input)
-- Creates a new superadmin user if email doesn't exist
-- Updates existing user to superadmin role if email already exists
-- Validates password strength (minimum 8 characters)
-- Confirms password before creating/updating
-
-**Example**:
-```bash
-$ ./scripts/create-superadmin.sh
-============================================================
-Create Superadmin User
-============================================================
-
-Enter email address: admin@example.com
-Enter password (min 8 characters):
-Confirm password:
-
-Creating superadmin user: admin@example.com
-✓ Superadmin user created successfully
-   User ID: 74030146-edd0-4595-87e5-cbc19fcdfaff
-
-============================================================
-Superadmin user is ready!
-============================================================
-
-You can now:
-  1. Login at /api/auth/login with:
-     Email: admin@example.com
-     Password: [your password]
-
-  2. Create registration codes at /api/admin/codes
-
-  3. Access API documentation at /docs
-     (Use DOCS_USERNAME and DOCS_PASSWORD in production)
-```
+- Names the database it is about to write to, on every run, before doing anything
+- Issues a code for exactly one address, redeemable for 24 hours (`CODE_LIFETIME`)
+- Refuses a second live code for an address that already has one
+- Revokes by address, and exits 1 when there is nothing to revoke, so a typo is not silent
 
 ---
 
@@ -135,9 +115,9 @@ python scripts/script_name.py
 
 ### First Time Setup
 
-1. **Create superadmin user** (required before creating registration codes):
+1. **Issue a registration code** for the first teacher:
    ```bash
-   ./scripts/create-superadmin.sh
+   just code-issue teacher@school.com
    ```
 
 2. **Seed test data** (optional, for development):
@@ -181,18 +161,11 @@ pip install -r requirements.txt
 chmod +x scripts/*.sh
 ```
 
-### Password requirements for superadmin
-- Minimum 8 characters
-- No maximum length
-- All characters allowed
-- Best practice: Use a strong, unique password
-
----
-
 ## Security Notes
 
-- **Superadmin credentials**: Store securely, never commit to git
-- **Registration codes**: Single-use, can be revoked if compromised
+- **Registration codes**: single-use, expire after 24 hours, and can be revoked before that
+- **Issuing a code**: authorized by database access, which the internet cannot reach — the
+  database listens on localhost only (ADR-0003)
 - **API documentation**: Protected with HTTP Basic Auth in production
 - **Database backups**: Use deployment scripts in `/deployment/scripts/`
 
@@ -201,15 +174,14 @@ chmod +x scripts/*.sh
 ## Development vs Production
 
 ### Development
-- Superadmin creation works the same way
 - API docs accessible without password
 - Use `ENVIRONMENT=development` and `DEBUG=True`
+- Issue codes with `just code-issue`
 
 ### Production
 - API docs require `DOCS_USERNAME` and `DOCS_PASSWORD`
-- Use strong passwords for superadmin accounts
-- Keep superadmin count minimal (1-2 users)
 - Set `ENVIRONMENT=production` and `DEBUG=False`
+- Issue codes inside the backend container (see section 1)
 
 ---
 

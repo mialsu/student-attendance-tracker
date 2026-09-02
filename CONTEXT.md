@@ -71,13 +71,12 @@ by no code — so the filter is currently unconditional. Owed as a spec.
 **Teacher**:
 The authenticated party who records attendance for a Class. Modelled as `User`, and a User is
 **only** ever a Teacher — there is no other kind of user.
-_Resolved 2026-09-01 — decided, NOT yet implemented_: the Owner has decided to remove the superadmin
-role entirely, together with the admin dashboard and the admin HTTP routes. Registration codes will
-be issued from a command line with direct database access, so **database access, not a role, is who
-may issue a code**. `User` therefore means exactly one thing, and the word collision that was this
-project's only `mapped` trigger is gone for good — the dial stays `on` with **one** context.
-⚠ The code still carries a role until that slice lands. Until then this entry describes the decision,
-not the schema.
+_Resolved 2026-09-01 — implemented_: the superadmin role is gone, together with the admin dashboard
+and the admin HTTP routes (ADR-0003). Registration codes are issued from a command line with direct
+database access, so **database access, not a role, is who may issue a code**. `User` therefore means
+exactly one thing, and the word collision that was this project's only `mapped` trigger is gone for
+good — the dial stays `on` with **one** context. There is no `role` column, no role in the profile
+response, and no `/api/admin` route.
 _Planned_: the Owner intends **shared Classes** — two Teachers on one Class — alongside individual
 ones. `INV-1` is worded "associated with" for that reason.
 

@@ -29,7 +29,6 @@ class UserResponse(UserBase):
     """Schema for user response."""
 
     id: uuid.UUID
-    role: str
     active: bool
     created_at: datetime
 

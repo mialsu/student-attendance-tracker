@@ -50,7 +50,7 @@ the Owner and declined, with the reason.
 | "A Student who reaches 14–15 Attendance records has earned the course credit" | **not a rule** | The teacher decides and ticks the box. 14–15 is her rule of thumb, not the system's. Nothing counts attendances, and `course_credit_received` is set only by `PUT /api/students/{id}`. Recorded in `CONTEXT.md` as vocabulary |
 | "Deleting a Student must not destroy the record of a granted credit" | **not a rule** | The school holds the credit; this app is a tally sheet. The cascade at `app/models/student.py:55` is correct as built |
 | "Attendance on an inactive Class becomes read-only" | **not a rule** | Offered and not taken. Closing a Class blocks new records only; existing ones stay editable and deletable |
-| "A superadmin may read any Teacher's data" | **open question** | The Owner is revisiting whether the superadmin role is needed at all. Until then INV-1 grants no role exception, which is also what the code does |
+| "A superadmin may read any Teacher's data" | **not a rule — the role no longer exists** | Resolved 2026-09-01 (ADR-0003): the Owner removed the superadmin role rather than decide what it may see. A signed-in person is a Teacher, INV-1 grants no exception to anyone, and there is nothing left to grant one to |
 
 ## Known future change
 

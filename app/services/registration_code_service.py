@@ -164,65 +164,6 @@ async def mark_code_as_used(
     await db.commit()
 
 
-async def delete_code(
-    db: AsyncSession,
-    code_id: str,
-) -> None:
-    """
-    Delete a registration code.
-
-    Args:
-        db: Database session
-        code_id: ID of the code to delete
-
-    Raises:
-        NotFoundError: If code not found
-        BadRequestException: If code has already been used
-    """
-    result = await db.execute(
-        select(RegistrationCode).where(RegistrationCode.id == code_id)
-    )
-    code = result.scalar_one_or_none()
-    if not code:
-        raise NotFoundError("Registration code not found")
-
-    if code.used:
-        raise BadRequestException("Cannot delete a code that has already been used")
-
-    await db.delete(code)
-    await db.commit()
-
-
-async def revoke_code(
-    db: AsyncSession,
-    code_id: str,
-) -> RegistrationCode:
-    """
-    Revoke a registration code (soft delete).
-
-    Args:
-        db: Database session
-        code_id: ID of the code to revoke
-
-    Returns:
-        The revoked registration code
-
-    Raises:
-        NotFoundError: If code not found
-    """
-    result = await db.execute(
-        select(RegistrationCode).where(RegistrationCode.id == code_id)
-    )
-    code = result.scalar_one_or_none()
-    if not code:
-        raise NotFoundError("Registration code not found")
-
-    code.revoked = True
-    await db.commit()
-    await db.refresh(code)
-    return code
-
-
 async def revoke_code_for_email(
     db: AsyncSession,
     email: str,
@@ -260,28 +201,3 @@ async def revoke_code_for_email(
     await db.commit()
     await db.refresh(code)
     return code
-
-
-async def list_registration_codes(
-    db: AsyncSession,
-    skip: int = 0,
-    limit: int = 100,
-) -> list[RegistrationCode]:
-    """
-    List all registration codes.
-
-    Args:
-        db: Database session
-        skip: Number of records to skip (for pagination)
-        limit: Maximum number of records to return
-
-    Returns:
-        List of RegistrationCode instances
-    """
-    result = await db.execute(
-        select(RegistrationCode)
-        .offset(skip)
-        .limit(limit)
-        .order_by(RegistrationCode.created_at.desc())
-    )
-    return list(result.scalars().all())

@@ -17,7 +17,7 @@ from app.models.attendance import AttendanceRecord
 from app.models.class_ import Class
 from app.models.registration_code import RegistrationCode
 from app.models.student import Student
-from app.models.user import User, UserRole
+from app.models.user import User
 from app.services import registration_code_service
 
 
@@ -133,21 +133,6 @@ async def inactive_user(db: AsyncSession) -> User:
         email="inactive@example.com",
         password_hash=hash_password("testpassword123"),
         active=False,
-    )
-    db.add(user)
-    await db.commit()
-    await db.refresh(user)
-    return user
-
-
-@pytest_asyncio.fixture
-async def superadmin_for_tests(db: AsyncSession) -> User:
-    """Create a superadmin user for tests."""
-    user = User(
-        email="superadmin@example.com",
-        password_hash=hash_password("superadminpass"),
-        role=UserRole.SUPERADMIN.value,
-        active=True,
     )
     db.add(user)
     await db.commit()

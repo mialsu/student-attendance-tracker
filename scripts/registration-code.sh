@@ -23,7 +23,11 @@ PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
 if [ ! -d "$PROJECT_ROOT/venv" ]; then
     echo -e "${RED}Error: Virtual environment not found${NC}"
-    echo "Please create it with: python3 -m venv venv"
+    echo "This wrapper is for a local checkout. Create one with: python3 -m venv venv"
+    echo ""
+    echo "Inside the production container there is no venv — dependencies are installed"
+    echo "globally and DATABASE_URL is already set, so call the script directly:"
+    echo "  python scripts/registration_code.py $*"
     exit 1
 fi
 

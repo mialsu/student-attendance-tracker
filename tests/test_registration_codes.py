@@ -8,9 +8,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import BadRequestException, NotFoundError
-from app.core.security import hash_password
 from app.models.registration_code import RegistrationCode
-from app.models.user import User, UserRole
+from app.models.user import User
 from app.services import registration_code_service
 
 
@@ -21,31 +20,15 @@ async def expire(db: AsyncSession, code: RegistrationCode) -> None:
     await db.commit()
 
 
-# Fixtures for superadmin user
-@pytest.fixture
-async def superadmin_user(db: AsyncSession) -> User:
-    """Create a superadmin user."""
-    user = User(
-        email="admin@example.com",
-        password_hash=hash_password("adminpass123"),
-        role=UserRole.SUPERADMIN.value,
-        active=True,
-    )
-    db.add(user)
+async def revoke(db: AsyncSession, code: RegistrationCode) -> None:
+    """Mark a code revoked, without caring which caller did it.
+
+    `revoke_code_for_email` has its own test (AC-9). These two are about *redeeming* a revoked
+    code, so they set the state rather than exercise a second seam to reach it.
+    """
+    code.revoked = True
+    db.add(code)
     await db.commit()
-    await db.refresh(user)
-    return user
-
-
-@pytest.fixture
-async def superadmin_headers(client: AsyncClient, superadmin_user: User) -> dict[str, str]:
-    """Get auth headers for superadmin."""
-    response = await client.post(
-        "/api/auth/login",
-        json={"email": "admin@example.com", "password": "adminpass123"},
-    )
-    token = response.json()["access_token"]
-    return {"Authorization": f"Bearer {token}"}
 
 
 # TDD: Registration Code Service Tests
@@ -148,10 +131,7 @@ class TestRegistrationCodeService:
             db, email_restriction="revoked@example.com"
         )
 
-        # Revoke the code
-        code.revoked = True
-        db.add(code)
-        await db.commit()
+        await revoke(db, code)
 
         with pytest.raises(BadRequestException, match="revoked"):
             await registration_code_service.validate_registration_code(
@@ -202,64 +182,6 @@ class TestRegistrationCodeService:
         assert code.used is True
         assert code.used_by_user_id == test_user.id
         assert code.used_at is not None
-
-    async def test_revoke_code(self, db: AsyncSession):
-        """Test revoking a registration code."""
-        code = await registration_code_service.create_registration_code(
-            db, email_restriction="revoke-by-id@example.com"
-        )
-
-        revoked_code = await registration_code_service.revoke_code(db, str(code.id))
-
-        assert revoked_code.revoked is True
-
-    async def test_revoke_code_not_found(self, db: AsyncSession):
-        """Test revoking non-existent code raises exception."""
-        import uuid
-
-        fake_id = str(uuid.uuid4())
-        with pytest.raises(NotFoundError, match="not found"):
-            await registration_code_service.revoke_code(db, fake_id)
-
-    async def test_list_registration_codes(self, db: AsyncSession):
-        """Test listing all registration codes."""
-        # Create multiple codes. Distinct addresses: two live codes for one address is
-        # refused by the duplicate guard (AC-7).
-        code1 = await registration_code_service.create_registration_code(
-            db, email_restriction="listed-one@example.com"
-        )
-        code2 = await registration_code_service.create_registration_code(
-            db, email_restriction="listed-two@example.com"
-        )
-
-        codes = await registration_code_service.list_registration_codes(db)
-
-        assert len(codes) >= 2
-        code_ids = [c.id for c in codes]
-        assert code1.id in code_ids
-        assert code2.id in code_ids
-
-    async def test_list_registration_codes_with_pagination(
-        self, db: AsyncSession
-    ):
-        """Test listing codes with pagination."""
-        # Create 5 codes, one address each (AC-7 refuses a second live code per address)
-        for n in range(5):
-            await registration_code_service.create_registration_code(
-                db, email_restriction=f"paged-{n}@example.com"
-            )
-
-        # Get first 3
-        codes_page1 = await registration_code_service.list_registration_codes(
-            db, skip=0, limit=3
-        )
-        assert len(codes_page1) == 3
-
-        # Get next 2
-        codes_page2 = await registration_code_service.list_registration_codes(
-            db, skip=3, limit=3
-        )
-        assert len(codes_page2) >= 2
 
     async def test_create_registration_code_expires_in_24_hours(
         self, db: AsyncSession
@@ -358,146 +280,38 @@ class TestRegistrationCodeService:
 
         await db.rollback()
 
-# TDD: Admin API Endpoint Tests
 @pytest.mark.asyncio
-class TestAdminAPI:
-    """Test admin API endpoints (TDD - write tests first)."""
+class TestAdminSurfaceIsGone:
+    """AC-13: the three former /api/admin/codes endpoints do not exist.
 
-    async def test_create_code_as_superadmin(
-        self, client: AsyncClient, superadmin_headers: dict
-    ):
-        """Superadmin can create registration codes."""
-        response = await client.post(
-            "/api/admin/codes",
-            headers=superadmin_headers,
-            json={"email_restriction": "created@example.com"},
-        )
-        assert response.status_code == 201
-        data = response.json()
-        assert "code" in data
-        assert len(data["code"]) == 16
-        assert data["used"] is False
-        assert data["revoked"] is False
+    Enumerating handlers rather than screens (CODING_STANDARDS): a deleted page in front of a
+    live route is the classic hole, so the assertion is against the route table. 404 and not 403
+    is the point — there is nothing left to be forbidden from.
+    """
 
-    async def test_create_code_with_email_restriction(
-        self, client: AsyncClient, superadmin_headers: dict
-    ):
-        """Superadmin can create code with email restriction."""
-        email = "restricted@example.com"
-        response = await client.post(
-            "/api/admin/codes",
-            headers=superadmin_headers,
-            json={"email_restriction": email},
-        )
-        assert response.status_code == 201
-        data = response.json()
-        assert data["email_restriction"] == email
-
-    async def test_create_code_as_regular_user_fails(
+    async def test_creating_a_code_over_http_is_not_a_thing(
         self, client: AsyncClient, auth_headers: dict
     ):
-        """Regular users cannot create codes (403)."""
         response = await client.post(
             "/api/admin/codes",
             headers=auth_headers,
-            json={"email_restriction": "denied@example.com"},
+            json={"email_restriction": "someone@example.com"},
         )
-        assert response.status_code == 403
-        assert "Superadmin" in response.json()["detail"]
+        assert response.status_code == 404
 
-    async def test_create_code_without_auth_fails(self, client: AsyncClient):
-        """Unauthenticated requests fail (401)."""
-        response = await client.post(
-            "/api/admin/codes",
-            json={"email_restriction": "anonymous@example.com"},
-        )
-        assert response.status_code == 401
-
-    async def test_list_codes_as_superadmin(
-        self, client: AsyncClient, superadmin_headers: dict
-    ):
-        """Superadmin can list all codes."""
-        # Create a few codes first
-        await client.post(
-            "/api/admin/codes",
-            headers=superadmin_headers,
-            json={"email_restriction": "listed-one@example.com"},
-        )
-        await client.post(
-            "/api/admin/codes",
-            headers=superadmin_headers,
-            json={"email_restriction": "listed-two@example.com"},
-        )
-
-        response = await client.get(
-            "/api/admin/codes",
-            headers=superadmin_headers,
-        )
-        assert response.status_code == 200
-        data = response.json()
-        assert isinstance(data, list)
-        assert len(data) >= 2
-
-    async def test_list_codes_as_regular_user_fails(
+    async def test_listing_codes_over_http_is_not_a_thing(
         self, client: AsyncClient, auth_headers: dict
     ):
-        """Regular users cannot list codes (403)."""
-        response = await client.get(
-            "/api/admin/codes",
-            headers=auth_headers,
-        )
-        assert response.status_code == 403
+        response = await client.get("/api/admin/codes", headers=auth_headers)
+        assert response.status_code == 404
 
-    async def test_revoke_code_as_superadmin(
-        self, client: AsyncClient, superadmin_headers: dict
+    async def test_revoking_a_code_over_http_is_not_a_thing(
+        self, client: AsyncClient, auth_headers: dict
     ):
-        """Superadmin can revoke codes."""
-        # Create a code
-        create_response = await client.post(
-            "/api/admin/codes",
-            headers=superadmin_headers,
-            json={"email_restriction": "revoked-by-admin@example.com"},
-        )
-        code_id = create_response.json()["id"]
-
-        # Revoke it
-        revoke_response = await client.delete(
-            f"/api/admin/codes/{code_id}",
-            headers=superadmin_headers,
-        )
-        assert revoke_response.status_code == 200
-        data = revoke_response.json()
-        assert data["revoked"] is True
-
-    async def test_revoke_code_as_regular_user_fails(
-        self, client: AsyncClient, superadmin_headers: dict, auth_headers: dict
-    ):
-        """Regular users cannot revoke codes (403)."""
-        # Create a code as superadmin
-        create_response = await client.post(
-            "/api/admin/codes",
-            headers=superadmin_headers,
-            json={"email_restriction": "not-yours@example.com"},
-        )
-        code_id = create_response.json()["id"]
-
-        # Try to revoke as regular user
-        revoke_response = await client.delete(
-            f"/api/admin/codes/{code_id}",
-            headers=auth_headers,
-        )
-        assert revoke_response.status_code == 403
-
-    async def test_revoke_nonexistent_code_fails(
-        self, client: AsyncClient, superadmin_headers: dict
-    ):
-        """Revoking non-existent code returns 404."""
         import uuid
 
-        fake_id = str(uuid.uuid4())
         response = await client.delete(
-            f"/api/admin/codes/{fake_id}",
-            headers=superadmin_headers,
+            f"/api/admin/codes/{uuid.uuid4()}", headers=auth_headers
         )
         assert response.status_code == 404
 
@@ -586,8 +400,7 @@ class TestSignupWithRegistrationCode:
             db, email_restriction="user@example.com"
         )
 
-        # Revoke the code
-        await registration_code_service.revoke_code(db, str(code.id))
+        await revoke(db, code)
 
         # Try to signup
         response = await client.post(
