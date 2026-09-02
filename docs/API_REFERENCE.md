@@ -8,7 +8,7 @@
 
 The API uses JWT (JSON Web Tokens) for authentication:
 - **Access Token**: Short-lived (15 minutes), used for API requests
-- **Refresh Token**: Long-lived (7 days), used to get new access tokens
+- **Refresh Token**: Long-lived (30 days), used to get new access tokens
 - **Authorization Header**: `Authorization: Bearer <access_token>`
 
 ## Endpoints
@@ -276,7 +276,7 @@ curl -X POST http://localhost:8000/api/auth/refresh \
 
 ### Token Security
 - Access tokens expire after 15 minutes
-- Refresh tokens expire after 7 days
+- Refresh tokens expire after 30 days, and every one of a user's tokens is revoked when they change their password
 - Tokens include user ID and email
 - Token type validation (access vs refresh)
 

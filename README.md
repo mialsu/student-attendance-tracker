@@ -178,7 +178,7 @@ student-attendance-tracker-api/
 | `SECRET_KEY` | JWT secret key | - |
 | `ALGORITHM` | JWT algorithm | HS256 |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | Access token expiration | 15 |
-| `REFRESH_TOKEN_EXPIRE_DAYS` | Refresh token expiration | 7 |
+| `REFRESH_TOKEN_EXPIRE_DAYS` | Refresh token expiration | 30 |
 | `CORS_ORIGINS` | Allowed CORS origins | localhost |
 | `ENVIRONMENT` | Environment (development/production) | development |
 
