@@ -170,27 +170,32 @@ out expired and that no row was deleted. Cheaper and more honest than simulating
 Each criterion names how it will be proven, before any code is written. Verdicts are filled by
 `/verify-live`, and the slice's verdict is the **worst** of them.
 
+**Filled 2026-09-02 at `/ship`. The slice's verdict is therefore `PENDING`, not `WORKS`** — AC-17
+can only be exercised on the production server, so it is the worst of them until the deploy lands
+and the tool is run there. Everything else is `WORKS` with the evidence named in the row. AC-8 is
+recorded as narrower than its own wording rather than promoted to a pass it does not have.
+
 | # | Criterion | Proven by | Serves | Verdict |
 |---|---|---|---|---|
-| AC-1 | A code issued now expires exactly 24 hours later | `test:` service seam | US-3 | — |
-| AC-2 | Signing up with an expired code is refused, with a message naming expiry | `test:` route seam | US-11, INV-6 | — |
-| AC-3 | Signing up with an already-used code is still refused | `test:` existing, regression | US-12, INV-6 | — |
-| AC-4 | Signing up with a revoked code is still refused | `test:` existing, regression | US-5, INV-6 | — |
-| AC-5 | Signing up with an address the code was not issued for is refused | `test:` existing, regression | US-10, INV-7 | — |
-| AC-6 | An **expired** code does not prevent issuing a new code for that address | `test:` service seam | US-7 | — |
-| AC-7 | A live code **does** prevent issuing a second one for that address | `test:` service seam | US-8 | — |
-| AC-8 | A code cannot be stored without an email address | `test:` constraint violation at the service seam | US-2, INV-7 | — |
-| AC-9 | Revoking by email revokes that address's outstanding code, and signup with it then fails | `test:` service seam + route seam | US-5 | — |
-| AC-10 | Revoking an address with no outstanding code fails with a clear error | `test:` service seam | US-6 | — |
-| AC-11 | `GET /api/auth/me` returns no role field | `test:` route seam | US-17 | — |
-| AC-12 | The 17 authorization denial tests still pass unchanged | `test:` existing suite | US-20, INV-1 | — |
-| AC-13 | No admin route exists: the three former endpoints return 404 | `test:` route seam | US-15 | — |
-| AC-14 | A signed-in teacher landing on `/` reaches the teacher dashboard | `live:` browser walk | US-13 | — |
-| AC-15 | No admin screen is reachable in the client | `live:` browser walk of the three former paths | US-14 | — |
-| AC-16 | Migrating a restored production backup leaves every pre-existing code expired, and deletes no rows | `live:` scratch-database recipe (Testing Decisions) | US-19 | — |
-| AC-17 | The tool issues a working code on the production server, end to end | `live:` issue, then sign up with it | US-1, US-9 | — |
-| AC-18 | Both repos' gate sets are green on every commit in this slice | `gate:` `just check` and `npm run check` | — | — |
-| AC-19 | `INVARIANTS.md` carries the rewritten INV-6 and the new INV-7, each naming a real enforcer | `gate:` drift-check invariant rule + `review-only` | US-18 | — |
+| AC-1 | A code issued now expires exactly 24 hours later | `test:` service seam | US-3 | **WORKS** `test_create_registration_code_expires_in_24_hours` |
+| AC-2 | Signing up with an expired code is refused, with a message naming expiry | `test:` route seam | US-11, INV-6 | **WORKS** `test_signup_with_expired_code` |
+| AC-3 | Signing up with an already-used code is still refused | `test:` existing, regression | US-12, INV-6 | **WORKS** `test_signup_with_used_code` |
+| AC-4 | Signing up with a revoked code is still refused | `test:` existing, regression | US-5, INV-6 | **WORKS** `test_signup_with_revoked_code` |
+| AC-5 | Signing up with an address the code was not issued for is refused | `test:` existing, regression | US-10, INV-7 | **WORKS** `test_signup_with_email_restricted_code_wrong_email` + `test_signup_with_a_code_that_names_no_address`; also live, 400 for the wrong address |
+| AC-6 | An **expired** code does not prevent issuing a new code for that address | `test:` service seam | US-7 | **WORKS** `test_expired_code_does_not_block_a_new_one_for_that_email` |
+| AC-7 | A live code **does** prevent issuing a second one for that address | `test:` service seam | US-8 | **WORKS** `test_live_code_blocks_a_second_one_for_that_email`; also live, `code-issue` exits 1 |
+| AC-8 | A code cannot be stored without an email address | `test:` constraint violation at the service seam | US-2, INV-7 | **WORKS** `test_a_code_cannot_be_stored_without_an_address` (NULL refused by the DB) + `test_issuing_a_code_requires_an_address`. Narrower than the wording: `''` is still storable — confessed |
+| AC-9 | Revoking by email revokes that address's outstanding code, and signup with it then fails | `test:` service seam + route seam | US-5 | **WORKS** `test_revoke_code_for_email` + `test_signup_with_a_code_revoked_by_email`; also live, issue → revoke → 400 |
+| AC-10 | Revoking an address with no outstanding code fails with a clear error | `test:` service seam | US-6 | **WORKS** `test_revoke_code_for_email_with_nothing_to_revoke`; also live, `code-revoke` exits 1 |
+| AC-11 | `GET /api/auth/me` returns no role field | `test:` route seam | US-17 | **WORKS** `test_get_current_user_carries_no_role`; also live, `/api/auth/me` and the signup response carry no `role` |
+| AC-12 | The 17 authorization denial tests still pass unchanged | `test:` existing suite | US-20, INV-1 | **WORKS** 24 tests pass and `tests/test_authorization.py` is byte-unchanged across all four slices (`git diff 7b2a246..HEAD` empty on that path) |
+| AC-13 | No admin route exists: the three former endpoints return 404 | `test:` route seam | US-15 | **WORKS** `TestAdminSurfaceIsGone` (3 tests); also live, all three return 404 authenticated, and `openapi.json` lists 19 paths with zero admin |
+| AC-14 | A signed-in teacher landing on `/` reaches the teacher dashboard | `live:` browser walk | US-13 | **WORKS** live, headless Chrome over CDP. Failed twice first, for two pre-existing client defects — both fixed (`2e7821e`) |
+| AC-15 | No admin screen is reachable in the client | `live:` browser walk of the three former paths | US-14 | **WORKS** live, all three former paths render the 404 page, signed out **and** signed in |
+| AC-16 | Migrating a restored production backup leaves every pre-existing code expired, and deletes no rows | `live:` scratch-database recipe (Testing Decisions) | US-19 | **WORKS** on production's own rows — its `20260902_055137` backup restored to a scratch DB, 4 migrations up: the one code `expires_at = created_at + 24h`, already expired; counts byte-identical across 6 tables; 4 down and 4 up again lose nothing |
+| AC-17 | The tool issues a working code on the production server, end to end | `live:` issue, then sign up with it | US-1, US-9 | **PENDING** — production only, by definition. To be run immediately after this deploy |
+| AC-18 | Both repos' gate sets are green on every commit in this slice | `gate:` `just check` and `npm run check` | — | **WORKS** every commit gated; every CI job also re-run locally, including the suite under CI's exact env (299 pass) and real `gitleaks` (no leaks, both repos) |
+| AC-19 | `INVARIANTS.md` carries the rewritten INV-6 and the new INV-7, each naming a real enforcer | `gate:` drift-check invariant rule + `review-only` | US-18 | **WORKS** INV-6 rewritten for expiry, INV-7 added naming a `constraint:` plus three tests; drift gate's invariant check passed on the row |
 
 ## Tracer Slices
 
