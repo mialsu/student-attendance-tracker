@@ -120,7 +120,15 @@ cut (`/confess`), read first by any architecture or review session, dispositione
   listens on port 8000 — connection-refused can yield a different number of failures than a local
   timeout. If the count moves, the ratchet fails for a reason unrelated to the diff. The fix is to
   mock at the `src/api` seam, or quarantine the file with a confession — **not** to raise the baseline.
-- **Disposition:** open — watch the first few CI runs.
+- **Measured 2026-09-02, before the first real push:** the count is **25 in both conditions**.
+  Run once with `VITE_API_URL` pointed at a dead port (nothing listening, which is CI) and once
+  as normal (where this machine has another project's `platform-api` answering 404 on :8000):
+  `Tests 25 failed | 71 passed (96)` both times. So connection-refused and an answered-404
+  produce the same count, and the ratchet is not at risk for this diff.
+- **Disposition:** open, but de-risked for this push. The count being stable across those two
+  conditions is not proof it is stable across all of them — a slow DNS path or a different
+  timeout could still move it. The fix remains mocking at the `src/api` seam, not raising the
+  baseline.
 
 ## 2026-09-01 — devkit's vocabulary check cannot express compound identifiers
 - **What:** `scripts/drift-check.sh`'s vocabulary check splits each identifier into segments
