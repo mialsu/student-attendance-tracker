@@ -1,0 +1,50 @@
+# What must NOT reach the image. Dockerfile:25 is `COPY . .`, so this file is the only thing
+# standing between the build context and the layer. /audit demonstrated on 2026-09-02 that
+# without it a `.env` present in the context is baked in, SECRET_KEY and all.
+#
+# Keep in mind what the container genuinely needs at runtime:
+#   app/          the application
+#   alembic/      + alembic.ini — the CMD runs `alembic upgrade head` on every start
+#   scripts/      registration_code.py is run with `docker compose exec backend python ...`
+#   requirements.txt
+# Everything else is build-host clutter, and some of it is a credential.
+
+# --- secrets. The reason this file exists. ---
+.env
+.env.*
+
+# --- version control history (3.2 MB, and it does not belong in a runtime image) ---
+.git
+.gitignore
+.githooks
+.github
+.gitleaks.toml
+
+# --- the build host's virtualenv: wrong platform, and it shadows the image's own packages ---
+venv
+.venv
+
+# --- test, coverage and lint artefacts ---
+tests
+pytest.ini
+.pytest_cache
+.coverage
+htmlcov
+.ruff_cache
+.import_linter_cache
+.harness-baseline
+test_bulk_logging.sh
+
+# --- caches and editor droppings ---
+**/__pycache__
+**/*.py[cod]
+.mypy_cache
+.DS_Store
+
+# --- docs and process files ---
+docs
+specs
+*.md
+justfile
+Dockerfile
+.dockerignore

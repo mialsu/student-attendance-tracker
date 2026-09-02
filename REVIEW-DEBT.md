@@ -6,6 +6,110 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 
 <!-- Newest first. -->
 
+## 2026-09-02 — the API now has a type gate, and 16 findings are baselined rather than fixed
+- **What:** `just typecheck` runs mypy 2.3.1 over `app/` as a ratchet (ADR-0004), closing what
+  `CODING_STANDARDS.md` called "the biggest remaining hole in this repo's harness". The gate starts
+  at a baseline of **16**, so those 16 are blocked from growing and are **not fixed**.
+- **Where:** `.harness-baseline` (`mypy=16`), `pyproject.toml` `[tool.mypy]`, `justfile` `typecheck`
+- **The 16, grouped — none is a live defect:**
+  - **5 × `app/models/*` `name-defined`** — SQLAlchemy string forward refs. The same debt ADR-0001
+    already left visible as 7 `F821` hits; `if TYPE_CHECKING:` imports close both at once.
+  - **4 × `app/api/auth.py` `arg-type`** — `cookie_samesite` is typed `str` where Starlette wants
+    `Literal['lax','strict','none']`. **Worth doing:** `COOKIE_SAMESITE=laxx` is accepted silently
+    today, and a wrong SameSite value is a real weakening of the cookie hardening done the same day.
+  - **3 × `app/services/*`** — `attendance_service.py:179` reuses the name `result` for two
+    different query shapes, which narrows the inferred return type to `list[UUID]`. Not a runtime
+    bug (the tests pass and `db.refresh` would fail loudly), but the fix is a rename.
+  - **2 × `app/config.py` `call-arg`** — `Settings()` with no arguments. pydantic's mypy plugin
+    would clear these; deferred in ADR-0004 because it re-types every model at once.
+  - **2 × `app/main.py` `union-attr`** — `docs_username` is `str | None` and `.encode()` is called
+    on it. The guarantee lives in `_docs_credentials_are_set`, a validator mypy cannot see.
+- **What green tests do NOT prove here:** the ratchet counts violations, it does not know which.
+  Fixing one and adding another nets zero and passes — it stops accumulation, not substitution.
+  Nothing stricter than `ignore_missing_imports` is on, so an entirely unannotated new function is
+  still legal.
+- **Disposition:** open, deliberately. The `app/api/auth.py` cluster is the one with a real
+  behavioural argument behind it and is the obvious next slice.
+
+## 2026-09-02 — the repo told you to point a schema-dropping fixture at another project's database
+- **What:** `conftest.py` removed the **default** `TEST_DATABASE_URL` on 2026-09-01 because it
+  pointed `drop_all` at port 5433 — `platform-postgres`, a different project's container on this
+  machine. The default went; the **instructions did not**. Until 2026-09-02 the comment at
+  `conftest.py:33`, the `RuntimeError` a developer actually sees at `conftest.py:44`, and
+  `.env.test.example:6` all still named port 5433 as the value to export. The paragraph directly
+  above the error message explained why that port is dangerous.
+- **Where:** `tests/conftest.py:33` and `:44`, `.env.test.example:6` (all three fixed);
+  `deployment/local/docker-compose.yml:35` still publishes the `db-test` service on `5433:5432`
+- **What green tests do NOT prove here:** nothing reads its own error messages. The suite passes
+  identically whether the guidance is safe or catastrophic, because the guidance is only ever
+  executed by a human.
+- **Impact if followed:** `Base.metadata.drop_all` against whatever answers on 5433. It failed on
+  mismatched credentials rather than doing damage, which is luck, not a safety mechanism — the
+  same sentence `conftest.py` already used about the default it removed.
+- **Disposition:** **fixed 2026-09-02** in this repo. All three now point at `just test-db-up`
+  (port 5439, disposable) and say explicitly not to use 5433. **Still open:**
+  `deployment/local/docker-compose.yml:35` binds `db-test` to 5433, so that service cannot start
+  while `platform-postgres` holds the port — already noted in the root `CLAUDE.md`, not changed
+  here because it is a different repository and a port choice the Owner may want to make
+  deliberately. Found by `/audit`, which hit the error message by running a test with no database.
+
+## 2026-09-02 — dependencies are unpinned, so the tested code and the shipped code differ
+- **What:** `requirements.txt` has **21 `>=` ranges and zero exact pins**, and there is no lockfile.
+  Every `docker compose build backend` re-resolves the whole graph against PyPI as it stands that
+  minute. Measured on 2026-09-02: the image built from this repo installed **FastAPI 0.141.1**
+  while the venv the 317 tests run against has **0.121.3** — twenty minor versions apart, from one
+  unchanged `requirements.txt`. The gap is visible in behaviour, not just in a version string:
+  under 0.141.1 `app.routes` holds `_IncludedRouter` wrappers where 0.121.3 holds flat `APIRoute`s.
+- **Where:** `requirements.txt` (all 21 lines); `Dockerfile:22`
+- **What green tests do NOT prove here:** the suite exercises the *local venv's* resolution. It
+  says nothing about the artifact that gets deployed, because that artifact's dependency set is
+  chosen at build time on the server and has never been the one under test. A gate on one and a
+  deploy of the other is the same defect as a standard with no enforcer, one layer down.
+- **Not a live break, and that is luck rather than design:** both versions were run against a real
+  PostgreSQL and both served correctly — `/health` 200, `POST /api/auth/login` 401, `GET
+  /api/classes` 401, `GET /api/nonexistent` 404. The next resolution is a coin toss nobody watches.
+- **Disposition:** open. The cheap fix is `pip-compile` (or `uv pip compile`) producing a pinned
+  `requirements.lock` that the Dockerfile installs, with `requirements.txt` kept as the input.
+  Deliberately NOT done inside the audit: it changes every dependency version at once, which is
+  the opposite of one-finding-per-commit, and it wants its own gate run. Found by `/audit`.
+
+## 2026-09-02 — what the security audit did not look at, and what stayed unproven
+- **What:** `/audit` ran on 2026-09-02 against the four repositories **as committed**. It was
+  static plus local execution only. Four leads could not be run down, and none of them can be
+  settled from inside a repository:
+  1. **Whether the running production image contains a `.env`.** `.dockerignore` now prevents it
+     for every future build, but the currently-deployed image was built before that existed, and
+     the answer depends on whether the server's build context held a `.env` at the time. One `ls`
+     on the VM settles it. If it does, `SECRET_KEY` should be treated as disclosed and rotated.
+  2. **The real production `CORS_ORIGINS`.** It lives in the server's `deployment/production/.env`.
+     No wildcard is prescribed anywhere in the repos, and `allow_credentials=True` at
+     `app/main.py:69` makes a wildcard there genuinely dangerous rather than merely untidy.
+  3. **Whether Vercel git auto-deploy is still disconnected.** Already tracked in
+     `client-app/REVIEW-DEBT.md`; nothing in any repo can detect a reconnect.
+  4. **`gitleaks` was not re-run.** It is not installed on this machine. History was checked
+     independently at file level instead — no `.env`, `.pem`, `.key`, `.p12` or ssh key was ever
+     committed in any of the four repositories — which corroborates the 2026-09-02 CI result
+     without reproducing it.
+- **Also deliberately out of scope:** the Hetzner VM and its filesystem, the Vercel account, DNS,
+  GitHub Actions secrets, and anything requiring traffic to the deployed app.
+- **What green tests do NOT prove here:** an audit never proves absence. This one had a scope and
+  a threat model — the asset is real student names and attendance history, the attacker is a
+  logged-in teacher probing other teachers' rows, and the worst outcome is student data reaching a
+  teacher with no right to it. Findings were ranked against *that*, not against a generic severity
+  table, and a different threat model would rank them differently.
+- **Disposition:** open, and it is the Owner's to close — each of the four needs a look at a
+  console, not at a file.
+
+## 2026-09-02 — `API_REFERENCE.md` exists twice, and both copies were wrong the same way
+- **What:** the file is duplicated at `API_REFERENCE.md` and `docs/API_REFERENCE.md`. Both claimed
+  refresh tokens last 7 days while the code and every runtime config say 30, and both had to be
+  edited to fix one fact. Two copies of one document is the documentation form of two
+  implementations of one behaviour: they drift, and then every session has to guess which is
+  canonical (ANTI-PATTERNS: *two formats for one artifact*).
+- **Where:** `API_REFERENCE.md`, `docs/API_REFERENCE.md`
+- **Disposition:** open. Noticed while fixing the 7-vs-30 drift; deleting one and leaving a pointer
+  is a two-minute job that was left alone because it is not this audit's subject.
+
 ## 2026-09-02 — the Dockerfile copies the whole build context, and this entry was itself owed
 - **What:** `Dockerfile:25` is `COPY . .` and there is **no `.dockerignore`**. Whatever sits in the
   build context when the image is built is baked into the image — including `.env` if one is

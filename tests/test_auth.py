@@ -345,6 +345,47 @@ class TestUpdatePassword:
         
         assert response.status_code == 422
 
+    async def test_update_password_revokes_every_existing_session(
+        self, client: AsyncClient, test_user: User
+    ):
+        """Changing the password must end every session that predates the change.
+
+        Found by /audit on 2026-09-02, demonstrated before it was fixed: the victim
+        changed their password, the old password stopped working, and a refresh token
+        issued BEFORE the change still returned 200 and minted a working access token.
+        A password change is the only remediation this app offers a teacher whose
+        session has been stolen, so it has to actually remove the stolen half.
+
+        If this test passes while `revoke_all_user_tokens` is removed from
+        `auth_service.update_user_password`, the test is wrong, not the code.
+        """
+        login = await client.post(
+            "/api/auth/login",
+            json={"email": "test@example.com", "password": "testpassword123"},
+        )
+        assert login.status_code == 200
+        stolen_refresh = login.cookies["refresh_token"]
+
+        changed = await client.put(
+            "/api/auth/password",
+            headers={"Authorization": f"Bearer {login.json()['access_token']}"},
+            json={
+                "current_password": "testpassword123",
+                "new_password": "a-brand-new-password-456",
+            },
+        )
+        assert changed.status_code == 204, changed.text
+
+        # The pre-change refresh token must no longer buy an access token.
+        client.cookies.clear()
+        replayed = await client.post(
+            "/api/auth/refresh", cookies={"refresh_token": stolen_refresh}
+        )
+        assert replayed.status_code == 401, (
+            f"a refresh token issued before the password change still returned "
+            f"{replayed.status_code}; the stolen session outlived the remediation"
+        )
+
 
 @pytest.mark.asyncio
 class TestLogout:

@@ -19,7 +19,12 @@ class Settings(BaseSettings):
     # Cookie configuration
     cookie_secure: bool = True  # False for local dev
     cookie_samesite: str = "lax"
-    cookie_domain: str | None = None  # ".kotoio.fi" for production
+    # Leave this UNSET. A host-only cookie goes to the API and nowhere else.
+    # Setting a parent domain (".kotoio.fi") sends the 30-day refresh token to every host
+    # under it — that meant app-attendance.kotoio.fi on Vercel, and CLAUDE.md plans more
+    # backends on the same VM. Removed from production 2026-09-02 by /audit; guarded by
+    # tests/test_config.py::TestCookieScope.
+    cookie_domain: str | None = None
 
     # Documentation Authentication. NO DEFAULT, deliberately.
     #

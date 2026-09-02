@@ -31,3 +31,4 @@ python-dotenv>=1.0.0
 # Replaces the flake8 + black + mypy recipes the justfile used to declare but never had installed.
 ruff>=0.16.0              # lint + format, one tool
 import-linter>=2.14       # boundary gate: the app.api > app.services > app.models layering
+mypy>=2.3                 # type gate (RATCHET, baseline in .harness-baseline) — ADR-0004
