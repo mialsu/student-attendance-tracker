@@ -25,6 +25,11 @@ def isolate_settings_environment(monkeypatch):
     variables, and CI's test job sets `ENVIRONMENT`, `DEBUG`, `DOCS_USERNAME` and `DOCS_PASSWORD`
     for real. Without this, the tests that assert a credential is ABSENT quietly inherit CI's
     value: they passed locally and failed in CI, which is how this fixture came to exist.
+
+    It happened a second time on 2026-09-02. TestCookieScope asserted `cookie_domain is None`
+    and CI sets `COOKIE_DOMAIN: ''`, so the assertion failed there and nowhere else. The cookie
+    variables are stripped here now, and the lesson is the one already written above: a Settings
+    test that reads an unlisted variable is testing the machine, not the default.
     """
     for key in (
         "DOCS_USERNAME",
@@ -33,6 +38,9 @@ def isolate_settings_environment(monkeypatch):
         "DEBUG",
         "DATABASE_URL",
         "SECRET_KEY",
+        "COOKIE_DOMAIN",
+        "COOKIE_SECURE",
+        "COOKIE_SAMESITE",
     ):
         monkeypatch.delenv(key, raising=False)
 
@@ -125,14 +133,24 @@ class TestCookieScope:
     """
 
     def test_cookie_domain_defaults_to_host_only(self):
-        """No Domain attribute unless someone deliberately sets one."""
-        assert Settings(**BASE, _env_file=None).cookie_domain is None
+        """The CODE default is host-only — no Domain attribute unless someone sets one.
+
+        Uses `settings_for()`, this module's helper, so the value comes from the defaults and
+        not from whatever the machine happens to export. Asserting against a raw `Settings(...)`
+        is what broke this in CI, where `COOKIE_DOMAIN` is set to the empty string.
+        """
+        assert settings_for().cookie_domain is None
 
     def test_login_sets_a_host_only_refresh_cookie(self):
         """The header the app actually emits carries no Domain.
 
         Asserted on the header rather than on the setting, because the setting is only
         interesting through `response.set_cookie(domain=...)` in app/api/auth.py.
+
+        This one deliberately reads the ambient `settings` singleton rather than the code
+        default, so it judges the environment the suite is actually running under. Both `None`
+        and `''` produce a host-only cookie — Starlette omits the attribute for either — so CI's
+        `COOKIE_DOMAIN: ''` passes here and a real parent domain would not.
         """
         from starlette.responses import Response
 
