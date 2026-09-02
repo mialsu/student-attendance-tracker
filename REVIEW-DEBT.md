@@ -6,6 +6,36 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 
 <!-- Newest first. -->
 
+## 2026-09-02 — the CLI was unusable in production, and leaked part of the DB password saying so
+- **What:** `scripts/registration_code.py`'s `target()` helper parsed `DATABASE_URL` with
+  `urllib.parse.urlparse(...)` and read `.port`. A generated password routinely contains `/`;
+  `urlparse` truncates the netloc at it, so `.port` then tries to cast a fragment of the
+  **password** to an integer and raises `ValueError`. Production's password contains a `/`.
+  `main()` catches `BadRequestException`, `NotFoundError`, `OSError`, `PostgresError` and
+  `SQLAlchemyError` — not `ValueError` — so the tool died on a raw traceback whose exception
+  message quoted a leading fragment of the production database password. `target()` exists
+  precisely to name the database *without* its password.
+- **Where:** `scripts/registration_code.py:47` (before this fix), introduced by `1da33bf` (Slice 2)
+- **Impact:** `just code-issue` worked on every machine with a simple password and **could not run
+  at all in production** — the headline use case of the whole feature (US-1, US-9). Nothing was
+  written to the database; it failed before opening a connection.
+- **What green tests did NOT prove here:** the spec chose deliberately not to test the script —
+  "with all behaviour in the service, the script is argument parsing and printing… proven by a
+  live exercise instead of a test." That reasoning was right about the behaviour and wrong about
+  this one function, which is a pure function of a string whose failure mode depends entirely on
+  a value that differs between environments. **AC-17 is what found it**, on the first run against
+  the server, which is the argument for that criterion existing.
+- **Disposition:** **fixed 2026-09-02.** `target()` now uses `sqlalchemy.engine.make_url` — the
+  parser that owns this URL format and is already a dependency — and is total: it catches
+  everything and returns `<unparseable DATABASE_URL>`, because it is called from the failure path
+  and must never widen a failure into a disclosure. `tests/test_cli_target.py` adds 17 tests over
+  URL shapes, including the exact production shape and an assertion that no password fragment
+  reaches the output. A raw `@` in a password stays ambiguous by the URL format's own rule and is
+  documented rather than "fixed".
+- **Still owed:** the password fragment reached a CI-free operator terminal, not a log aggregator,
+  and the password is unchanged. Rotating `POSTGRES_PASSWORD` is the Owner's call; it was exposed
+  only to the operator already holding database access.
+
 ## 2026-09-02 — tests read the developer's own environment, so local green is not CI green
 - **What:** `app/config.py` builds a module-level `settings = Settings()` at import, and
   pydantic-settings reads the real process environment. So what the suite sees depends on

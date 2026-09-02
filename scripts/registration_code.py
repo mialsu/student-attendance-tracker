@@ -20,12 +20,12 @@ import argparse
 import asyncio
 import sys
 from pathlib import Path
-from urllib.parse import urlparse
 
 # Add parent directory to path to import app modules
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from asyncpg.exceptions import PostgresError
+from sqlalchemy.engine import make_url
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
@@ -42,9 +42,22 @@ def target() -> str:
     containers at once and this repo has already been bitten twice by a command aimed at the
     wrong one (REVIEW-DEBT.md). A tool that writes to whatever DATABASE_URL happens to say
     should say what that is.
+
+    Parsed by SQLAlchemy, which owns this URL format, and NOT by `urllib.parse`. A generated
+    password routinely contains `/`; `urlparse` truncates the netloc there and then
+    `.port` raises `ValueError` while quoting a fragment of the password into the message. That
+    took the tool from working locally to unusable in production, and printed part of the
+    production password into a traceback — see REVIEW-DEBT.md, 2026-09-02.
+
+    Total by construction: this function is called from the failure path, so it must never be
+    the thing that fails, and it must never widen a failure into a disclosure.
     """
-    parsed = urlparse(settings.database_url)
-    return f"{parsed.username}@{parsed.hostname}:{parsed.port}{parsed.path}"
+    try:
+        url = make_url(settings.database_url)
+        return f"{url.username}@{url.host}:{url.port}{'/' + url.database if url.database else ''}"
+    except Exception:
+        # Deliberately says nothing about the value it could not parse.
+        return "<unparseable DATABASE_URL>"
 
 
 async def issue(session: AsyncSession, email: str) -> None:
