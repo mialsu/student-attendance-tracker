@@ -108,3 +108,47 @@ class TestDocsCredentialsRequired:
         s = settings_for(environment="development", debug=True)
         assert s.docs_username != "admin"
         assert s.docs_password != "changeme"
+
+
+class TestCookieScope:
+    """The refresh cookie must stay host-only.
+
+    /audit, 2026-09-02: production set `COOKIE_DOMAIN: .kotoio.fi`, which sends the 30-day
+    refresh token to EVERY kotoio.fi host. That already included app-attendance.kotoio.fi —
+    Vercel, a third party with no need for it — and CLAUDE.md documents the VM as
+    multi-backend, so more siblings were planned. The API is the only host that needs this
+    cookie, and a host-only cookie is what sends it to exactly that host.
+
+    Demonstrated at the time with the same Starlette call the route makes:
+        Set-Cookie: refresh_token=...; Domain=.kotoio.fi; HttpOnly; ...; Secure
+        -> sent to attendance-api.kotoio.fi, app-attendance.kotoio.fi, anything-else.kotoio.fi
+    """
+
+    def test_cookie_domain_defaults_to_host_only(self):
+        """No Domain attribute unless someone deliberately sets one."""
+        assert Settings(**BASE, _env_file=None).cookie_domain is None
+
+    def test_login_sets_a_host_only_refresh_cookie(self):
+        """The header the app actually emits carries no Domain.
+
+        Asserted on the header rather than on the setting, because the setting is only
+        interesting through `response.set_cookie(domain=...)` in app/api/auth.py.
+        """
+        from starlette.responses import Response
+
+        from app.config import settings
+
+        response = Response()
+        response.set_cookie(
+            key="refresh_token",
+            value="irrelevant",
+            httponly=True,
+            secure=settings.cookie_secure,
+            samesite=settings.cookie_samesite,
+            domain=settings.cookie_domain,
+        )
+        header = response.raw_headers[-1][1].decode()
+        assert "Domain=" not in header, (
+            f"the refresh cookie is scoped to a domain and will be sent to every host "
+            f"under it: {header}"
+        )
