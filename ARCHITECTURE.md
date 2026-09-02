@@ -304,7 +304,7 @@ class AttendanceRecord(Base):
 
 **Implementation:**
 - **Access Token**: Short-lived (15 minutes), sent in Authorization header
-- **Refresh Token**: Long-lived (7 days), stored in HTTP-only cookie
+- **Refresh Token**: Long-lived (30 days), stored in HTTP-only cookie, host-only to the API
 - **Password Hashing**: bcrypt via `passlib`
 - **JWT Library**: `python-jose[cryptography]`
 
@@ -322,7 +322,7 @@ class AttendanceRecord(Base):
 ```
 1. User logs in with email/password
 2. Backend validates credentials
-3. Generate access token (15 min) + refresh token (7 days)
+3. Generate access token (15 min) + refresh token (30 days)
 4. Return both tokens
 5. Frontend stores access token in memory
 6. Frontend stores refresh token in HTTP-only cookie
@@ -490,7 +490,7 @@ services:
       DATABASE_URL: postgresql+asyncpg://attendance_user:${DB_PASSWORD}@db:5432/attendance_tracker
       SECRET_KEY: ${SECRET_KEY}
       ACCESS_TOKEN_EXPIRE_MINUTES: 15
-      REFRESH_TOKEN_EXPIRE_DAYS: 7
+      REFRESH_TOKEN_EXPIRE_DAYS: 30
     ports:
       - "8000:8000"
     depends_on:

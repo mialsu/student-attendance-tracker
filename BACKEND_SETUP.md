@@ -251,7 +251,7 @@ All database operations use `async/await` for better performance.
 | `SECRET_KEY` | ✅ | - | JWT secret (generate with openssl) |
 | `ALGORITHM` | ❌ | HS256 | JWT algorithm |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | ❌ | 15 | Access token expiration |
-| `REFRESH_TOKEN_EXPIRE_DAYS` | ❌ | 7 | Refresh token expiration |
+| `REFRESH_TOKEN_EXPIRE_DAYS` | ❌ | 30 | Refresh token expiration |
 | `CORS_ORIGINS` | ❌ | localhost:5173 | Allowed CORS origins (comma-separated) |
 | `ENVIRONMENT` | ❌ | development | Environment (development/production) |
 | `DEBUG` | ❌ | True | Debug mode |
