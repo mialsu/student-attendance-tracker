@@ -6,6 +6,25 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 
 <!-- Newest first. -->
 
+## 2026-09-02 — the Dockerfile copies the whole build context, and this entry was itself owed
+- **What:** `Dockerfile:25` is `COPY . .` and there is **no `.dockerignore`**. Whatever sits in the
+  build context when the image is built is baked into the image — including `.env` if one is
+  present, the `venv/`, `htmlcov/`, and the git history. On the server the context is
+  `student-attendance-tracker-api/`, which is a git checkout, so at minimum `.git` goes in.
+- **Where:** `student-attendance-tracker-api/Dockerfile:25`; no `.dockerignore` in the repo
+- **What green tests do NOT prove here:** nothing inspects the image. `gitleaks` scans the repo's
+  history, not what got layered into a container.
+- **How this was found, which is the part worth reading:** `specs/0001-...md`'s *Out of Scope*
+  section says this finding "gets a `REVIEW-DEBT.md` entry and belongs to `/audit`". It never got
+  one — `grep -c Dockerfile REVIEW-DEBT.md` returned **0** on 2026-09-02, five commits after the
+  spec said otherwise. A spec asserting a confession that does not exist is the same defect as a
+  standard with no enforcer, one document up. Found by sweeping for backlog items rather than by
+  any gate.
+- **Disposition:** open → `/audit`. The fix is a `.dockerignore` (`.git`, `.env*`, `venv/`,
+  `htmlcov/`, `__pycache__/`, `tests/`), which also shrinks the image. Worth confirming what the
+  current production image actually contains before assuming, since the answer decides whether
+  this is hygiene or a live credential exposure.
+
 ## 2026-09-02 — the CLI was unusable in production, and leaked part of the DB password saying so
 - **What:** `scripts/registration_code.py`'s `target()` helper parsed `DATABASE_URL` with
   `urllib.parse.urlparse(...)` and read `.port`. A generated password routinely contains `/`;
