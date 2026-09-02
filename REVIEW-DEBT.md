@@ -6,6 +6,63 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 
 <!-- Newest first. -->
 
+## 2026-09-02 — dependencies are unpinned, so the tested code and the shipped code differ
+- **What:** `requirements.txt` has **21 `>=` ranges and zero exact pins**, and there is no lockfile.
+  Every `docker compose build backend` re-resolves the whole graph against PyPI as it stands that
+  minute. Measured on 2026-09-02: the image built from this repo installed **FastAPI 0.141.1**
+  while the venv the 317 tests run against has **0.121.3** — twenty minor versions apart, from one
+  unchanged `requirements.txt`. The gap is visible in behaviour, not just in a version string:
+  under 0.141.1 `app.routes` holds `_IncludedRouter` wrappers where 0.121.3 holds flat `APIRoute`s.
+- **Where:** `requirements.txt` (all 21 lines); `Dockerfile:22`
+- **What green tests do NOT prove here:** the suite exercises the *local venv's* resolution. It
+  says nothing about the artifact that gets deployed, because that artifact's dependency set is
+  chosen at build time on the server and has never been the one under test. A gate on one and a
+  deploy of the other is the same defect as a standard with no enforcer, one layer down.
+- **Not a live break, and that is luck rather than design:** both versions were run against a real
+  PostgreSQL and both served correctly — `/health` 200, `POST /api/auth/login` 401, `GET
+  /api/classes` 401, `GET /api/nonexistent` 404. The next resolution is a coin toss nobody watches.
+- **Disposition:** open. The cheap fix is `pip-compile` (or `uv pip compile`) producing a pinned
+  `requirements.lock` that the Dockerfile installs, with `requirements.txt` kept as the input.
+  Deliberately NOT done inside the audit: it changes every dependency version at once, which is
+  the opposite of one-finding-per-commit, and it wants its own gate run. Found by `/audit`.
+
+## 2026-09-02 — what the security audit did not look at, and what stayed unproven
+- **What:** `/audit` ran on 2026-09-02 against the four repositories **as committed**. It was
+  static plus local execution only. Four leads could not be run down, and none of them can be
+  settled from inside a repository:
+  1. **Whether the running production image contains a `.env`.** `.dockerignore` now prevents it
+     for every future build, but the currently-deployed image was built before that existed, and
+     the answer depends on whether the server's build context held a `.env` at the time. One `ls`
+     on the VM settles it. If it does, `SECRET_KEY` should be treated as disclosed and rotated.
+  2. **The real production `CORS_ORIGINS`.** It lives in the server's `deployment/production/.env`.
+     No wildcard is prescribed anywhere in the repos, and `allow_credentials=True` at
+     `app/main.py:69` makes a wildcard there genuinely dangerous rather than merely untidy.
+  3. **Whether Vercel git auto-deploy is still disconnected.** Already tracked in
+     `client-app/REVIEW-DEBT.md`; nothing in any repo can detect a reconnect.
+  4. **`gitleaks` was not re-run.** It is not installed on this machine. History was checked
+     independently at file level instead — no `.env`, `.pem`, `.key`, `.p12` or ssh key was ever
+     committed in any of the four repositories — which corroborates the 2026-09-02 CI result
+     without reproducing it.
+- **Also deliberately out of scope:** the Hetzner VM and its filesystem, the Vercel account, DNS,
+  GitHub Actions secrets, and anything requiring traffic to the deployed app.
+- **What green tests do NOT prove here:** an audit never proves absence. This one had a scope and
+  a threat model — the asset is real student names and attendance history, the attacker is a
+  logged-in teacher probing other teachers' rows, and the worst outcome is student data reaching a
+  teacher with no right to it. Findings were ranked against *that*, not against a generic severity
+  table, and a different threat model would rank them differently.
+- **Disposition:** open, and it is the Owner's to close — each of the four needs a look at a
+  console, not at a file.
+
+## 2026-09-02 — `API_REFERENCE.md` exists twice, and both copies were wrong the same way
+- **What:** the file is duplicated at `API_REFERENCE.md` and `docs/API_REFERENCE.md`. Both claimed
+  refresh tokens last 7 days while the code and every runtime config say 30, and both had to be
+  edited to fix one fact. Two copies of one document is the documentation form of two
+  implementations of one behaviour: they drift, and then every session has to guess which is
+  canonical (ANTI-PATTERNS: *two formats for one artifact*).
+- **Where:** `API_REFERENCE.md`, `docs/API_REFERENCE.md`
+- **Disposition:** open. Noticed while fixing the 7-vs-30 drift; deleting one and leaving a pointer
+  is a two-minute job that was left alone because it is not this audit's subject.
+
 ## 2026-09-02 — the Dockerfile copies the whole build context, and this entry was itself owed
 - **What:** `Dockerfile:25` is `COPY . .` and there is **no `.dockerignore`**. Whatever sits in the
   build context when the image is built is baked into the image — including `.env` if one is
