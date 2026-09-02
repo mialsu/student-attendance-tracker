@@ -31,8 +31,9 @@ def get_docs_dependency():
     In development mode, returns a dummy dependency that skips auth.
     In production, returns HTTP Basic Auth dependency.
     """
-    if settings.environment == "development" and settings.debug:
-        # Development mode: no authentication required
+    if not settings.docs_auth_required:
+        # Development mode: no authentication required. The condition lives on Settings, so the
+        # boot-time check that credentials EXIST is guaranteed to agree with this branch.
         async def dev_auth() -> str:
             return "dev-user"
 

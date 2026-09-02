@@ -6,6 +6,28 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 
 <!-- Newest first. -->
 
+## 2026-09-02 — tests read the developer's own environment, so local green is not CI green
+- **What:** `app/config.py` builds a module-level `settings = Settings()` at import, and
+  pydantic-settings reads the real process environment. So what the suite sees depends on
+  whoever is running it. Demonstrated the hard way in this session: `tests/test_config.py`
+  passed locally and **failed 4 of 12 in CI's environment**, because CI's test job sets
+  `DOCS_USERNAME` / `DOCS_PASSWORD` for real and the tests that assert a credential is *absent*
+  silently inherited them. `_env_file=None` was not enough — that skips the file, not the
+  environment.
+- **Where:** `app/config.py:76`; `tests/test_config.py` (now carries an autouse
+  `isolate_settings_environment` fixture that deletes the keys it is about to assert on)
+- **What green tests do NOT prove here:** that they will be green anywhere else. Nothing forces
+  a test to declare which settings it depends on, and no gate runs the suite under CI's
+  environment — this was caught by reproducing that environment by hand before pushing, not by
+  anything automatic.
+- **Not currently divergent beyond the fixed case:** the other 295 tests pass identically under
+  a bare local environment and under CI's full variable set. Both were run.
+- **Disposition:** open, narrow. The one broken test file is fixed. The general fix is either a
+  session-scoped fixture that pins the whole settings environment for the suite, or an injected
+  `Settings` instead of an import-time singleton — the second is the real answer and is a
+  refactor, not a patch. Cheapest guard meanwhile: run the suite once under CI's variables
+  before a push, which is what found this.
+
 ## 2026-09-01 — production /docs is behind the built-in default credentials
 - **What:** `app/config.py:26-27` defaults `docs_username = "admin"` and
   `docs_password = "changeme"`. `deployment/production/docker-compose.yml`'s `backend` service
@@ -20,10 +42,22 @@ cut (`/confess`), read first by any architecture or review session, dispositione
   refuses to start without them — this is the only secret-shaped setting with a fallback.
 - **Why it surfaced now:** the Owner intends to publish this repo as a reference project. That does
   not create the weakness, but it removes the last thing standing in front of it.
-- **Disposition:** open — found while answering the spec's open question 1, out of scope for that
-  slice, not fixed here. The fix is two lines: drop the defaults so `Settings` refuses to start
-  without them (matching `secret_key`), and add `DOCS_USERNAME` / `DOCS_PASSWORD` to the production
-  compose. It needs an Owner decision because it changes what production requires to boot.
+- **The actual cause, found on the server 2026-09-02:** the values were **already set correctly**
+  in `deployment/production/.env` — a real 13-character password, not `changeme`. But the
+  `backend` service in `docker-compose.yml` never listed them, so
+  `docker exec attendance-backend-prod printenv DOCS_USERNAME` returned nothing and the app fell
+  back to its own default. The credential was never wrong; it simply never reached the process.
+  A default is what made that invisible for months.
+- **Disposition:** **fixed 2026-09-02**, Owner's call, across two repos plus CI:
+  `app/config.py` drops both defaults (`str | None = None`) and gains
+  `docs_auth_required` — the single owner of "are the docs protected?", which `app/main.py` now
+  asks instead of re-deciding — plus a `model_validator` that refuses to construct `Settings`
+  when the docs are protected and either credential is missing. `docker-compose.yml` passes both
+  through. Proven by watching it fail: `ENVIRONMENT=production DEBUG=false` with no `DOCS_*`
+  raises at import; with them it boots; local development still boots with neither.
+  `tests/test_config.py` adds 12 tests. **Caught before the push:** CI's test job sets
+  `ENVIRONMENT: test` with no `DOCS_*`, so the new guard would have failed the whole job at
+  collection — the workflow now names a value, as production does.
 
 ## 2026-09-01 — three dead service functions removed with proof, one of them dead before this slice
 - **What:** Slice 4 deleted `list_registration_codes`, `revoke_code(db, code_id)` and `delete_code`

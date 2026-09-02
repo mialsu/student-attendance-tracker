@@ -111,6 +111,10 @@ Raising a number in `.harness-baseline` gets the same treatment. `[review-only]`
 
 - No secret in the repo, and none in history. `.env` is gitignored; `.env.example` carries no real
   values. `[review-only]`
+- **A credential setting has no default.** `Settings` must refuse to start rather than fall back to
+  one. `docs_username` / `docs_password` defaulted to `admin` / `changeme`, and production ran on
+  that pair for months because the compose file never passed the real values through — a default is
+  what turned a config mistake into a silent one. `[test]` (`tests/test_config.py`)
 - Errors reaching a client carry no stack trace, no query and no internal id. `[review-only]`
 
 ## Dependencies & reuse

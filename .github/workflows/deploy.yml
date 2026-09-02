@@ -111,6 +111,11 @@ jobs:
           CORS_ORIGINS: http://localhost:5173
           ENVIRONMENT: test
           DEBUG: 'false'
+          # ENVIRONMENT is not 'development', so app/config.py treats the docs as protected and
+          # requires these. That refusal is the point: the old admin/changeme default is gone,
+          # and CI has to name a value like production does rather than inherit a fallback.
+          DOCS_USERNAME: ci
+          DOCS_PASSWORD: ci-not-a-real-password
         run: pytest -v --cov=app --cov-report=term-missing --cov-report=html
 
       - name: Upload coverage

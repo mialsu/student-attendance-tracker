@@ -1,5 +1,6 @@
 """Application configuration using Pydantic Settings."""
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -20,9 +21,14 @@ class Settings(BaseSettings):
     cookie_samesite: str = "lax"
     cookie_domain: str | None = None  # ".kotoio.fi" for production
 
-    # Documentation Authentication
-    docs_username: str = "admin"
-    docs_password: str = "changeme"
+    # Documentation Authentication. NO DEFAULT, deliberately.
+    #
+    # These used to default to `admin` / `changeme`, and production ran on that pair for months:
+    # the values were set correctly in the server's .env, but `docker-compose.yml` never passed
+    # them into the container, so the fallback won silently. A default is what made that
+    # invisible, so there isn't one any more — see `_docs_credentials_are_set` below.
+    docs_username: str | None = None
+    docs_password: str | None = None
 
     # CORS
     cors_origins: str = "http://localhost:5173"
@@ -39,6 +45,32 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         case_sensitive=False,
     )
+
+    @property
+    def docs_auth_required(self) -> bool:
+        """Whether `/docs` sits behind HTTP Basic auth.
+
+        The ONE owner of this rule: `app/main.py` asks this rather than re-deciding it, and the
+        validator below requires credentials exactly when it is true. Two copies of the condition
+        would be two places to forget.
+        """
+        return not (self.environment == "development" and self.debug)
+
+    @model_validator(mode="after")
+    def _docs_credentials_are_set(self) -> "Settings":
+        """Refuse to start when the docs are protected but there is nothing to protect them with.
+
+        Fail at boot, loudly, rather than serve a documented default to the internet. In
+        development-with-debug the Basic-auth path is never taken, so nothing is required there.
+        """
+        if self.docs_auth_required and not (self.docs_username and self.docs_password):
+            raise ValueError(
+                "DOCS_USERNAME and DOCS_PASSWORD are required when ENVIRONMENT is not "
+                "'development' (or DEBUG is off), because /docs, /redoc and /openapi.json are "
+                "served behind HTTP Basic auth. There is no default: the old one was "
+                "admin/changeme and production ran on it. Set both in the environment."
+            )
+        return self
 
     @property
     def cors_origins_list(self) -> list[str]:
