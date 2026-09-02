@@ -6,6 +6,36 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 
 <!-- Newest first. -->
 
+## 2026-09-02 — reloading any protected page logs you out, though the session is valid
+- **What:** `AuthContext` starts `loading` at `false` (`src/contexts/AuthContext.tsx:20`).
+  `ProtectedRoute` renders **before** its own `useEffect` runs, so its first render sees
+  `loading === false` and `user === null` and returns `<Navigate to="/auth" replace />`
+  (`src/components/ProtectedRoute.tsx:32-34`). `checkAuth()` then fires and *succeeds* — but the
+  redirect has already happened, and `/auth` never re-checks. The user sees the login screen with
+  a perfectly good session.
+- **Where:** `src/contexts/AuthContext.tsx:20`, `src/components/ProtectedRoute.tsx:14-34`
+- **Evidence (live, 2026-09-02):** headless Chrome over CDP against the dev server on
+  `localhost:5173` and the API on `localhost:8001`. Logged in through the real form → landed on
+  `/dashboard`. Cold-loaded `/dashboard` → sat on `/auth` for **12 seconds**, polled once a
+  second, never recovering. The API log for that same load shows
+  `POST /api/auth/refresh 200` followed by `GET /api/auth/me 200`: the server restored the
+  session while the client was already on the login page.
+- **What green tests do NOT prove here:** nothing exercises a page reload with a live refresh
+  cookie. This is inside the "auth/login/logout effectively untested" hole the root `CLAUDE.md`
+  already names, and it is the concrete bug hiding in it.
+- **Not caused by the role removal.** `git diff cff0ddb..HEAD` touches neither file, and the
+  `useState(false)` line dates to `d9f4086` (2025-11-03), when the client was first wired to the
+  API. It has been live for ~10 months.
+- **Why it surfaced now:** it is what `AC-14` of the API repo's
+  `specs/0001-registration-code-cli-and-role-removal.md` walks into. That criterion's *intent* —
+  signing in lands you on the teacher dashboard, not on a removed admin screen — **is** met and
+  was proven live. Its literal wording, "a signed-in teacher landing on `/`", fails for this
+  unrelated reason.
+- **Disposition:** open — Owner's call, out of scope for the slice that found it. The fix is one
+  line: start `loading` at `true`, so `ProtectedRoute` shows its existing spinner until
+  `checkAuth` resolves. Worth a test that reloads a protected route with a live cookie, since
+  that is the case no test covers.
+
 ## 2026-09-01 — this repo has no INVARIANTS.md by design, so drift-check's invariant gate is inert here
 - **What:** `/crunch-domain` produced six invariants and put them in
   `../student-attendance-tracker-api/INVARIANTS.md`, because **every enforcer is server-side** — a
