@@ -31,10 +31,19 @@ cut (`/confess`), read first by any architecture or review session, dispositione
   signing in lands you on the teacher dashboard, not on a removed admin screen — **is** met and
   was proven live. Its literal wording, "a signed-in teacher landing on `/`", fails for this
   unrelated reason.
-- **Disposition:** open — Owner's call, out of scope for the slice that found it. The fix is one
-  line: start `loading` at `true`, so `ProtectedRoute` shows its existing spinner until
-  `checkAuth` resolves. Worth a test that reloads a protected route with a live cookie, since
-  that is the case no test covers.
+- **A SECOND defect, same shape, found while fixing this one:** `Index.tsx` — the `/` landing
+  route — never called `checkAuth()` at all, and read `user` from an empty context on its first
+  render. So even with `ProtectedRoute` fixed, a cold load of `/` still sent a signed-in teacher
+  to the login screen. That is `AC-14` of the API repo's
+  `specs/0001-registration-code-cli-and-role-removal.md`, and it is why that criterion failed
+  live twice before passing.
+- **Disposition:** **fixed 2026-09-02**, Owner's call. Two changes: `loading` starts `true`
+  (`AuthContext.tsx:20`), so `ProtectedRoute` shows its existing spinner instead of redirecting;
+  and `Index.tsx` now calls `checkAuth()` and waits for `loading` before choosing a destination.
+  Six tests added across `src/components/__tests__/ProtectedRoute.test.tsx` and
+  `src/pages/__tests__/Index.test.tsx`, covering the cold-load-with-a-session case that nothing
+  covered. Re-proven live over CDP: reloading `/dashboard` stays on `/dashboard`, and a cold load
+  of `/` reaches the teacher dashboard. Failing test count unchanged at 25.
 
 ## 2026-09-01 — this repo has no INVARIANTS.md by design, so drift-check's invariant gate is inert here
 - **What:** `/crunch-domain` produced six invariants and put them in

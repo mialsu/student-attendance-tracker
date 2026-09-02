@@ -17,7 +17,11 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(false);
+  // Starts TRUE. React runs effects after the first render commits, so a `false` start let
+  // ProtectedRoute render once with no user and redirect to /auth before its own checkAuth()
+  // could look at the refresh cookie — logging you out on every reload and deep link, with a
+  // perfectly valid session. See REVIEW-DEBT.md, 2026-09-02.
+  const [loading, setLoading] = useState(true);
   const [initialized, setInitialized] = useState(false);
 
   const checkAuth = async () => {
