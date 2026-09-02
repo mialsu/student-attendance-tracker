@@ -6,6 +6,28 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 
 <!-- Newest first. -->
 
+## 2026-09-02 — the repo told you to point a schema-dropping fixture at another project's database
+- **What:** `conftest.py` removed the **default** `TEST_DATABASE_URL` on 2026-09-01 because it
+  pointed `drop_all` at port 5433 — `platform-postgres`, a different project's container on this
+  machine. The default went; the **instructions did not**. Until 2026-09-02 the comment at
+  `conftest.py:33`, the `RuntimeError` a developer actually sees at `conftest.py:44`, and
+  `.env.test.example:6` all still named port 5433 as the value to export. The paragraph directly
+  above the error message explained why that port is dangerous.
+- **Where:** `tests/conftest.py:33` and `:44`, `.env.test.example:6` (all three fixed);
+  `deployment/local/docker-compose.yml:35` still publishes the `db-test` service on `5433:5432`
+- **What green tests do NOT prove here:** nothing reads its own error messages. The suite passes
+  identically whether the guidance is safe or catastrophic, because the guidance is only ever
+  executed by a human.
+- **Impact if followed:** `Base.metadata.drop_all` against whatever answers on 5433. It failed on
+  mismatched credentials rather than doing damage, which is luck, not a safety mechanism — the
+  same sentence `conftest.py` already used about the default it removed.
+- **Disposition:** **fixed 2026-09-02** in this repo. All three now point at `just test-db-up`
+  (port 5439, disposable) and say explicitly not to use 5433. **Still open:**
+  `deployment/local/docker-compose.yml:35` binds `db-test` to 5433, so that service cannot start
+  while `platform-postgres` holds the port — already noted in the root `CLAUDE.md`, not changed
+  here because it is a different repository and a port choice the Owner may want to make
+  deliberately. Found by `/audit`, which hit the error message by running a test with no database.
+
 ## 2026-09-02 — dependencies are unpinned, so the tested code and the shipped code differ
 - **What:** `requirements.txt` has **21 `>=` ranges and zero exact pins**, and there is no lockfile.
   Every `docker compose build backend` re-resolves the whole graph against PyPI as it stands that

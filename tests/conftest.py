@@ -29,8 +29,15 @@ from app.services import registration_code_service
 # The credentials did not match, so it failed to connect rather than doing damage, but "the wrong
 # database refused us" is not a safety mechanism.
 #
-# Set it explicitly, e.g.:
-#   export TEST_DATABASE_URL=postgresql+asyncpg://attendance_user:pw@localhost:5433/attendance_tracker_test
+# The default was removed on 2026-09-01 and the INSTRUCTIONS still said 5433 until /audit caught
+# it on 2026-09-02 -- both this comment and the RuntimeError below handed the developer the exact
+# value the paragraph above calls dangerous. Removing a footgun's default and leaving it in the
+# example is not removing the footgun.
+#
+# Use the helper. It starts a disposable database on 5439 and prints the export line:
+#   eval "$(just test-db-up)"
+#   just check
+#   just test-db-down
 # See .env.test.example. CI sets it in .github/workflows/deploy.yml.
 TEST_DATABASE_URL = os.getenv("TEST_DATABASE_URL")
 
@@ -39,9 +46,11 @@ if not TEST_DATABASE_URL:
         "TEST_DATABASE_URL is not set.\n"
         "These tests create and DROP tables, so the target database must be named explicitly "
         "rather than guessed from a default port.\n"
-        "Example:\n"
-        "  export TEST_DATABASE_URL="
-        "postgresql+asyncpg://attendance_user:PASSWORD@localhost:5433/attendance_tracker_test\n"
+        "Use the helper, which starts a disposable database on port 5439 and prints the "
+        "export line for you:\n"
+        "  eval \"$(just test-db-up)\"\n"
+        "Do NOT point this at port 5433. That is another project's PostgreSQL container on "
+        "this machine, and these fixtures call drop_all.\n"
         "See .env.test.example."
     )
 
