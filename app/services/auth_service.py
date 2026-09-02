@@ -208,7 +208,7 @@ async def update_user_password(
     user.password_hash = hash_password(new_password)
     user.updated_at = datetime.now(timezone.utc)
 
-    # A password change ends every session that predates it. Without this, a refresh token
+    # INV-8: a password change ends every session that predates it. Without this, a refresh token
     # stolen before the change kept minting access tokens for REFRESH_TOKEN_EXPIRE_DAYS --
     # so the one remediation a teacher has did nothing to the half an attacker holds.
     # Demonstrated by /audit on 2026-09-02; guarded by
