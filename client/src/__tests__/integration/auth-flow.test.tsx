@@ -46,7 +46,7 @@ const authResponse: AuthResponse = {
 };
 
 // Codes are issued from the command line and the field asks for sixteen characters.
-const CODE = 'A1B2C3D4E5F6G7H8';
+const CODE = 'TEST-CODE-000001';
 
 describe('Authentication flow', () => {
   beforeEach(() => {

@@ -190,7 +190,7 @@ describe('AuthContext', () => {
 
       const { result } = renderAuth();
       await act(async () => {
-        await result.current.signup(teacher.email, 'a-password', 'A1B2C3D4E5F6G7H8');
+        await result.current.signup(teacher.email, 'a-password', 'TEST-CODE-000001');
       });
 
       expect(result.current.user).toEqual(teacher);
@@ -203,13 +203,13 @@ describe('AuthContext', () => {
 
       const { result } = renderAuth();
       await act(async () => {
-        await result.current.signup(teacher.email, 'a-password', 'A1B2C3D4E5F6G7H8');
+        await result.current.signup(teacher.email, 'a-password', 'TEST-CODE-000001');
       });
 
       expect(authApi.signup).toHaveBeenCalledWith({
         email: teacher.email,
         password: 'a-password',
-        registration_code: 'A1B2C3D4E5F6G7H8',
+        registration_code: 'TEST-CODE-000001',
       });
     });
 
