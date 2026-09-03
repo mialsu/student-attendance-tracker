@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Attendance Tracker Backlog</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<style>
+/* ---- tokens: light is the base, taken from client-app/src/index.css and biased cool ---- */
+:root {
+  --ground:      #f7f9fa;
+  --surface:     #ffffff;
+  --surface-sunk:#eef3f5;
+  --ink:         #141719;
+  --ink-soft:    #5b6570;
+  --ink-faint:   #8b959e;
+  --rule:        #dbe4e9;
+  --rule-strong: #b9c7cf;
+  --accent:      #0086ab;   /* the app's azure, darkened for text contrast */
+  --accent-flat: #00ade0;   /* the app's token value, for rules and fills */
+  --accent-wash: #e2f4fa;
+  --live:        #b52d38;
+  --live-wash:   #fbe9ea;
+  --hold:        #8f5600;
+  --hold-wash:   #fbf1e0;
+  --rest:        #6b7680;
+  --rest-wash:   #edf1f3;
+  --done:        #1f6b4a;
+  --done-wash:   #e2f3ea;
+
+  --shadow: 0 1px 2px rgba(20,23,25,.05), 0 8px 24px -16px rgba(20,23,25,.18);
+
+  --display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --body:    "Source Serif 4", Georgia, "Times New Roman", serif;
+  --mono:    "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ground:      #0f1214;
+    --surface:     #171b1e;
+    --surface-sunk:#1e2427;
+    --ink:         #e9eef1;
+    --ink-soft:    #a2aeb6;
+    --ink-faint:   #75818a;
+    --rule:        #2a3237;
+    --rule-strong: #3c464c;
+    --accent:      #4bc9ea;
+    --accent-flat: #00ade0;
+    --accent-wash: #10333d;
+    --live:        #f08a92;
+    --live-wash:   #38191c;
+    --hold:        #e0a952;
+    --hold-wash:   #33260f;
+    --rest:        #93a0a8;
+    --rest-wash:   #22292d;
+    --done:        #6fd4a1;
+    --done-wash:   #123123;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.7);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --ground:      #0f1214;
+  --surface:     #171b1e;
+  --surface-sunk:#1e2427;
+  --ink:         #e9eef1;
+  --ink-soft:    #a2aeb6;
+  --ink-faint:   #75818a;
+  --rule:        #2a3237;
+  --rule-strong: #3c464c;
+  --accent:      #4bc9ea;
+  --accent-flat: #00ade0;
+  --accent-wash: #10333d;
+  --live:        #f08a92;
+  --live-wash:   #38191c;
+  --hold:        #e0a952;
+  --hold-wash:   #33260f;
+  --rest:        #93a0a8;
+  --rest-wash:   #22292d;
+  --done:        #6fd4a1;
+  --done-wash:   #123123;
+  --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.7);
+  color-scheme: dark;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--body);
+  font-size: 17px;
+  line-height: 1.6;
+  font-optical-sizing: auto;
+}
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+
+.wrap { max-width: 60rem; margin: 0 auto; padding: 0 1.5rem 6rem; }
+
+/* ---- masthead ---- */
+.masthead { padding: 4rem 0 2rem; border-bottom: 2px solid var(--ink); }
+.eyebrow {
+  font-family: var(--mono); font-size: .7rem; font-weight: 500;
+  letter-spacing: .14em; text-transform: uppercase; color: var(--accent);
+  margin: 0 0 1.1rem;
+}
+h1 {
+  font-family: var(--display); font-weight: 700;
+  font-size: clamp(2.1rem, 5.5vw, 3.4rem); line-height: 1.02;
+  letter-spacing: -.02em; text-wrap: balance; margin: 0 0 1rem;
+}
+.standfirst {
+  font-size: 1.14rem; color: var(--ink-soft); max-width: 60ch;
+  margin: 0; text-wrap: pretty;
+}
+.tally {
+  display: flex; flex-wrap: wrap; gap: 0 2.5rem;
+  margin: 2.25rem 0 0; padding: 0; list-style: none;
+}
+.tally div { display: flex; flex-direction: column; gap: .15rem; }
+.tally dt {
+  font-family: var(--mono); font-size: .66rem; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--ink-faint);
+}
+.tally dd {
+  margin: 0; font-family: var(--display); font-weight: 600;
+  font-size: 1.6rem; font-variant-numeric: tabular-nums; line-height: 1;
+}
+
+/* ---- section headings ---- */
+h2 {
+  font-family: var(--display); font-weight: 600;
+  font-size: 1.55rem; letter-spacing: -.01em; text-wrap: balance;
+  margin: 4rem 0 .5rem;
+}
+.section-note { color: var(--ink-soft); max-width: 62ch; margin: 0 0 2rem; }
+
+/* ---- the ranked spine ---- */
+.spine { list-style: none; padding: 0; margin: 0; position: relative; }
+.spine::before {
+  content: ""; position: absolute; left: 1.15rem; top: 1.9rem; bottom: 2.5rem;
+  width: 2px; background: linear-gradient(var(--accent-flat), var(--rule));
+}
+.item { position: relative; padding-left: 3.6rem; margin-bottom: 1.6rem; }
+.rank {
+  position: absolute; left: 0; top: .35rem;
+  width: 2.3rem; height: 2.3rem; border-radius: 50%;
+  background: var(--surface); border: 2px solid var(--accent-flat);
+  color: var(--accent); font-family: var(--mono); font-weight: 700; font-size: .82rem;
+  display: grid; place-items: center; font-variant-numeric: tabular-nums;
+}
+.card {
+  background: var(--surface); border: 1px solid var(--rule);
+  border-radius: 3px; padding: 1.35rem 1.5rem; box-shadow: var(--shadow);
+}
+.card h3 {
+  font-family: var(--display); font-weight: 600; font-size: 1.16rem;
+  margin: 0 0 .3rem; letter-spacing: -.005em; text-wrap: balance;
+}
+.why {
+  font-family: var(--mono); font-size: .68rem; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--ink-faint);
+  margin: 0 0 .8rem;
+}
+.card p { margin: 0 0 .7rem; max-width: 66ch; }
+.card p:last-child { margin-bottom: 0; }
+.ev {
+  font-family: var(--mono); font-size: .78rem; line-height: 1.5;
+  color: var(--ink-soft); background: var(--surface-sunk);
+  border-left: 2px solid var(--rule-strong);
+  padding: .55rem .8rem; margin: .85rem 0 0;
+  overflow-x: auto; white-space: pre-wrap; word-break: break-word;
+}
+
+/* ---- chips ---- */
+.chips { display: flex; flex-wrap: wrap; gap: .4rem; margin: 0 0 .7rem; }
+.chip {
+  font-family: var(--mono); font-size: .64rem; font-weight: 500;
+  letter-spacing: .08em; text-transform: uppercase;
+  padding: .22rem .5rem; border-radius: 2px; white-space: nowrap;
+}
+.chip.live { color: var(--live); background: var(--live-wash); }
+.chip.hold { color: var(--hold); background: var(--hold-wash); }
+.chip.rest { color: var(--rest); background: var(--rest-wash); }
+.chip.acc  { color: var(--accent); background: var(--accent-wash); }
+.chip.done { color: var(--done); background: var(--done-wash); }
+/* ---- a shipped item: still readable, visibly spent ---- */
+.item.done .card { border-color: var(--done); background: var(--surface); }
+.item.done .rank {
+  border-color: var(--done); color: var(--done-wash);
+  background: var(--done); font-size: .95rem;
+}
+.item.done h3 { color: var(--ink-soft); }
+.item.done .why { color: var(--done); }
+.shipped {
+  margin: .85rem 0 0; padding: .6rem .85rem;
+  background: var(--done-wash); border-left: 2px solid var(--done);
+  border-radius: 0 3px 3px 0; font-size: .93rem;
+}
+.shipped strong { color: var(--done); }
+/* ---- the do-this-now banner ---- */
+.nownext {
+  margin: 0 0 2.25rem; padding: 1.1rem 1.35rem;
+  background: var(--hold-wash); border-left: 3px solid var(--hold);
+  border-radius: 0 3px 3px 0;
+}
+.nownext p { margin: 0 0 .5rem; max-width: 66ch; }
+.nownext p:last-child { margin-bottom: 0; }
+.nownext strong { color: var(--hold); }
+.nownext ol { margin: .5rem 0 0; padding-left: 1.2rem; }
+.nownext li { margin-bottom: .35rem; max-width: 64ch; }
+
+/* ---- the ordering constraint ---- */
+.constraint {
+  margin: 2rem 0 0; padding: 1.1rem 1.35rem;
+  background: var(--live-wash); border-left: 3px solid var(--live);
+  border-radius: 0 3px 3px 0;
+}
+.constraint p { margin: 0; max-width: 66ch; }
+.constraint strong { color: var(--live); }
+.constraint .why { color: var(--live); margin-bottom: .45rem; }
+
+/* ---- inventory table ---- */
+.scroller { overflow-x: auto; border: 1px solid var(--rule); border-radius: 3px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; min-width: 40rem; font-size: .93rem; }
+caption { text-align: left; padding: .9rem 1.1rem .2rem; font-family: var(--display); font-weight: 600; color: var(--ink); }
+th {
+  text-align: left; font-family: var(--mono); font-weight: 500;
+  font-size: .64rem; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--ink-faint); padding: .8rem 1.1rem .5rem;
+  border-bottom: 1px solid var(--rule-strong); white-space: nowrap;
+}
+td { padding: .7rem 1.1rem; border-bottom: 1px solid var(--rule); vertical-align: top; }
+tbody tr:last-child td { border-bottom: none; }
+td.where { font-family: var(--mono); font-size: .78rem; color: var(--ink-soft); word-break: break-word; }
+td.st { white-space: nowrap; }
+
+code {
+  font-family: var(--mono); font-size: .86em;
+  background: var(--surface-sunk); padding: .08em .32em; border-radius: 2px;
+}
+.card .ev code, td.where code { background: none; padding: 0; }
+a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+
+footer {
+  margin-top: 4.5rem; padding-top: 1.5rem;
+  border-top: 1px solid var(--rule);
+  font-size: .88rem; color: var(--ink-faint); max-width: 66ch;
+}
+footer p { margin: 0 0 .5rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="masthead">
+  <p class="eyebrow">Student Attendance Tracker &middot; swept 2 September 2026, updated after the deploy</p>
+  <h1>What to build next, and why in that order</h1>
+  <p class="standfirst">
+    Everything currently owed across the two repositories, gathered from both
+    <code>REVIEW-DEBT.md</code> ledgers, the unresolved terms in both <code>CONTEXT.md</code> files,
+    and the deferred scope of spec&nbsp;0001. Nothing here is invented: every row names the file
+    that proves it.
+  </p>
+  <dl class="tally">
+    <div><dt>Shipped 2 Sep</dt><dd>2</dd></div>
+    <div><dt>Ranked, remaining</dt><dd>4</dd></div>
+    <div><dt>Small &amp; independent</dt><dd>13</dd></div>
+    <div><dt>Live defects</dt><dd>1</dd></div>
+    <div><dt>Need your call</dt><dd>5</dd></div>
+    <div><dt>Ready to spec</dt><dd>2</dd></div>
+  </dl>
+</header>
+
+<h2>The sequence</h2>
+<p class="section-note">
+  Numbered because the order carries a real dependency, not for decoration. Each card leads with
+  the reason it sits where it does &mdash; if that reason doesn't hold for you, move it.
+</p>
+
+<div class="nownext">
+  <p class="why">Right now &middot; one small thing the 2 September deploy left on your desk</p>
+  <ol>
+    <li><strong>Revoke <code>refresh_tokens</code> once.</strong> Teachers still hold the old
+      <code>.kotoio.fi</code> cookie next to the new host-only one, so the first refresh fails and
+      drops them on the login screen. Revoking retires the stale cookies instead of waiting out
+      their 30 days. Hygiene, not urgency.</li>
+  </ol>
+  <p><strong>Checked 3 September and closed:</strong> the production image never contained a
+  <code>.env</code>. All eight backend images on the VM were inspected, seven of them predating
+  <code>.dockerignore</code> and reaching back two weeks &mdash; all clean, and structurally so,
+  because the build context there is a git clone and <code>.env</code> is gitignored. So
+  <code>SECRET_KEY</code> was never disclosed and no rotation was needed. That item was ranked here
+  as "the last audit finding with real blast radius"; the mechanism was real on a developer
+  machine, and the step from there to production was never evidenced.</p>
+</div>
+
+<ol class="spine">
+
+  <li class="item done">
+    <span class="rank" aria-hidden="true">&check;</span>
+    <div class="card">
+      <div class="chips"><span class="chip done">shipped 2 Sep</span><span class="chip acc">/audit</span></div>
+      <h3>Security pass, before the repository goes public</h3>
+      <p class="why">Done &middot; six findings, five fixed, deployed to production</p>
+      <p>
+        You intend to publish this as a reference project. That is the single constraint here that
+        isn't self-imposed, which is what earns it the top slot &mdash; everything else can wait
+        for you, this one waits for a decision you've already made.
+      </p>
+      <p>
+        It starts from real ground rather than a blank page: <code>INVARIANTS.md</code> has seven
+        rules with named enforcers, and the 24-test denial suite already proves object-level
+        authorization from the refused side. The first finding is waiting: the Dockerfile copies
+        the entire build context with no ignore file, so an <code>.env</code> present at build
+        time is baked into the image. Confirm what the running image actually contains before
+        deciding whether that's hygiene or a live exposure.
+      </p>
+      <p class="ev">Dockerfile:25 &mdash; COPY . .   (no .dockerignore in the repo)
+gitleaks over full history: clean, both repos, verified 2026-09-02</p>
+      <div class="shipped">
+        <p><strong>What it found.</strong> Threat model set with the Owner: the asset is real
+        student names and attendance history, the attacker is a logged-in teacher probing other
+        teachers' rows, the worst outcome is student data reaching a teacher with no right to it.
+        Six findings. Two were <em>exploited</em> &mdash; demonstrated, not asserted.</p>
+        <p class="ev">1  password change revoked NOTHING &mdash; a refresh token stolen beforehand kept
+minting sessions for 30 days. revoke_all_user_tokens existed with zero callers.   b24e2cc, now INV-8
+2  COPY . . baked .env (SECRET_KEY), .git and venv/ into the image                 d4be8a2 + gate 0276098
+   (a DEVELOPER build; production checked 3 Sep, never affected -- see the banner)
+3  the 30-day refresh cookie was scoped .kotoio.fi, so Vercel received it too      f6496f1 + guard 60ed9e8
+4  docs claimed 7-day refresh tokens; code and every runtime config say 30         63f8ae6, e22b49c
+6  conftest.py told developers to point drop_all at port 5433 &mdash; another project's db   f1b79bc
+&mdash;  dependencies are unpinned: NOT fixed, see the new row below</p>
+        <p><strong>What held up.</strong> All 17 class-reaching routes are covered from the denied
+        side. No raw SQL, no shell-out, no outbound fetch anywhere in <code>app/</code>. No secret
+        was ever committed in any of the four repositories.</p>
+        <p><strong>Deployed.</strong> Run 33641739482, all four jobs green, backup verified at
+        35,620&nbsp;bytes, healthy after 3 attempts. The first push went red on a test of mine that
+        read the machine instead of the default &mdash; the deploy was skipped and production was
+        never touched, which is the gate working.</p>
+      </div>
+    </div>
+  </li>
+
+  <li class="item">
+    <span class="rank" aria-hidden="true">2</span>
+    <div class="card">
+      <div class="chips"><span class="chip hold">blocks everything after it</span><span class="chip rest">client-app</span></div>
+      <h3>Make the client test suite honest</h3>
+      <p class="why">Why second &middot; three gates are ratchets until this is done</p>
+      <p>
+        25 of 90 tests fail on <code>main</code>, and one makes a real network request to
+        <code>localhost:8000</code>. They are localStorage-era tests asserting an API that no
+        longer exists &mdash; <code>localStorage.getItem('currentUser')</code>, a
+        <code>signup()</code> that returned a boolean.
+      </p>
+      <p>
+        This is the least glamorous item and the one I'd argue hardest for. Because the count is
+        absorbed as a baseline, the typecheck, lint and test gates all block <em>accumulation</em>
+        rather than proving anything. Both authentication bugs fixed on 2 September shipped past a
+        suite structurally incapable of catching them. Fix at the <code>src/api</code> seam, never
+        by raising the baseline.
+      </p>
+      <p class="ev">src/contexts/__tests__/AuthContext.test.tsx  &mdash; the stale file
+.harness-baseline  &mdash; typecheck=26  lint=16  tests=25
+measured 2026-09-02: 25 failures with and without a listener on the API port</p>
+    </div>
+  </li>
+
+  <li class="item">
+    <span class="rank" aria-hidden="true">3</span>
+    <div class="card">
+      <div class="chips"><span class="chip live">live defect</span><span class="chip acc">ready to spec</span><span class="chip rest">both repos</span></div>
+      <h3>The five-year legacy-student filter</h3>
+      <p class="why">Why third &middot; the only defect a user can actually hit</p>
+      <p>
+        Three faults in one feature. It filters <code>Student.created_at</code> while this repo's
+        own docs, the root <code>CLAUDE.md</code> and the frontend's type comment all say
+        <em>first attendance</em> &mdash; and for every student the entity migration created, that
+        date <strong>is</strong> the migration date. The <code>legacy</code> parameter defaults to
+        on and no component ever sets it, so the cutoff cannot be switched off from the app. And it
+        has never once fired: the app launched in November 2025, so the first silent disappearance
+        is due around November 2030.
+      </p>
+      <p>
+        Your decision is already recorded &mdash; keep the cutoff on by default, and add a way to
+        reveal old students so they can be deleted. So this is a small feature, not a removal, and
+        it is ready for <code>/grill-with-docs</code> today. Fix the date field in the same slice.
+      </p>
+      <p class="ev">app/services/attendance_service.py:124-128  &mdash; filters created_at
+app/api/attendance.py:84                &mdash; legacy defaults to None = filter on
+client-app/src/api/attendance.ts:20     &mdash; typed, never set by any component</p>
+    </div>
+  </li>
+
+  <li class="item">
+    <span class="rank" aria-hidden="true">4</span>
+    <div class="card">
+      <div class="chips"><span class="chip hold">two slices, this order</span><span class="chip acc">ready to spec</span></div>
+      <h3>Consolidate INV-1, then shared classes</h3>
+      <p class="why">Why fourth &middot; the second slice is cheap only after the first</p>
+      <p>
+        You intend shared classes &mdash; two teachers on one class. <code>INV-1</code> is worded
+        &ldquo;a teacher <em>associated with</em> a class&rdquo; precisely so the rule survives that
+        change and only the definition of <em>associated</em> moves.
+      </p>
+      <p>
+        But it is implemented at <strong>seven</strong> sites, three of them raising the same
+        refusal with three different messages. Shared classes against seven sites is seven edits
+        with an eighth easy to miss; against one owner it is a single edit.
+        <code>get_attendance_statistics</code> folds into the same work &mdash; it takes no
+        <code>teacher</code> at all, so its only check lives in the route and any second caller
+        gets none.
+      </p>
+      <p class="ev">class_service.py:54, :151, :194, :226
+student_service.py:579
+attendance_service.py:80, :286
+attendance_service.py:389  &mdash; get_attendance_statistics, no teacher argument
+target seam: verify_class_ownership(db, class_id, teacher)</p>
+    </div>
+  </li>
+
+  <li class="item done">
+    <span class="rank" aria-hidden="true">&check;</span>
+    <div class="card">
+      <div class="chips"><span class="chip done">shipped 2 Sep</span><span class="chip rest">harness</span></div>
+      <h3>A type gate for the API</h3>
+      <p class="why">Done &middot; the biggest remaining hole in the harness, closed</p>
+      <p>
+        There is no type checking in the backend at all. The <code>justfile</code> once declared
+        <code>typecheck: mypy app</code>, but mypy was never installed, so that gate never existed;
+        <code>/harness</code> removed the false recipe rather than leave it lying. Adding it was
+        deliberately deferred in ADR-0001 &mdash; no annotation discipline exists yet, so the
+        opening baseline would be large and unmeasured.
+      </p>
+      <p>
+        Cheapest useful slice: mypy in <code>--ignore-missing-imports</code> mode over
+        <code>app/services</code> only, as a ratchet like ruff.
+      </p>
+      <p class="ev">CODING_STANDARDS.md &mdash; "[types] appears nowhere in this file because
+nothing earns it. This is the biggest remaining hole in this repo's harness."</p>
+      <div class="shipped">
+        <p><strong>Scope widened, deliberately.</strong> ADR-0001 deferred mypy because the opening
+        baseline "would be large and unmeasured". Measured, it is <strong>16 errors across 9 files
+        out of 35</strong> &mdash; so the deferral expired on its own terms, and the gate covers all
+        of <code>app/</code> rather than the <code>app/services</code> slice planned here. Four of
+        the 16 are in <code>app/api/auth.py</code> and a services-only gate would have missed every
+        one of them. ADR-0004 records that, with its rejected alternatives.</p>
+        <p class="ev">just typecheck           mypy 2.3.1 ratchet, baseline 16, in check-fast and CI
+proven by breaking it:  clean -&gt; ok  |  add a type error -&gt; FAIL  |  revert -&gt; ok
+                        baseline 17 -&gt; ratchets DOWN to 16  |  bad flag -&gt; FAIL (crash guard)
+end to end:             staging a type error and running `git commit` was REFUSED by the hook</p>
+        <p><strong>Two harness defects surfaced on the way,</strong> both fixed: the ratchet scored a
+        <em>crashed</em> tool as 0 problems &mdash; a green gate and a wiped baseline from a tool that
+        never ran (ab55f49) &mdash; and <code>.githooks/pre-commit</code> claimed to run
+        <code>just check-fast</code> while listing the gates inline, so the two had already drifted
+        and the new type gate would not have run on commit.</p>
+      </div>
+    </div>
+  </li>
+
+  <li class="item">
+    <span class="rank" aria-hidden="true">6</span>
+    <div class="card">
+      <div class="chips"><span class="chip rest">hygiene</span><span class="chip acc">/prune</span></div>
+      <h3>The dead-code sweep</h3>
+      <p class="why">Why last &middot; real value, no urgency, and it grows while you wait</p>
+      <p>
+        Two provably-dead client modules are exempted from the orphan gate rather than deleted;
+        <code>src/lib/classes.ts</code> is kept alive solely by its own tests; one upward boundary
+        violation is exempted where hooks reach into components. Each exemption is a line in a
+        config that reads like policy and is actually debt.
+      </p>
+      <p class="ev">client-app/.dependency-cruiser.cjs &mdash; no-orphans, two baseline exemptions
+src/lib/attendance.ts, src/components/ui/aspect-ratio.tsx</p>
+    </div>
+  </li>
+
+</ol>
+
+<div class="constraint">
+  <p class="why">The one ordering rule I'd defend hardest</p>
+  <p>
+    <strong>Don't start shared classes before the INV-1 consolidation, and don't start either
+    before the client tests are honest.</strong> A permission change is the worst possible thing to
+    ship against a suite you can't trust &mdash; and this project has already proved that once, when
+    deleting an ownership filter left all 262 tests green with byte-identical coverage.
+  </p>
+</div>
+
+<h2>Everything else</h2>
+<p class="section-note">
+  Not ranked, because ranking these would imply a sequence that doesn't exist. Each is
+  independent and small enough to fold into a session that's already touching the area.
+</p>
+
+<div class="scroller">
+  <table>
+    <caption>Small and independent</caption>
+    <thead>
+      <tr><th scope="col">Item</th><th scope="col">Where</th><th scope="col">Status</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>student_service.py</code> is a core service at 29% coverage</td>
+        <td class="where">app/services/student_service.py</td>
+        <td class="st"><span class="chip hold">open</span></td>
+      </tr>
+      <tr>
+        <td><code>Settings</code> is an import-time singleton reading the ambient environment, so a test's result depends on who runs it.
+          <strong>No longer hypothetical:</strong> on 2 Sep a new test asserted
+          <code>cookie_domain is None</code>, passed locally, and failed in CI, which sets
+          <code>COOKIE_DOMAIN: ''</code>. The suite's own fixture existed for exactly this and the
+          variable simply was not on its list &mdash; the second occurrence of the same shape
+          (fixed in c2caea6)</td>
+        <td class="where">app/config.py:82, tests/test_config.py</td>
+        <td class="st"><span class="chip hold">open</span></td>
+      </tr>
+      <tr>
+        <td>Formatting is not gated &mdash; 33 of 51 files would change under <code>ruff format</code></td>
+        <td class="where">justfile &mdash; just fmt</td>
+        <td class="st"><span class="chip rest">open</span></td>
+      </tr>
+      <tr>
+        <td>55 of the 93 ruff findings are auto-fixable; run as its own commit, not folded into a feature</td>
+        <td class="where">.harness-baseline &mdash; ruff=93</td>
+        <td class="st"><span class="chip rest">open</span></td>
+      </tr>
+      <tr>
+        <td>Two <code>#&nbsp;noqa:&nbsp;E712</code> suppressions with no confession entry &mdash; the drift gate is a <em>diff</em> gate, so it never saw them</td>
+        <td class="where">app/services/refresh_token_service.py:50, :73</td>
+        <td class="st"><span class="chip rest">open</span></td>
+      </tr>
+      <tr>
+        <td>A root <code>.github/</code> workflow that can never run &mdash; the project root is not a repository</td>
+        <td class="where">.github/workflows/backend-tests.yml</td>
+        <td class="st"><span class="chip rest">open</span></td>
+      </tr>
+      <tr>
+        <td>Two committed lockfiles in the client</td>
+        <td class="where">client-app/</td>
+        <td class="st"><span class="chip rest">open</span></td>
+      </tr>
+      <tr>
+        <td>Hard-coded value marked for UI configuration</td>
+        <td class="where">client-app/src/pages/ClassStatistics.tsx:23</td>
+        <td class="st"><span class="chip rest">open</span></td>
+      </tr>
+      <tr>
+        <td>The client's <code>CLAUDE.md</code> test and coverage claims still don't match the code</td>
+        <td class="where">client-app/CLAUDE.md</td>
+        <td class="st"><span class="chip rest">open</span></td>
+      </tr>
+      <tr>
+        <td><strong>Dependencies are unpinned</strong> &mdash; 21 <code>&gt;=</code> ranges, no lockfile, so every
+          build re-resolves. The deployed image installs FastAPI <strong>0.141.1</strong> while the
+          330 tests run against <strong>0.121.3</strong>. Both serve correctly, so this is not a live
+          break; it means the gates prove nothing about the artifact that actually deploys. Not
+          fixed inside <code>/audit</code> because a lockfile moves every dependency at once</td>
+        <td class="where">requirements.txt, Dockerfile:22</td>
+        <td class="st"><span class="chip hold">new</span></td>
+      </tr>
+      <tr>
+        <td><code>cookie_samesite</code> is typed <code>str</code> where Starlette wants
+          <code>Literal['lax','strict','none']</code>, so <code>COOKIE_SAMESITE=laxx</code> is
+          accepted silently. Four of the 16 baselined mypy findings, and the only cluster with a
+          behavioural argument behind it &mdash; the obvious next type slice</td>
+        <td class="where">app/api/auth.py:61, :106, :178, :220</td>
+        <td class="st"><span class="chip hold">new</span></td>
+      </tr>
+      <tr>
+        <td><code>db-test</code> is still published on port <strong>5433</strong>, which is another
+          project's <code>platform-postgres</code> on this machine, so that service cannot start.
+          The repo's own instructions were fixed; this port was left alone as a choice you may want
+          to make deliberately</td>
+        <td class="where">deployment/local/docker-compose.yml:35</td>
+        <td class="st"><span class="chip hold">new</span></td>
+      </tr>
+      <tr>
+        <td><code>API_REFERENCE.md</code> exists twice and both copies carried the same wrong claim,
+          so one fact needed two edits</td>
+        <td class="where">API_REFERENCE.md, docs/API_REFERENCE.md</td>
+        <td class="st"><span class="chip hold">new</span></td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="scroller" style="margin-top:1.5rem">
+  <table>
+    <caption>Needs a decision from you, not code</caption>
+    <thead>
+      <tr><th scope="col">Question</th><th scope="col">Where</th><th scope="col">Status</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>The Finnish UI says &ldquo;Kurssi&rdquo;, the API says <code>Class</code>. Both are correct in their own place &mdash; but the term is unresolved in <strong>both</strong> glossaries, which is how a project ends up with two words for one thing</td>
+        <td class="where">CONTEXT.md:42 in both repos</td>
+        <td class="st"><span class="chip hold">your call</span></td>
+      </tr>
+      <tr>
+        <td>No accessibility enforcer exists anywhere, so every A11Y rule is <code>[review-only]</code> and there is no <code>DESIGN.md</code>. The web profile names three cheap enforcers; this is a <code>/design-brief</code> decision before it is a task</td>
+        <td class="where">client-app &mdash; no DESIGN.md</td>
+        <td class="st"><span class="chip hold">your call</span></td>
+      </tr>
+      <tr>
+        <td>Vercel's git integration must stay disconnected or CI's gate silently becomes advisory again and two deploys race. <strong>Nothing in the repo can detect a reconnect</strong></td>
+        <td class="where">Vercel &rarr; Settings &rarr; Git</td>
+        <td class="st"><span class="chip hold">remember</span></td>
+      </tr>
+      <tr>
+        <td>The real production <code>CORS_ORIGINS</code>. It lives in the server's
+          <code>.env</code>, so no repository can show it. No wildcard is prescribed anywhere, and
+          <code>allow_credentials=True</code> makes a wildcard genuinely dangerous rather than
+          merely untidy</td>
+        <td class="where">app/main.py:69, the server's deployment/production/.env</td>
+        <td class="st"><span class="chip hold">your call</span></td>
+      </tr>
+      <tr>
+        <td><code>gitleaks</code> is gated in CI but is <strong>not installed on this machine</strong>, so
+          the pre-commit hook cannot run it and a local audit cannot reproduce the CI result. History
+          was checked independently at file level instead &mdash; no <code>.env</code>, key or
+          certificate was ever committed in any of the four repositories</td>
+        <td class="where">both CI workflows; no local binary</td>
+        <td class="st"><span class="chip hold">your call</span></td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="scroller" style="margin-top:1.5rem">
+  <table>
+    <caption>Accepted with reason &mdash; recorded so they aren't re-litigated</caption>
+    <thead>
+      <tr><th scope="col">Item</th><th scope="col">Why it stands</th><th scope="col">Status</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>A mandatory email is <code>NOT NULL</code>, which is not the same as a real address &mdash; <code>''</code> is still storable</td>
+        <td>Legacy rows carry <code>''</code>, so a stricter check would fail on the rows you chose to keep. Inert: those rows are revoked, and an empty address matches nobody. Free to tighten once they're purged</td>
+        <td class="st"><span class="chip rest">accepted</span></td>
+      </tr>
+      <tr>
+        <td>108 gitleaks findings allowlisted in history</td>
+        <td>All documentation placeholders, allowlisted by <em>value</em> and not by path, so a real token in the same file still fails. Proven by planting one</td>
+        <td class="st"><span class="chip rest">accepted</span></td>
+      </tr>
+      <tr>
+        <td>The migration backfill was proven on seeded rows</td>
+        <td><strong>Superseded 2026-09-02:</strong> it ran against a restored production backup &mdash; four migrations up, four down, four up, byte-identical counts across six tables</td>
+        <td class="st"><span class="chip acc">closed</span></td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<footer>
+  <p>
+    Generated from the ledgers rather than from memory, on 2 September 2026, immediately after
+    spec&nbsp;0001 shipped. The sweep itself turned up one item: spec&nbsp;0001 claimed the
+    Dockerfile finding already had a <code>REVIEW-DEBT.md</code> entry, and it did not &mdash;
+    <code>grep -c</code> returned 0, five commits later. That entry now exists.
+  </p>
+  <p>
+    <strong>Updated the same day, after items 1 and 5 shipped.</strong> Both are marked done above
+    with the evidence rather than a tick: commit SHAs, the gate proofs, and the deploy run. Four
+    rows were added that this session produced rather than found &mdash; unpinned dependencies, the
+    <code>samesite</code> typing, the 5433 port, and the duplicated API reference &mdash; and the
+    <code>Settings</code> singleton row picked up a real example, having stopped being hypothetical
+    at 14:14 when it turned CI red.
+  </p>
+  <p>
+    The counts at the top changed basis and are worth reading rather than trusting: they now count
+    rows that exist in this document (4 ranked remaining, 13 small, 5 needing a decision, 3
+    accepted), not the 27 the earlier sweep reported under a rule this file never wrote down.
+  </p>
+  <p>
+    This file lives at the project root, which is not a git repository, so it is not versioned.
+    Move it into one of the four repositories if you want its history.
+  </p>
+</footer>
+
+</div>
+</body>
+</html>
