@@ -38,7 +38,9 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 - **What green CI does NOT prove here:** nothing. CI is unaffected and remains the real enforcer —
   this is purely the local fast feedback loop. The risk is a false sense of protection: you commit,
   see no complaint, and assume the gates ran.
-- **Disposition:** open. The shape of the fix is one root hook that inspects the staged paths and
+- **Disposition:** **fixed 2026-09-03** by `.githooks/pre-commit` at the repository root, proven
+  on all three dispatch paths (docs-only runs nothing, api/ runs its gates, client/ runs its own).
+  husky is removed. The original plan, kept for the record: one root hook that inspects staged paths and
   dispatches — `api/**` runs the API's fast set, `client/**` runs the client's, a commit touching
   both runs both. Deliberately not done during the migration: it wants its own change, and it must
   be proven by breaking it in each package separately, which is exactly the ceremony that does not

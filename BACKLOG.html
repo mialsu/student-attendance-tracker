@@ -543,13 +543,17 @@ src/lib/attendance.ts, src/components/ui/aspect-ratio.tsx</p>
         <td class="st"><span class="chip rest">open</span></td>
       </tr>
       <tr>
-        <td>A root <code>.github/</code> workflow that can never run &mdash; the project root is not a repository</td>
-        <td class="where">.github/workflows/backend-tests.yml</td>
-        <td class="st"><span class="chip rest">open</span></td>
+        <td>A root <code>.github/</code> workflow that can never run &mdash; the project root is not a repository.
+          <strong>Closed 3 Sep:</strong> the file lived in the unversioned project root, which the monorepo
+          migration replaced. The root now <em>is</em> a repository and its three workflows all run</td>
+        <td class="where">was .github/workflows/backend-tests.yml</td>
+        <td class="st"><span class="chip done">closed</span></td>
       </tr>
       <tr>
-        <td>Two committed lockfiles in the client</td>
-        <td class="where">client/</td>
+        <td>Two committed lockfiles in the client &mdash; <code>bun.lockb</code> and
+          <code>package-lock.json</code>. CI and the hooks both use <code>npm ci</code>, so the bun
+          lockfile is decorative and can disagree silently. Pick one</td>
+        <td class="where">client/bun.lockb, client/package-lock.json</td>
         <td class="st"><span class="chip rest">open</span></td>
       </tr>
       <tr>
