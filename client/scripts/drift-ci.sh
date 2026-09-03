@@ -16,7 +16,10 @@
 #        scripts/drift-ci.sh --print  # print the resolved range only (for testing)
 
 set -uo pipefail
-cd "$(git rev-parse --show-toplevel)" || exit 2
+# Anchor on THIS package, not on the git root. They were the same directory while client-app was
+# its own repository; in the monorepo the git root is one level up and every relative path below
+# (./scripts/*, .harness-baseline, src/) silently pointed at nothing.
+cd "$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)" || exit 2
 
 resolve_range() {
   if [ "${GITHUB_EVENT_NAME:-}" = "pull_request" ] && [ -n "${GITHUB_BASE_REF:-}" ]; then

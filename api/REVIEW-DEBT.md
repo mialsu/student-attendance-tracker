@@ -6,6 +6,25 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 
 <!-- Newest first. -->
 
+## 2026-09-03 — two pre-commit hook systems, one repository, and git allows one hooksPath
+- **What:** the monorepo inherited two independent local-hook setups. `api/` uses `.githooks` wired
+  by `git config core.hooksPath .githooks` (`just install-hooks`); `client/` uses **husky**, which
+  wires `core.hooksPath` to its own directory. `core.hooksPath` is a single repository-wide
+  setting, so **only one of them can be active** — whichever was configured last silently wins and
+  the other package commits with no gates at all.
+- **Where:** `api/.githooks/pre-commit`, `client/.husky/pre-commit`, `api/justfile` (`install-hooks`)
+- **What green CI does NOT prove here:** nothing. CI is unaffected and remains the real enforcer —
+  this is purely the local fast feedback loop. The risk is a false sense of protection: you commit,
+  see no complaint, and assume the gates ran.
+- **Disposition:** open. The shape of the fix is one root hook that inspects the staged paths and
+  dispatches — `api/**` runs the API's fast set, `client/**` runs the client's, a commit touching
+  both runs both. Deliberately not done during the migration: it wants its own change, and it must
+  be proven by breaking it in each package separately, which is exactly the ceremony that does not
+  belong in the middle of moving four repositories.
+- Found by reading `client/.husky/pre-commit` while fixing the same package-root anchoring bug the
+  API scripts had.
+
+
 ## 2026-09-03 — the deployment repo could not be deployed on its own, and nginx.conf changes were inert
 - **What:** the `deployment` repo has **no workflow of its own**. It reaches the VM only through the
   API's deploy job (`deploy.yml:257-258`, `git -C deployment reset --hard origin/master`), so a

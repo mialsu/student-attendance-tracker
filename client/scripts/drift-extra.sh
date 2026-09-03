@@ -22,7 +22,10 @@
 #        scripts/drift-extra.sh --cached        (staged only — the pre-commit form)
 
 set -uo pipefail
-cd "$(git rev-parse --show-toplevel)" || exit 2
+# Anchor on THIS package, not on the git root. They were the same directory while client-app was
+# its own repository; in the monorepo the git root is one level up and every relative path below
+# (./scripts/*, .harness-baseline, src/) silently pointed at nothing.
+cd "$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)" || exit 2
 
 # Banned COMPOUND identifiers, with the canonical term to use instead.
 # Format: regex<TAB>replacement guidance

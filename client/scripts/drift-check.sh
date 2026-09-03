@@ -29,7 +29,10 @@
 
 set -uo pipefail
 
-cd "$(git rev-parse --show-toplevel)" || exit 2
+# Anchor on THIS package, not on the git root. They were the same directory while client-app was
+# its own repository; in the monorepo the git root is one level up and every relative path below
+# (./scripts/*, .harness-baseline, src/) silently pointed at nothing.
+cd "$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)" || exit 2
 
 MAX_NEW_FILE_LINES="${MAX_NEW_FILE_LINES:-400}"
 LEDGER="${LEDGER:-REVIEW-DEBT.md}"

@@ -1,4 +1,4 @@
-name: CI & Deploy
+name: Backend
 
 # Gates and tests run on every push and PR. Deploy runs only after ALL of them are green, and only
 # on a push to main.
