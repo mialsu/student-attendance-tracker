@@ -154,8 +154,16 @@ describe('AttendanceTracking Component', () => {
 
     expect(mockMutate).toHaveBeenCalledWith({
       classId: mockClassId,
-      data: { student_name: 'John Doe', quantity: 1 },
+      data: {
+        student_name: 'John Doe',
+        quantity: 1,
+        timestamp: expect.any(String),
+      },
     });
+
+    // Asserting the day, not the instant: the component stamps the current time.
+    const [{ data }] = mockMutate.mock.calls[0];
+    expect(new Date(data.timestamp).toDateString()).toBe(new Date().toDateString());
   });
 
   it('should support bulk logging with quantity', async () => {
@@ -195,8 +203,16 @@ describe('AttendanceTracking Component', () => {
 
     expect(mockMutate).toHaveBeenCalledWith({
       classId: mockClassId,
-      data: { student_name: 'John Doe', quantity: 5 },
+      data: {
+        student_name: 'John Doe',
+        quantity: 5,
+        timestamp: expect.any(String),
+      },
     });
+
+    // Asserting the day, not the instant: the component stamps the current time.
+    const [{ data }] = mockMutate.mock.calls[0];
+    expect(new Date(data.timestamp).toDateString()).toBe(new Date().toDateString());
   });
 
   it('should clear input fields after successful submission', async () => {

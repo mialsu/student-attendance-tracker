@@ -85,9 +85,10 @@ Enforced by `.dependency-cruiser.cjs`, and each rule below was proven by breakin
 
 - Test external behavior through the module's interface, never implementation detail.
   `[review-only]`
-- **A test must not make a real network call.** `src/contexts/__tests__/AuthContext.test.tsx`
-  currently reaches `http://localhost:8000` and fails with `ERR_NETWORK` — a test that depends on a
-  dev server is not a test. Mock at the `src/api` seam. `[review-only]`
+- **A test must not make a real network call.** Mock at the `src/api` seam. Enforced by
+  `src/test/setup.ts`, which refuses every `XMLHttpRequest` and `fetch` and re-throws the attempt
+  after the test, so swallowing the rejection does not hide it. Proven by probe on 2026-09-03:
+  an awaited request, a swallowed one and a `fetch` all go red. `[script]`
 - A test is not a reason to keep dead code alive. `src/lib/classes.ts` has zero production
   importers and 26 passing tests; that is 26 tests guarding a module the app does not use.
   `[review-only]`

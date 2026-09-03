@@ -257,21 +257,35 @@ it('should handle form submission', async () => {
 
 ### Mocking Functions
 
+`src/api` is the seam this project mocks: the access token lives in memory inside it and the
+refresh token is an HttpOnly cookie, so neither is reachable from a test. Mocking here is also
+what keeps the suite off the network.
+
 ```typescript
 import { vi } from 'vitest';
-import * as classesLib from '@/lib/classes';
 
-vi.mock('@/lib/classes', () => ({
-  logClassAttendance: vi.fn(),
+vi.mock('@/api/auth', () => ({
+  authApi: {
+    login: vi.fn(),
+    getCurrentUser: vi.fn(),
+  },
 }));
 
-it('should call mocked function', () => {
-  const mockLog = vi.mocked(classesLib.logClassAttendance);
-  mockLog.mockReturnValue({ /* mock return */ });
+import { authApi } from '@/api/auth';
+
+it('holds the user the API returned', async () => {
+  vi.mocked(authApi.login).mockResolvedValue({
+    access_token: 'an-access-token',
+    token_type: 'bearer',
+    user: { id: 'u1', email: 'teacher@example.com', active: true, created_at: '2026-09-02T00:00:00Z' },
+  });
 
   // ... test code
 
-  expect(mockLog).toHaveBeenCalledWith(/* expected args */);
+  expect(authApi.login).toHaveBeenCalledWith({
+    email: 'teacher@example.com',
+    password: 'password123',
+  });
 });
 ```
 

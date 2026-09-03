@@ -6,6 +6,37 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 
 <!-- Newest first. -->
 
+## 2026-09-03 — a failed logout leaves the teacher looking signed in
+- **What:** `logout()` awaits `authApi.logout()` and only then clears state
+  (`src/contexts/AuthContext.tsx:62-64`). `authApi.logout` clears the in-memory access token in a
+  `finally` but re-throws (`src/api/auth.ts:17-23`), so when the request fails the `setUser(null)`
+  never runs. The screen still shows a signed-in teacher whose access token is already gone — and
+  the refresh cookie is still valid, so the very next 401 silently refreshes them back in
+  (`src/api/client.ts:47-60`). Server-side, the refresh token was never revoked.
+- **Where:** `src/contexts/AuthContext.tsx:61-65`, `src/api/auth.ts:17-23`
+- **What green tests do NOT prove here:** the suite now pins this behaviour rather than fixing it —
+  `AuthContext.test.tsx`, "surfaces a failed logout instead of swallowing it". That test asserts
+  what the code does today, so it will turn red when the behaviour is corrected, which is the point.
+- **Disposition:** open — found while rewriting the suite, not while fixing behaviour, so it was
+  recorded rather than quietly changed. The Owner decides whether logout should clear local state
+  regardless of the request's fate. It is genuinely a judgement call: clearing on failure hides
+  from the teacher that the server still holds a live session.
+
+## 2026-09-03 — validateEmail's inline message is unreachable for a malformed address
+- **What:** the email field is `type="email"` and `required` (`src/pages/Auth.tsx:112-118`), so the
+  browser's own constraint validation refuses the submit and `handleSubmit` never runs. The inline
+  message set at `src/pages/Auth.tsx:30` therefore cannot appear for an address like
+  `invalid-email`. It is reachable only in the gap between native validation and the stricter regex
+  at `:27` — `a@b` passes the browser and fails the regex.
+- **Where:** `src/pages/Auth.tsx:26-34`, `:112-121`
+- **What green tests do NOT prove here:** two tests used to assert that message appeared and had
+  been failing since the field became `type="email"`. The rewritten test asserts the guarantee that
+  actually holds — a malformed address never becomes a request — so the unreachable branch is now
+  documented instead of falsely covered.
+- **Disposition:** open, low. Either drop the regex and let the browser own the rule, or drop
+  `type="email"` and let the regex own it. Two validators for one rule is the defect; which one
+  survives is the Owner's call.
+
 ## 2026-09-02 — reloading any protected page logs you out, though the session is valid
 - **What:** `AuthContext` starts `loading` at `false` (`src/contexts/AuthContext.tsx:20`).
   `ProtectedRoute` renders **before** its own `useEffect` runs, so its first render sees
@@ -170,7 +201,15 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 - **What green tests do NOT prove here:** auth, login, logout, email change and password change are
   effectively **untested** despite appearing in the suite. `CLAUDE.md` claims "94.14% coverage" for
   this repo; that figure does not describe this tree.
-- **Disposition:** open — these may be real product bugs rather than test bugs. Not diagnosed.
+- **Disposition:** **RESOLVED 2026-09-03.** Diagnosed, and none of the 25 was a product bug.
+  Three causes: `AuthContext.test.tsx` (19) and `auth-flow.test.tsx` (4) asserted a localStorage
+  auth context that no longer exists — `signup()` returning a boolean, `isTeacher`, the `users`
+  and `currentUser` keys — and `AttendanceTracking.test.tsx` (2) held a strict-equality payload
+  that omitted the `timestamp` the component correctly sends. All three files were rewritten
+  against the real seam (`vi.mock('@/api/auth')`, the pattern `Index.test.tsx` and
+  `ProtectedRoute.test.tsx` already used), each proven by mutating the production file and
+  watching the new tests go red. The network call is gone and can no longer come back — see the
+  enforcer in `src/test/setup.ts`, proven by probe.
 
 ## 2026-09-01 — CLAUDE.md's test and coverage claims do not match the code
 - **What:** `CLAUDE.md` states the frontend has 94.14% coverage and the backend "241 tests, 82%
