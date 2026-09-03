@@ -1,3 +1,12 @@
+# Compose derives the project name from this file's directory, which is `production` — verified
+# on the VM: the running containers carry com.docker.compose.project=production. That was fine by
+# accident, not by design: a project rename would orphan the running containers, and `up -d` would
+# then fail with "the container name is already in use" against its own stack.
+#
+# Pinned so it can never depend on a directory again. The value is the one already in use, so this
+# changes nothing today and prevents a whole class of surprise later.
+name: production
+
 services:
   # PostgreSQL Database
   db:
