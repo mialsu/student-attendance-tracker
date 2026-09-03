@@ -22,7 +22,10 @@
 # Usage: scripts/drift-extra.sh [<git range>] | scripts/drift-extra.sh --cached
 
 set -uo pipefail
-cd "$(git rev-parse --show-toplevel)" || exit 2
+# Anchor on THIS package, not on the git root. They were the same thing while the API was its
+# own repository; in the monorepo the git root is one level up and every relative path below
+# (./venv/bin/ruff, .harness-baseline, app/, tests/) silently pointed at nothing.
+cd "$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)" || exit 2
 
 BANNED=$(cat <<'EOT'
 student_(first|last)_name	Student has one normalized `name` column — the first/last split was removed by the Student-entity migration

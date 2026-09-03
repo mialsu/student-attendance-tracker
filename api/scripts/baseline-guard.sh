@@ -21,7 +21,10 @@
 #   - Per-file scoping is what lint-staged does on commit; this is the whole-repo umbrella number.
 
 set -uo pipefail
-cd "$(git rev-parse --show-toplevel)" || exit 2
+# Anchor on THIS package, not on the git root. They were the same thing while the API was its
+# own repository; in the monorepo the git root is one level up and every relative path below
+# (./venv/bin/ruff, .harness-baseline, app/, tests/) silently pointed at nothing.
+cd "$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)" || exit 2
 
 NAME="${1:?usage: baseline-guard.sh <name> <cmd...>}"; shift
 BASELINE_FILE=".harness-baseline"
