@@ -89,9 +89,9 @@ Enforced by `.dependency-cruiser.cjs`, and each rule below was proven by breakin
   `src/test/setup.ts`, which refuses every `XMLHttpRequest` and `fetch` and re-throws the attempt
   after the test, so swallowing the rejection does not hide it. Proven by probe on 2026-09-03:
   an awaited request, a swallowed one and a `fetch` all go red. `[script]`
-- A test is not a reason to keep dead code alive. `src/lib/classes.ts` has zero production
-  importers and 26 passing tests; that is 26 tests guarding a module the app does not use.
-  `[review-only]`
+- A test is not a reason to keep dead code alive. The orphan gate counts a test file as an
+  importer, so a module whose only caller is its own test walks straight past it. `src/lib/classes.ts`
+  did exactly that with 26 passing tests and was deleted on 2026-09-03. `[review-only]`
 - No skipped, focused, or silently-deleted test lands without a `REVIEW-DEBT.md` entry. `[script]`
 - Green tests gate; they do not prove. The live exercise proves (PRINCIPLES #1). `[review-only]`
 
