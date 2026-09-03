@@ -1,0 +1,56 @@
+#!/bin/bash
+# MOTD banner — shows SSL certificate health on every SSH login.
+#
+# This is the whole local alerting story: the 2026 outage went unnoticed for 80
+# days because a failure was only ever visible to someone who went looking.
+# Now it is impossible to log into this box without seeing it.
+#
+# Must stay FAST: it reads a cached status file written by ssl-cert-check.timer
+# and asks systemd for the last certbot result. No network calls.
+#
+# Installed to /etc/update-motd.d/99-ssl-cert-status
+STATE_FILE="/var/lib/ssl-cert-check/status"
+
+RED='\033[1;31m'; YEL='\033[1;33m'; GRN='\033[0;32m'; DIM='\033[2m'; RST='\033[0m'
+
+problems=0
+
+# Parse rather than source: the banner runs as root on every login, so it must
+# never execute the contents of a file it merely reads.
+field() { sed -n "s/^$1=\"\\(.*\\)\"$/\\1/p" "$STATE_FILE" 2>/dev/null | head -1; }
+
+if [ -r "$STATE_FILE" ]; then
+    STATUS="$(field STATUS)"
+    MESSAGE="$(field MESSAGE)"
+    CHECKED="$(field CHECKED)"
+    case "${STATUS:-}" in
+        CRIT)
+            echo -e "${RED}✖ SSL: ${MESSAGE}${RST}"
+            echo -e "${RED}  Fix: cd /root/student-attendance-tracker/deployment/scripts && ./setup-ssl.sh${RST}"
+            problems=1
+            ;;
+        WARN)
+            echo -e "${YEL}⚠ SSL: ${MESSAGE}${RST}"
+            echo -e "${YEL}  Check: /root/student-attendance-tracker/deployment/scripts/check-ssl.sh${RST}"
+            problems=1
+            ;;
+        OK)
+            echo -e "${GRN}✔ SSL: ${MESSAGE}${RST}"
+            ;;
+    esac
+    echo -e "${DIM}  last checked: ${CHECKED:-never}${RST}"
+else
+    echo -e "${YEL}⚠ SSL: no certificate check has run yet.${RST}"
+    problems=1
+fi
+
+# The last unattended renewal attempt. A failed oneshot unit stays "failed"
+# until it next succeeds, so this needs no state file of its own.
+if systemctl is-failed --quiet certbot.service 2>/dev/null; then
+    echo -e "${RED}✖ SSL: the last automatic renewal FAILED.${RST}"
+    echo -e "${RED}  Why: journalctl -u certbot.service -n 30${RST}"
+    problems=1
+fi
+
+[ "$problems" -eq 1 ] && echo ""
+exit 0
