@@ -22,7 +22,12 @@ permissions:
 concurrency:
   # Supersede in-flight CI on the same ref, but never cancel a PR-unrelated main run mid-deploy
   # (the deploy job carries its own non-cancelling group).
-  group: ci-${{ github.ref }}
+  #
+  # github.workflow is IN the group deliberately: concurrency groups are REPOSITORY-wide, so while
+  # this was `ci-${{ github.ref }}` this workflow and backend.yml shared one slot and could cancel
+  # each other. It happened — Backend run 33743740347 on 2026-09-03, cancelled with zero jobs when
+  # a Frontend run took the pending slot. backend.yml carries the full account.
+  group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:

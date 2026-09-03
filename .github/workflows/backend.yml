@@ -26,7 +26,18 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.ref }}
+  # github.workflow is IN the group deliberately. Concurrency groups are REPOSITORY-wide, so while
+  # this was `ci-${{ github.ref }}` the Backend and Frontend workflows shared a single slot. GitHub
+  # allows one running run plus one pending run per group and cancels any third entrant, so on
+  # 2026-09-03 run 33743740347 (Backend, 87c0b6a) was cancelled one second after creation with zero
+  # jobs: ba9dfb5's Backend run was still going and a Frontend run took the pending slot. That
+  # commit's gates AND its deploy went with it, and the run list still read green, because a
+  # cancelled run is not a failure. Any push touching both api/ and client/ could do it again.
+  #
+  # Grouping per workflow keeps the behaviour that was wanted — a newer push to main supersedes an
+  # older run of THE SAME workflow, so the newest always survives and intermediate runs drop
+  # harmlessly — while two unrelated workflows no longer compete.
+  group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
