@@ -74,13 +74,24 @@ cut (`/confess`), read first by any architecture or review session, dispositione
   the opposite of one-finding-per-commit, and it wants its own gate run. Found by `/audit`.
 
 ## 2026-09-02 — what the security audit did not look at, and what stayed unproven
+
+> **Update 2026-09-03:** lead 1 is closed — the production image never contained a `.env`. Three
+> remain. See the strikethrough below rather than a deletion, so the check is not re-run from scratch.
 - **What:** `/audit` ran on 2026-09-02 against the four repositories **as committed**. It was
   static plus local execution only. Four leads could not be run down, and none of them can be
   settled from inside a repository:
-  1. **Whether the running production image contains a `.env`.** `.dockerignore` now prevents it
-     for every future build, but the currently-deployed image was built before that existed, and
-     the answer depends on whether the server's build context held a `.env` at the time. One `ls`
-     on the VM settles it. If it does, `SECRET_KEY` should be treated as disclosed and rotated.
+  1. ~~**Whether the running production image contains a `.env`.**~~ **CLOSED 2026-09-03: it does
+     not, and it never did.** All eight backend images on the VM were checked for `/app/.env` --
+     the live one and seven older ones going back two weeks, i.e. well before `.dockerignore`
+     existed. Every one clean. The reason is structural rather than lucky: the server's build
+     context is a **git clone**, `.env` is in `.gitignore:138` and was never committed, so it was
+     never in the context. A `find` over the VM turns up exactly one `.env`, in
+     `deployment/production/`, which is not the build context. **`SECRET_KEY` was never disclosed
+     and no rotation was needed.** The finding was real as a *mechanism* -- demonstrated by
+     building from a developer working tree, where a `.env` does exist -- and the leap from that to
+     "production may be affected" was mine and was never evidenced. `.dockerignore` and
+     `tests/test_packaging.py` stay: they are preventive now, and they still keep 3.2 MB of `.git`
+     and the host `venv/` out of the image.
   2. **The real production `CORS_ORIGINS`.** It lives in the server's `deployment/production/.env`.
      No wildcard is prescribed anywhere in the repos, and `allow_credentials=True` at
      `app/main.py:69` makes a wildcard there genuinely dangerous rather than merely untidy.
