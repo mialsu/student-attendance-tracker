@@ -182,6 +182,12 @@ jobs:
         # Shallow is fine now: only pip-audit remains here, and it reads requirements.txt.
         # The full history was for gitleaks, which moved to security.yml.
 
+      # python-version used to sit on the checkout step above, which does not accept it: Actions
+      # printed "Unexpected input(s) 'python-version'" on every run and ignored it, so pip-audit
+      # ran on whatever Python the runner happened to ship. It matched 3.12 by luck, not by
+      # pinning. The input almost certainly got orphaned when this job was trimmed and its
+      # setup-python went with gitleaks to security.yml.
+      - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
