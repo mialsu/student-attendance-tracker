@@ -6,6 +6,28 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 
 <!-- Newest first. -->
 
+## 2026-09-03 — a verification that cannot tell "found nothing" from "did not run"
+- **What:** before irreversibly deleting four GitHub repositories, a loop checked that every commit
+  on each remote existed in the monorepo. It reported `refs=0  missing=0  ✔ safe to delete` and was
+  **completely vacuous**: the URLs used plain `github.com` where this machine reaches GitHub through
+  a `github.com-personal` SSH alias, so `git ls-remote` failed on all four — and `2>/dev/null`
+  swallowed the error. Zero refs checked presented as zero refs missing.
+- **Where:** an ad-hoc shell loop, not committed anywhere. That is part of the point.
+- **Why it is worth a ledger entry anyway:** this is the *same defect* as `ab55f49`, fixed in
+  `scripts/baseline-guard.sh` earlier the same day, where a tool that failed to execute counted as
+  0 problems, beat a baseline of 93 and reported `improved — 0 (was 93). Baseline RATCHETED down`.
+  The lesson was written into the harness and then reintroduced hours later in a throwaway loop —
+  in the one place where the consequence was irreversible.
+- **The rule, generalised:** a check must be able to distinguish *"ran and found nothing"* from
+  *"did not run"*, and must fail loudly on the second. In practice: never `2>/dev/null` the command
+  whose success you are inferring; assert a **positive** count before concluding a negative one
+  (`total > 0 && missing == 0`, never `missing == 0` alone); and treat an empty result from a
+  network call as suspect by default.
+- **Disposition:** the rerun with the correct alias found 4 real refs, all present in the monorepo,
+  which is what actually justified the deletion. Nothing was lost. Recorded because the pattern
+  recurs and the harness can only enforce it where a script exists — this one had none.
+
+
 ## 2026-09-03 — two pre-commit hook systems, one repository, and git allows one hooksPath
 - **What:** the monorepo inherited two independent local-hook setups. `api/` uses `.githooks` wired
   by `git config core.hooksPath .githooks` (`just install-hooks`); `client/` uses **husky**, which

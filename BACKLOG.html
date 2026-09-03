@@ -285,13 +285,18 @@ footer p { margin: 0 0 .5rem; }
 </p>
 
 <div class="nownext">
-  <p class="why">Right now &middot; one small thing the 2 September deploy left on your desk</p>
+  <p class="why">Right now &middot; one small thing left over</p>
   <ol>
     <li><strong>Revoke <code>refresh_tokens</code> once.</strong> Teachers still hold the old
       <code>.kotoio.fi</code> cookie next to the new host-only one, so the first refresh fails and
       drops them on the login screen. Revoking retires the stale cookies instead of waiting out
       their 30 days. Hygiene, not urgency.</li>
   </ol>
+  <p><strong>Migrated 3 September.</strong> The four repositories are now one, at
+  <code>github.com/mialsu/student-attendance-tracker</code>. The organisation's repos and the
+  local and server copies are deleted; only the organisation shell remains, pending an
+  <code>admin:org</code> scope. Production deploys from the monorepo &mdash; cutover run
+  33733406991, verified live.</p>
   <p><strong>Checked 3 September and closed:</strong> the production image never contained a
   <code>.env</code>. All eight backend images on the VM were inspected, seven of them predating
   <code>.dockerignore</code> and reaching back two weeks &mdash; all clean, and structurally so,
