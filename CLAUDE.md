@@ -11,7 +11,7 @@ watched fail is not a gate (PRINCIPLES #2). Rules live in each repo's `CODING_ST
 everything the gates do **not** prove lives in each repo's `REVIEW-DEBT.md`. Read those two files
 before trusting anything in this one.
 
-**client-app** (`cd client-app`)
+**client** (`cd client`)
 ```bash
 npm run check              # everything, in order
 npm run gate:typecheck     # tsc ratchet   — baseline 26 errors  (.harness-baseline)
@@ -23,7 +23,7 @@ npm run drift:extra        # compound-vocabulary bans the segment matcher cannot
 ```
 Pre-commit hook: `.husky/pre-commit` (runs the same set, drift staged-only).
 
-**student-attendance-tracker-api** (`cd student-attendance-tracker-api`)
+**api** (`cd api`)
 ```bash
 just check-fast            # boundaries + drift + lint + typecheck (~10s, no db) — what the hook runs
 just check                 # fast set + the 330-test suite (~7 min, needs TEST_DATABASE_URL)
@@ -44,7 +44,7 @@ be large and unmeasured". Measured, it was 16 across 9 files. The 16 are confess
 Tests DROP tables, so `TEST_DATABASE_URL` is mandatory with no default. **Use the helper** — it
 starts a disposable database on port 5439 and prints the export line:
 ```bash
-cd student-attendance-tracker-api
+cd api
 eval "$(just test-db-up)"     # or: eval "$(./scripts/test-db.sh up)"
 just check                     # 286 tests, ~3.5 min
 just test-db-down              # destroys it; there is nothing worth keeping
@@ -191,16 +191,26 @@ traffic to the deployed app. Static and local only; nothing left this machine.
 
 ### Project Structure
 ```
-student-attendance-tracker/
-├── client-app/                      # React 18 + TypeScript frontend ✅
-├── student-attendance-tracker-api/  # FastAPI Python backend ✅
-├── deployment/                      # Deployment configurations ✅
-│   ├── local/                       # Local dev environment
-│   ├── production/                  # Production environment  
-│   ├── scripts/                     # Deployment helper scripts
-│   └── README.md                    # Deployment documentation
-└── knowledge-base/                  # Documentation repository ✅
+student-attendance-tracker/          ONE repository, github.com/mialsu (since 2026-09-03)
+├── api/                             FastAPI backend — gates, invariants, ADRs, review debt
+├── client/                          React 18 + TypeScript frontend
+├── deployment/                      compose, nginx, SSL and backup scripts
+│   ├── local/  production/  scripts/
+├── docs/                            architecture + the SSL / firewall / backend setup guides
+├── .github/workflows/               backend.yml · frontend.yml · security.yml
+├── CLAUDE.md  BACKLOG.html  README.md
 ```
+
+It was four separate repositories in a GitHub organisation until 2026-09-03. They were merged
+with `git subtree` rather than a history rewrite, deliberately: `REVIEW-DEBT.md`, `ADR-0004`,
+this file and `BACKLOG.html` all cite commit SHAs, and a rewrite would have invalidated every
+one. `knowledge-base` is gone as a name; its four files are `docs/`.
+
+**Why one repository:** `deployment/` had no independent lifecycle — it could not deploy itself,
+and a compose change only reached the VM when an unrelated backend push happened to run. One
+logical change (the 2026-09-02 cookie fix) took three repos, three merges and an ordering rule
+that existed only in the deploy script. Now `deployment/**` triggers the backend workflow and one
+commit ships the whole deployable unit.
 
 ### Tech Stack
 
@@ -587,7 +597,7 @@ ENVIRONMENT=development
 ### Backend Development
 ```bash
 # Create virtual environment
-cd student-attendance-tracker-api
+cd api
 python3.12 -m venv venv
 source venv/bin/activate  # Linux/Mac
 # or
@@ -622,7 +632,7 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 ### Frontend Development
 ```bash
-cd client-app
+cd client
 npm install
 npm run dev     # http://localhost:5173
 npm run test    # Run Vitest tests
@@ -709,7 +719,7 @@ pytest tests/test_auth.py -v
 
 ```bash
 # Backend
-cd student-attendance-tracker-api
+cd api
 pytest -v                                      # Run all tests
 pytest --cov=app --cov-report=html             # Run with coverage report
 ./scripts/run-tests.sh                         # Run tests (via helper script)
@@ -719,7 +729,7 @@ alembic current                                # Check current migration
 uvicorn app.main:app --reload                  # Dev server (port 8000)
 
 # Frontend
-cd client-app
+cd client
 npm run dev                                    # Dev server (port 5173)
 npm run test                                   # Run tests
 npm run test:coverage                          # Coverage report
@@ -736,7 +746,7 @@ npm run lint                                   # Lint check
 ./deployment/scripts/restore-db.sh production backup.sql  # Restore database
 
 # Seed test data (backend)
-cd student-attendance-tracker-api
+cd api
 ./scripts/seed-db.sh                           # Populate DB with test data
 
 # Docker (manual)
