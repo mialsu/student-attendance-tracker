@@ -1,0 +1,116 @@
+# Tool configuration only. Runtime dependencies live in requirements.txt — this file deliberately
+# declares no [project] table, so there is exactly one dependency manifest in this repo.
+
+[tool.ruff]
+line-length = 100          # matches CLAUDE.md's "Max line length: 100 characters"
+target-version = "py312"
+extend-exclude = ["venv", "alembic/versions", "htmlcov"]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "F",    # pyflakes
+    "I",    # isort — import ordering
+    "B",    # flake8-bugbear
+    "UP",   # pyupgrade
+    "DTZ",  # flake8-datetimez — timezone-naive datetimes, which matter in an attendance app
+    "RET",  # flake8-return
+    "PIE",  # flake8-pie
+    "RUF",  # ruff-specific
+]
+ignore = [
+    # `datetime.timezone.utc` -> `datetime.UTC`. Valid on 3.11+, but it is a naming preference, not
+    # a defect, and it fires 76 times — enough to bury the 7 F821 and 3 DTZ findings that do matter.
+    # A baseline number nobody reads is a baseline nobody defends.
+    "UP017",
+]
+
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI's dependency-injection idiom IS a function call in a default argument:
+#     async def route(db: AsyncSession = Depends(get_db))
+# B008 flags all 31 of them. Left unconfigured it would fire on every new endpoint forever,
+# which trains people to raise the baseline instead of reading it — the exact way a gate gets
+# tuned into silence. These are the framework's contract, not a defect.
+extend-immutable-calls = [
+    "fastapi.Depends",
+    "fastapi.Query",
+    "fastapi.Path",
+    "fastapi.Body",
+    "fastapi.Header",
+    "fastapi.Cookie",
+    "fastapi.File",
+    "fastapi.Form",
+    "fastapi.Security",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Test files legitimately shadow imported names with same-named fixtures.
+"tests/*" = ["F811"]
+
+# NOTE: F821 (undefined name) is deliberately NOT ignored for app/models/*, where it fires 7 times
+# on SQLAlchemy string forward references — `Mapped[list["Class"]]`. Those resolve at runtime via
+# SQLAlchemy's registry, so they are not bugs, but the honest fix is a `if TYPE_CHECKING:` import
+# block rather than an ignore that would also hide a real typo in a model. They stay in the
+# baseline as visible debt. See REVIEW-DEBT.md.
+
+# ── Boundary gate ─────────────────────────────────────────────────────────────────────────────────
+# import-linter (`lint-imports`). The layers below were read off the ACTUAL import graph, not
+# invented: `app.services` already imports no `app.api`, and `app.models` imports neither. The gate
+# freezes a property the code already has, which is the cheapest moment to install one.
+#
+# The web profile names dependency-cruiser, which is TypeScript-only; import-linter 2.14 is the
+# maintained Python equivalent and was verified installable before being chosen (/harness step 1).
+[tool.mypy]
+# The API's type gate, installed 2026-09-02. ADR-0004 supersedes ADR-0001's rejection of mypy:
+# that rejection rested on the opening baseline being "large and unmeasured", and measured it is
+# 16 errors across 35 files.
+#
+# A RATCHET, like ruff -- `just typecheck` fails when the count grows, not when it is above zero.
+# The 16 are real and listed in REVIEW-DEBT.md; none is a live defect.
+python_version = "3.12"
+files = ["app"]
+
+# Third-party packages without type stubs (passlib, jose, and friends) would otherwise drown the
+# real findings in import errors. This is the "cheapest useful slice" setting: it types OUR code
+# and declines to type theirs.
+ignore_missing_imports = true
+
+# Everything below is deliberately NOT enabled yet. Turning on disallow_untyped_defs today would
+# take the baseline from 16 to several hundred and make the number meaningless, which is the trap
+# ADR-0001 was right to avoid. They are the ratchet's future, one at a time, each with its own
+# measured baseline:
+#   disallow_untyped_defs, disallow_incomplete_defs, warn_return_any, strict_optional
+#
+# alembic/versions is generated -- ANTI-PATTERNS forbids touching generated files, so it is not
+# type-checked either.
+exclude = ["^venv/", "^alembic/versions/", "^htmlcov/", "^tests/"]
+
+[tool.importlinter]
+root_package = "app"
+
+[[tool.importlinter.contracts]]
+name = "Layered: api -> services -> models"
+type = "layers"
+layers = [
+    "app.api",
+    "app.services",
+    "app.models",
+]
+
+[[tool.importlinter.contracts]]
+name = "Schemas are a leaf (Pydantic contracts import no application logic)"
+type = "forbidden"
+source_modules = ["app.schemas"]
+forbidden_modules = ["app.api", "app.services", "app.models"]
+
+[[tool.importlinter.contracts]]
+name = "Core is a leaf (security/exceptions depend on nothing above config)"
+type = "forbidden"
+source_modules = ["app.core"]
+forbidden_modules = ["app.api", "app.services", "app.models", "app.schemas"]
+
+[[tool.importlinter.contracts]]
+name = "Models never reach into transport or business logic"
+type = "forbidden"
+source_modules = ["app.models"]
+forbidden_modules = ["app.api", "app.services", "app.schemas"]

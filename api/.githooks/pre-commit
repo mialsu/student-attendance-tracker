@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# Fast gate set for student-attendance-tracker-api — /harness step 6.
+# Every gate here was proven by breaking it on purpose before being wired.
+#
+# This DELEGATES to `just check-fast --cached`: boundaries + drift + lint + typecheck. ~10 seconds,
+# no database, no network. `--cached` makes the drift gate judge the STAGED diff rather than HEAD.
+#
+# It used to list the gates inline instead, and the two copies drifted exactly as you would expect:
+# the comment claimed it ran `just check-fast` while the body ran its own shorter list, so the mypy
+# type gate added on 2026-09-02 (ADR-0004) would have been enforced by `just check` and CI and NOT
+# by this hook. One list now, in the justfile.
+#
+# The TEST SUITE IS NOT HERE, deliberately: it takes ~7 minutes and needs a running postgres with
+# TEST_DATABASE_URL set. A hook that slow gets bypassed, and a bypassed hook is worse than an honest
+# split. Run `just check` (fast set + 330 tests) before pushing.
+#
+# And read this before trusting either: the suite is green, but during the harness install the
+# teacher-ownership filter was removed from app/services/class_service.py:54 and every test still
+# passed. That specific hole is now covered by tests/test_authorization.py, but green here still
+# does not mean authorization holds everywhere. See REVIEW-DEBT.md.
+#
+# Bypassing with `--no-verify` is a confession: it needs a REVIEW-DEBT.md entry.
+set -e
+cd "$(git rev-parse --show-toplevel)"
+
+if command -v just >/dev/null 2>&1; then
+  exec just check-fast --cached
+fi
+
+# Fallback for a machine without `just`. This is the ONE duplicated copy of the gate list, kept
+# because a missing tool should not mean a missing gate. Anything added to `check-fast` belongs
+# here too.
+echo "pre-commit: \`just\` not found — running the same gates directly." >&2
+./venv/bin/lint-imports
+./scripts/drift-check.sh --cached
+./scripts/drift-extra.sh --cached
+./scripts/baseline-guard.sh ruff ./venv/bin/ruff check app tests
+./scripts/baseline-guard.sh mypy ./venv/bin/mypy
+echo "✓ fast gates green"
