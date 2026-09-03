@@ -6,6 +6,35 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 
 <!-- Newest first. -->
 
+## 2026-09-03 — the deployment repo could not be deployed on its own, and nginx.conf changes were inert
+- **What:** the `deployment` repo has **no workflow of its own**. It reaches the VM only through the
+  API's deploy job (`deploy.yml:257-258`, `git -C deployment reset --hard origin/master`), so a
+  compose or nginx change sat on `origin/master` doing nothing until an unrelated backend push
+  happened to run. Two things made that worse:
+  1. **The documented manual trigger did not work.** The job's comment said "can also be triggered
+     manually via workflow_dispatch" while its guard read
+     `if: github.event_name == 'push' && ...`, which excludes that event. A manual run went green
+     having silently skipped the deploy job. So there was *no* way to ship a deployment-only change
+     except an unrelated push.
+  2. **`nginx.conf` changes were inert.** It is a bind mount, and `up -d` does not restart a
+     container whose spec is unchanged. nginx kept serving the config it loaded at boot, so editing
+     it and deploying looked successful and changed nothing.
+- **Where:** `.github/workflows/deploy.yml` — the `deploy` job guard, and the recreate step
+- **Disposition:** **fixed 2026-09-03.** The guard now accepts `workflow_dispatch`, and a validate
+  + reload step runs after the health check.
+- **What is NOT proven, and it is the interesting part:** the reload step has **never executed on
+  the VM**. It cannot be exercised without deploying. What *was* proven locally is the branch logic
+  — `nginx -t` exits 0 on a valid config and 1 on a broken one, so `if ! nginx -t` discriminates.
+  The production `nginx.conf` itself cannot be validated off the VM: it needs the Let's Encrypt
+  certificates and a resolvable `backend` upstream, and fails locally on both.
+- **A bug caught in review, recorded because the shape recurs:** the reload was first placed
+  immediately after `up -d`, before the health check. `nginx -t` **resolves upstream hostnames**, so
+  it would have failed with `host not found in upstream "backend"` whenever the backend had not
+  finished starting — turning a good config into a failed deploy. It now runs after the health
+  check, where the upstream is known to resolve. Found by running `nginx -t` against the real file
+  in a container, which is the only reason it did not ship.
+
+
 ## 2026-09-02 — the API now has a type gate, and 16 findings are baselined rather than fixed
 - **What:** `just typecheck` runs mypy 2.3.1 over `app/` as a ratchet (ADR-0004), closing what
   `CODING_STANDARDS.md` called "the biggest remaining hole in this repo's harness". The gate starts

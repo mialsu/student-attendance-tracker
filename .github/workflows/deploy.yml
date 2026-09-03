@@ -197,10 +197,18 @@ jobs:
     needs: [gates, test, security]
     # Every push to main that passes gates + tests + security deploys to the Hetzner VM.
     #
-    # This job is a rewrite and its first execution IS its verification (REVIEW-DEBT.md) — the
-    # backup, explicit-migration, no-DB-downtime, retry-health-check and code-rollback steps have
-    # never run on the real VM. It can also be triggered manually via workflow_dispatch.
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # Manual runs deploy too. This block used to say "can also be triggered manually via
+    # workflow_dispatch" while the guard below excluded that event, so a manual run went green
+    # having skipped this job entirely — the documented escape hatch was never wired.
+    #
+    # It matters because the `deployment` repo has NO workflow of its own: a compose or nginx
+    # change reaches the VM only through this job's `git -C deployment reset --hard`. Without a
+    # working manual trigger, the only way to ship one was an unrelated push to this repo.
+    #
+    # (The old comment also claimed the job had never run on the real VM. It has, repeatedly.)
+    if: >-
+      (github.event_name == 'push' && github.ref == 'refs/heads/main')
+      || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: production
@@ -289,6 +297,7 @@ jobs:
             $COMPOSE up -d --no-deps backend nginx
             echo "::endgroup::"
 
+
             # ---- 7. Health check with retries, not `sleep 15` ---------------------------------
             echo "::group::Health check"
             ok=0
@@ -326,6 +335,26 @@ jobs:
             docker image prune -f --filter "until=168h" >/dev/null 2>&1 || true
 
             echo "✅ Deployed $TARGET_SHA"
+            # ---- 7b. Reload the proxy, AFTER the backend is confirmed healthy.
+            #          nginx.conf is a BIND MOUNT and `up -d` does not restart a container whose spec is
+            #          unchanged, so editing nginx.conf and deploying LOOKED successful while nginx kept
+            #          the config it loaded at boot.
+            #
+            #          Order matters and cost a bug in review: `nginx -t` resolves upstream hostnames, so
+            #          running it straight after `up -d` fails with "host not found in upstream backend"
+            #          whenever the backend has not finished starting -- a spurious deploy failure on a
+            #          perfectly good config. After the health check, the upstream is known to resolve.
+            echo "::group::Reload nginx config"
+            if ! $COMPOSE exec -T nginx nginx -t; then
+              echo "nginx.conf failed validation - NOT reloading."
+              echo "nginx keeps its previous, working config and the backend is already healthy,"
+              echo "so the site stays up. Fix nginx.conf and re-run this workflow."
+              exit 1
+            fi
+            $COMPOSE exec -T nginx nginx -s reload
+            echo "nginx reloaded against the current nginx.conf"
+            echo "::endgroup::"
+
             $COMPOSE ps
 
       - name: Summary
