@@ -260,7 +260,7 @@ footer p { margin: 0 0 .5rem; }
 <div class="wrap">
 
 <header class="masthead">
-  <p class="eyebrow">Student Attendance Tracker &middot; swept 2 September 2026, updated after the deploy</p>
+  <p class="eyebrow">Student Attendance Tracker &middot; swept 2 September 2026, updated 3 September after the client suite</p>
   <h1>What to build next, and why in that order</h1>
   <p class="standfirst">
     Everything currently owed across the two repositories, gathered from both
@@ -269,8 +269,8 @@ footer p { margin: 0 0 .5rem; }
     that proves it.
   </p>
   <dl class="tally">
-    <div><dt>Shipped 2 Sep</dt><dd>2</dd></div>
-    <div><dt>Ranked, remaining</dt><dd>4</dd></div>
+    <div><dt>Shipped</dt><dd>3</dd></div>
+    <div><dt>Ranked, remaining</dt><dd>3</dd></div>
     <div><dt>Small &amp; independent</dt><dd>13</dd></div>
     <div><dt>Live defects</dt><dd>1</dd></div>
     <div><dt>Need your call</dt><dd>5</dd></div>
@@ -354,13 +354,13 @@ minting sessions for 30 days. revoke_all_user_tokens existed with zero callers. 
   </li>
 
   <li class="item">
-    <span class="rank" aria-hidden="true">2</span>
+    <span class="rank" aria-hidden="true">&check;</span>
     <div class="card">
-      <div class="chips"><span class="chip hold">blocks everything after it</span><span class="chip rest">client/</span></div>
+      <div class="chips"><span class="chip done">shipped 3 Sep</span><span class="chip rest">client/</span></div>
       <h3>Make the client test suite honest</h3>
-      <p class="why">Why second &middot; three gates are ratchets until this is done</p>
+      <p class="why">Done &middot; 73 tests, none failing, and the network rule now has an enforcer</p>
       <p>
-        25 of 90 tests fail on <code>main</code>, and one makes a real network request to
+        25 of 96 tests failed on <code>main</code>, and one made a real network request to
         <code>localhost:8000</code>. They are localStorage-era tests asserting an API that no
         longer exists &mdash; <code>localStorage.getItem('currentUser')</code>, a
         <code>signup()</code> that returned a boolean.
@@ -372,9 +372,33 @@ minting sessions for 30 days. revoke_all_user_tokens existed with zero callers. 
         suite structurally incapable of catching them. Fix at the <code>src/api</code> seam, never
         by raising the baseline.
       </p>
-      <p class="ev">src/contexts/__tests__/AuthContext.test.tsx  &mdash; the stale file
-.harness-baseline  &mdash; typecheck=26  lint=16  tests=25
-measured 2026-09-02: 25 failures with and without a listener on the API port</p>
+      <p><strong>Fixed 3 September, and none of the 25 was a product bug.</strong> Three causes:
+        <code>AuthContext.test.tsx</code> (19) and <code>auth-flow.test.tsx</code> (4) asserted a
+        localStorage auth context that no longer exists, and the latter never filled the
+        now-required <em>Rekister&ouml;intikoodi</em> field, so native validation refused the submit;
+        <code>AttendanceTracking.test.tsx</code> (2) held a strict-equality payload that omitted
+        the <code>timestamp</code> the component correctly sends. All three now mock
+        <code>@/api/auth</code> &mdash; the pattern <code>Index.test.tsx</code> and
+        <code>ProtectedRoute.test.tsx</code> already used &mdash; and each rewrite was proven by
+        mutating the production file and watching it go red. Every production file came out
+        byte-identical.</p>
+      <p><strong>The rule got an enforcer.</strong> &ldquo;A test must not make a real network
+        call&rdquo; was <code>[review-only]</code> and had been broken by 19 tests at once.
+        <code>src/test/setup.ts</code> now refuses every <code>XMLHttpRequest</code> and
+        <code>fetch</code> <em>and</em> re-throws the attempt after the test, because axios turns a
+        synchronous adapter throw into a rejected promise a test asserting
+        <code>.rejects</code> would swallow. Probed three ways, all red.</p>
+      <p><strong>Two dead modules went with it</strong> (item 6's territory, taken early on the
+        Owner's call): <code>src/lib/classes.ts</code> and <code>src/lib/attendance.ts</code> had
+        zero production importers, and <code>classes.ts</code> escaped the orphan gate only because
+        its own test imported it &mdash; the gate counts a test file as an importer. That blind spot
+        is now a rule in <code>CODING_STANDARDS.md</code>, since the gate still cannot see the next
+        module that hides behind a test.</p>
+      <p class="ev">73 tests, 0 failing (was 25 of 96)
+.harness-baseline  &mdash; typecheck=4  lint=16  tests=0
+the 22 type errors that went were in the rewritten SUITES, not the deleted files
+two seams confessed instead of quietly changed: a failed logout leaves you looking signed in;
+validateEmail's inline message is unreachable behind type="email"</p>
     </div>
   </li>
 
