@@ -5,7 +5,9 @@
 !.env.test.example
 
 # python
+venv
 venv/
+.venv
 .venv/
 __pycache__/
 *.py[cod]
