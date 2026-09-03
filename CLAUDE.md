@@ -59,12 +59,13 @@ configured for 5433, so it cannot start either — see the API repo's `REVIEW-DE
 
 Both repos gate in CI, and both deploy from CI. Same gates as the pre-commit hooks, plus security.
 
-| | frontend (`client-app`) | backend (`…-api`) |
+| | frontend (`client/`) | backend (`api/` + `deployment/`) |
 |---|---|---|
-| Workflow | `.github/workflows/ci.yml` | `.github/workflows/deploy.yml` |
+| Workflow | `.github/workflows/frontend.yml` | `.github/workflows/backend.yml` |
+| Fires on | changes under `client/**` | changes under `api/**` or `deployment/**` |
 | Jobs | `gates`, `security`, `deploy` | `gates`, `test`, `security`, `deploy` |
 | Deploys to | Vercel, via `vercel deploy --prebuilt --prod` | Hetzner, via SSH |
-| Gated on | gates + security green, push to `main` | gates + tests + security green, push to `main` |
+| Gated on | gates + security green, push to `main`, and `vars.DEPLOY_ENABLED` | gates + tests + security green, push to `main` |
 
 Both set `BASELINE_FROZEN=1` so CI never rewrites `.harness-baseline`, and both check out with
 `fetch-depth: 0` because the drift gate is a *diff* gate — a shallow clone makes it compare nothing

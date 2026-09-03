@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+# Root pre-commit dispatcher for the monorepo.
+#
+# WHY THIS EXISTS. Each package brought its own hook system from when it was a separate repository:
+# api/ used .githooks via core.hooksPath, client/ used husky, which ALSO sets core.hooksPath. That
+# setting is a single repository-wide value, so only one could ever be active — whichever was
+# configured last won silently and the other package committed with no gates at all. The failure
+# mode was the dangerous kind: you commit, see no complaint, and assume the gates ran.
+#
+# So: one hook, which looks at what is actually staged and runs only the gates that apply. A commit
+# touching only docs runs nothing and is instant; a commit touching both packages runs both.
+#
+# Install once per clone:  git config core.hooksPath .githooks
+# Bypassing with --no-verify is a confession: it needs a REVIEW-DEBT.md entry.
+set -euo pipefail
+cd "$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+
+staged="$(git diff --cached --name-only --diff-filter=ACMR)"
+[ -z "$staged" ] && exit 0
+
+run_api=0; run_client=0
+grep -qE '^(api|deployment)/' <<<"$staged" && run_api=1
+grep -qE '^client/'           <<<"$staged" && run_client=1
+
+if [ "$run_api" -eq 0 ] && [ "$run_client" -eq 0 ]; then
+  echo "pre-commit: nothing staged under api/, deployment/ or client/ — no gates apply."
+  exit 0
+fi
+
+if [ "$run_api" -eq 1 ]; then
+  echo "══ api ══"
+  ( cd api && exec ./.githooks/pre-commit )
+fi
+
+if [ "$run_client" -eq 1 ]; then
+  echo "══ client ══"
+  # Mirrors what client/.husky/pre-commit ran before husky was removed. husky cannot work from a
+  # subdirectory: its `prepare` script looks for .git beside package.json and errors on every
+  # `npm ci` in a monorepo.
+  cd client
+  echo "▸ boundaries";           npm run --silent lint:boundaries
+  echo "▸ drift (staged)";       ./scripts/drift-check.sh --cached
+  echo "▸ drift-extra (staged)"; ./scripts/drift-extra.sh --cached
+  echo "▸ typecheck (ratchet)";  npm run --silent gate:typecheck
+  echo "▸ lint (ratchet)";       npm run --silent gate:lint
+  echo "▸ tests (ratchet)";      npm run --silent gate:tests
+  echo "▸ build";                npm run --silent build
+  echo "✔ client gates green"
+fi

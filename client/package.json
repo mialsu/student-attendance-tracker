@@ -20,7 +20,6 @@
     "lint:boundaries": "depcruise src --config .dependency-cruiser.cjs",
     "drift": "scripts/drift-check.sh",
     "check": "npm run gate:typecheck && npm run gate:lint && npm run lint:boundaries && npm run gate:tests && npm run drift && npm run drift:extra && npm run build",
-    "prepare": "husky",
     "drift:extra": "scripts/drift-extra.sh"
   },
   "dependencies": {

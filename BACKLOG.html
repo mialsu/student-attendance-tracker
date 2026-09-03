@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=JetBrains+Mono:wght@400;500;700&display=swap">
 <style>
-/* ---- tokens: light is the base, taken from client-app/src/index.css and biased cool ---- */
+/* ---- tokens: light is the base, taken from client/src/index.css and biased cool ---- */
 :root {
   --ground:      #f7f9fa;
   --surface:     #ffffff;
@@ -351,7 +351,7 @@ minting sessions for 30 days. revoke_all_user_tokens existed with zero callers. 
   <li class="item">
     <span class="rank" aria-hidden="true">2</span>
     <div class="card">
-      <div class="chips"><span class="chip hold">blocks everything after it</span><span class="chip rest">client-app</span></div>
+      <div class="chips"><span class="chip hold">blocks everything after it</span><span class="chip rest">client/</span></div>
       <h3>Make the client test suite honest</h3>
       <p class="why">Why second &middot; three gates are ratchets until this is done</p>
       <p>
@@ -395,7 +395,7 @@ measured 2026-09-02: 25 failures with and without a listener on the API port</p>
       </p>
       <p class="ev">app/services/attendance_service.py:124-128  &mdash; filters created_at
 app/api/attendance.py:84                &mdash; legacy defaults to None = filter on
-client-app/src/api/attendance.ts:20     &mdash; typed, never set by any component</p>
+client/src/api/attendance.ts:20     &mdash; typed, never set by any component</p>
     </div>
   </li>
 
@@ -477,7 +477,7 @@ end to end:             staging a type error and running `git commit` was REFUSE
         violation is exempted where hooks reach into components. Each exemption is a line in a
         config that reads like policy and is actually debt.
       </p>
-      <p class="ev">client-app/.dependency-cruiser.cjs &mdash; no-orphans, two baseline exemptions
+      <p class="ev">client/.dependency-cruiser.cjs &mdash; no-orphans, two baseline exemptions
 src/lib/attendance.ts, src/components/ui/aspect-ratio.tsx</p>
     </div>
   </li>
@@ -544,17 +544,17 @@ src/lib/attendance.ts, src/components/ui/aspect-ratio.tsx</p>
       </tr>
       <tr>
         <td>Two committed lockfiles in the client</td>
-        <td class="where">client-app/</td>
+        <td class="where">client/</td>
         <td class="st"><span class="chip rest">open</span></td>
       </tr>
       <tr>
         <td>Hard-coded value marked for UI configuration</td>
-        <td class="where">client-app/src/pages/ClassStatistics.tsx:23</td>
+        <td class="where">client/src/pages/ClassStatistics.tsx:23</td>
         <td class="st"><span class="chip rest">open</span></td>
       </tr>
       <tr>
         <td>The client's <code>CLAUDE.md</code> test and coverage claims still don't match the code</td>
-        <td class="where">client-app/CLAUDE.md</td>
+        <td class="where">client/CLAUDE.md</td>
         <td class="st"><span class="chip rest">open</span></td>
       </tr>
       <tr>
@@ -606,7 +606,7 @@ src/lib/attendance.ts, src/components/ui/aspect-ratio.tsx</p>
       </tr>
       <tr>
         <td>No accessibility enforcer exists anywhere, so every A11Y rule is <code>[review-only]</code> and there is no <code>DESIGN.md</code>. The web profile names three cheap enforcers; this is a <code>/design-brief</code> decision before it is a task</td>
-        <td class="where">client-app &mdash; no DESIGN.md</td>
+        <td class="where">client/ &mdash; no DESIGN.md</td>
         <td class="st"><span class="chip hold">your call</span></td>
       </tr>
       <tr>
