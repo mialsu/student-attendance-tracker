@@ -7,8 +7,12 @@ name: CI & Deploy
 on:
   push:
     branches: [main]
+    paths: &frontend_paths
+      - 'client/**'
+      - '.github/workflows/frontend.yml'
   pull_request:
     branches: [main]
+    paths: *frontend_paths
   workflow_dispatch:
 
 # Least privilege. Nothing here needs write access to the repo.
@@ -32,6 +36,9 @@ jobs:
     name: Gates
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: client
     steps:
       - uses: actions/checkout@v4
         with:
@@ -43,6 +50,7 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
+          cache-dependency-path: client/package-lock.json
 
       - name: Install
         run: npm ci
@@ -77,33 +85,19 @@ jobs:
     name: Security
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: client
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: gitleaks (full history)
-        run: |
-          set -euo pipefail
-          # Capture the response into a variable BEFORE parsing it. Piping curl straight into
-          # `grep -m1` makes grep close the pipe on its first match, curl then fails with
-          # CURLE_WRITE_ERROR (23), and `pipefail` fails the whole step. Verified by running it.
-          api_json="$(curl -fsSL https://api.github.com/repos/gitleaks/gitleaks/releases/latest)"
-          tag="$(printf '%s' "$api_json" | grep '"tag_name"' | head -1 | cut -d'"' -f4)"
-          if [ -z "$tag" ]; then echo "could not resolve gitleaks release tag"; exit 1; fi
-          ver="${tag#v}"
-          echo "gitleaks $tag"
-          curl -fsSL -o gitleaks.tar.gz \
-            "https://github.com/gitleaks/gitleaks/releases/download/${tag}/gitleaks_${ver}_linux_x64.tar.gz"
-          tar xzf gitleaks.tar.gz gitleaks
-          # `git` scans committed history. `dir` would also scan untracked/gitignored files, which
-          # on a clean runner is nothing — history is what actually leaked if anything did.
-          ./gitleaks git . --redact --no-banner --verbose
-
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
+          cache-dependency-path: client/package-lock.json
 
       - name: Install
         run: npm ci
@@ -128,7 +122,11 @@ jobs:
     # stay DISCONNECTED (Settings -> Git -> Connected Git Repository), or both paths deploy and
     # race. Note that an empty "Deploy Hooks" list is NOT evidence that auto-deploy is off.
     # Requires repo secrets: VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID.
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # Same cutover switch as backend.yml: skipped until DEPLOY_ENABLED is set, so the gates can
+    # be proven in the monorepo layout before anything ships to Vercel.
+    if: >-
+      vars.DEPLOY_ENABLED == 'true'
+      && github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment: production
@@ -140,6 +138,9 @@ jobs:
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
       VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    defaults:
+      run:
+        working-directory: client
     steps:
       - uses: actions/checkout@v4
 

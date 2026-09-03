@@ -13,9 +13,14 @@ name: CI & Deploy
 on:
   push:
     branches: [main]
+    paths: &backend_paths
+      - 'api/**'
+      - 'deployment/**'        # compose/nginx are part of the backend's deployable unit
+      - '.github/workflows/backend.yml'
   pull_request:
     branches: [main]
-  workflow_dispatch:
+    paths: *backend_paths
+  workflow_dispatch:           # deploys too — see the `deploy` job's guard
 
 permissions:
   contents: read
@@ -33,6 +38,9 @@ jobs:
     name: Gates
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: api
     steps:
       - uses: actions/checkout@v4
         with:
@@ -44,6 +52,7 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
+          cache-dependency-path: api/requirements.txt
 
       - name: Install
         run: |
@@ -88,6 +97,9 @@ jobs:
           --health-retries 5
         ports:
           - 5432:5432
+    defaults:
+      run:
+        working-directory: api
     steps:
       - uses: actions/checkout@v4
 
@@ -95,6 +107,7 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
+          cache-dependency-path: api/requirements.txt
 
       - name: Install
         run: |
@@ -150,31 +163,14 @@ jobs:
     name: Security
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: api
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+        # Shallow is fine now: only pip-audit remains here, and it reads requirements.txt.
+        # The full history was for gitleaks, which moved to security.yml.
 
-      # Baseline measured 2026-09-01: 108 findings, all documentation placeholders, all allowlisted
-      # by VALUE (not by path) in .gitleaks.toml — so a real token pasted into API_REFERENCE.md
-      # still fails this step. Verified by planting one.
-      - name: gitleaks (full history)
-        run: |
-          set -euo pipefail
-          # Capture the response into a variable BEFORE parsing it. Piping curl straight into
-          # `grep -m1` makes grep close the pipe on its first match, curl then fails with
-          # CURLE_WRITE_ERROR (23), and `pipefail` fails the whole step. Verified by running it.
-          api_json="$(curl -fsSL https://api.github.com/repos/gitleaks/gitleaks/releases/latest)"
-          tag="$(printf '%s' "$api_json" | grep '"tag_name"' | head -1 | cut -d'"' -f4)"
-          if [ -z "$tag" ]; then echo "could not resolve gitleaks release tag"; exit 1; fi
-          ver="${tag#v}"
-          echo "gitleaks $tag"
-          curl -fsSL -o gitleaks.tar.gz \
-            "https://github.com/gitleaks/gitleaks/releases/download/${tag}/gitleaks_${ver}_linux_x64.tar.gz"
-          tar xzf gitleaks.tar.gz gitleaks
-          ./gitleaks git . --redact --no-banner --verbose --config .gitleaks.toml
-
-      - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
@@ -201,14 +197,21 @@ jobs:
     # workflow_dispatch" while the guard below excluded that event, so a manual run went green
     # having skipped this job entirely — the documented escape hatch was never wired.
     #
-    # It matters because the `deployment` repo has NO workflow of its own: a compose or nginx
-    # change reaches the VM only through this job's `git -C deployment reset --hard`. Without a
-    # working manual trigger, the only way to ship one was an unrelated push to this repo.
+    # It mattered more than it looks: `deployment` was a separate repository with no workflow
+    # of its own, so a compose or nginx change could only reach the VM by riding along with an
+    # unrelated backend push. That coupling is gone now everything is one repository, but the
+    # manual trigger is still how you ship a deployment-only change deliberately.
     #
-    # (The old comment also claimed the job had never run on the real VM. It has, repeatedly.)
+    # (The old comment also claimed this job had never run on the real VM. It has, repeatedly.)
+    # DEPLOY_ENABLED is a repository variable and is the switch for the monorepo cutover: while it
+    # is unset this job is skipped, so gates and tests can be proven in the new layout without any
+    # risk of deploying from a checkout the server is not yet using. Flip it in Phase C with
+    #   gh variable set DEPLOY_ENABLED --body true
+    # It doubles as a kill switch afterwards.
     if: >-
-      (github.event_name == 'push' && github.ref == 'refs/heads/main')
-      || github.event_name == 'workflow_dispatch'
+      vars.DEPLOY_ENABLED == 'true'
+      && ((github.event_name == 'push' && github.ref == 'refs/heads/main')
+          || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: production
@@ -237,7 +240,7 @@ jobs:
             cd "$PROJECT"
 
             # ---- 1. Record the SHA we can return to -------------------------------------------
-            PREV_SHA="$(git -C student-attendance-tracker-api rev-parse HEAD)"
+            PREV_SHA="$(git rev-parse HEAD)"
             echo "::group::Deploy plan"
             echo "  from : $PREV_SHA"
             echo "  to   : $TARGET_SHA"
@@ -260,10 +263,12 @@ jobs:
 
             # ---- 3. Fetch the exact commit under test ----------------------------------------
             echo "::group::Fetch code"
-            git -C student-attendance-tracker-api fetch --quiet origin
-            git -C student-attendance-tracker-api reset --hard "$TARGET_SHA"
-            git -C deployment fetch --quiet origin
-            git -C deployment reset --hard origin/master
+            # ONE repository. This used to fetch the api and the deployment repos separately and
+            # reset the latter to origin/master, which meant a compose or nginx change only reached
+            # the VM when an unrelated backend push happened to deploy — and that the two could be
+            # out of step with each other. Now the whole deployable unit moves as one commit.
+            git fetch --quiet origin
+            git reset --hard "$TARGET_SHA"
             echo "::endgroup::"
 
             # ---- 4. Build. WITH the layer cache: --no-cache tripled the downtime window for no
@@ -313,7 +318,7 @@ jobs:
             if [ "$ok" -ne 1 ]; then
               echo "::group::Health check FAILED — rolling back code to $PREV_SHA"
               $COMPOSE logs --tail=80 backend || true
-              git -C student-attendance-tracker-api reset --hard "$PREV_SHA"
+              git reset --hard "$PREV_SHA"
               $COMPOSE build backend
               $COMPOSE up -d --no-deps backend nginx
               rb=0

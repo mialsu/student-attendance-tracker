@@ -26,7 +26,10 @@ services:
   # FastAPI Backend
   backend:
     build:
-      context: ../../student-attendance-tracker-api
+      # ../../api — the backend now lives beside this file in one repository, so the whole
+      # deployable unit moves in a single commit. It used to be a separate repo pulled in by the
+      # deploy job, which meant a compose change could not ship without an unrelated backend push.
+      context: ../../api
       dockerfile: Dockerfile
     container_name: attendance-backend-prod
     restart: always

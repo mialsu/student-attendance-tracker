@@ -46,7 +46,7 @@ services:
   # FastAPI Backend
   backend:
     build:
-      context: ../../student-attendance-tracker-api
+      context: ../../api
       dockerfile: Dockerfile
     container_name: attendance-backend-local
     restart: unless-stopped
@@ -54,7 +54,7 @@ services:
       sh -c "alembic upgrade head &&
              uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
     volumes:
-      - ../../student-attendance-tracker-api:/app
+      - ../../api:/app
     environment:
       DATABASE_URL: postgresql+asyncpg://attendance_user:local_dev_password_123@db:5432/attendance_tracker
       SECRET_KEY: local-dev-secret-key-change-in-production
