@@ -1,0 +1,59 @@
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { attendanceApi } from '../api/attendance';
+import type { CreateAttendanceRequest, ListAttendanceParams, GetSummaryParams } from '../api/attendance';
+
+export function useAttendance(classId: string, params?: ListAttendanceParams) {
+  return useQuery({
+    queryKey: ['attendance', classId, params],
+    queryFn: () => attendanceApi.list(classId, params),
+    enabled: !!classId,
+  });
+}
+
+export function useAttendanceSummary(
+  classId: string,
+  params?: GetSummaryParams
+) {
+  return useQuery({
+    queryKey: ['attendance-summary', classId, params],
+    queryFn: () => attendanceApi.getSummary(classId, params),
+    enabled: !!classId,
+  });
+}
+
+export function useAttendanceStatistics(classId: string, excludeDates?: string[]) {
+  return useQuery({
+    queryKey: ['attendance-statistics', classId, excludeDates],
+    queryFn: () => attendanceApi.getStatistics(classId, excludeDates),
+    enabled: !!classId,
+    staleTime: 1000 * 60 * 5, // 5 minutes
+  });
+}
+
+export function useCreateAttendance() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ classId, data }: { classId: string; data: CreateAttendanceRequest }) =>
+      attendanceApi.create(classId, data),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['attendance', variables.classId] });
+      queryClient.invalidateQueries({ queryKey: ['attendance-summary', variables.classId] });
+      queryClient.invalidateQueries({ queryKey: ['attendance-statistics', variables.classId] });
+    },
+  });
+}
+
+export function useDeleteAttendance() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ recordId, classId }: { recordId: string; classId: string }) =>
+      attendanceApi.delete(recordId),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['attendance', variables.classId] });
+      queryClient.invalidateQueries({ queryKey: ['attendance-summary', variables.classId] });
+      queryClient.invalidateQueries({ queryKey: ['attendance-statistics', variables.classId] });
+    },
+  });
+}
