@@ -99,9 +99,8 @@ module.exports = {
           '^src/vite-env\\.d\\.ts$',
           '^src/test/setup\\.ts$',                       // loaded by vitest config, not imported
           '(__tests__|\\.test\\.(ts|tsx))$',             // tests are entry points
-          // --- BASELINE DEBT, not policy. Each is provably dead (depcruise: zero importers) and
-          // each has a REVIEW-DEBT.md entry. Remove the exemption when /prune deletes the file.
-          '^src/lib/attendance\\.ts$',                   // dead localStorage-era module
+          // --- BASELINE DEBT, not policy. Provably dead (depcruise: zero importers) and carries
+          // a REVIEW-DEBT.md entry. Remove the exemption when /prune deletes the file.
           '^src/components/ui/aspect-ratio\\.tsx$',      // unused shadcn primitive
         ],
       },

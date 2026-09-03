@@ -181,13 +181,21 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 - **What:** `/harness` was installed with the Owner's explicit "gate forward, confess the baseline"
   decision. Typecheck, lint and tests were all failing on a clean `main`, so each was wired as a
   ratchet against a recorded count (`.harness-baseline`) rather than a clean pass/fail gate.
-- **Where:** `.harness-baseline` (`typecheck=26`, `lint=19`, `tests=25`),
+- **Where:** `.harness-baseline` (`typecheck=4`, `lint=16`, `tests=0`),
   `scripts/baseline-guard.sh`
-- **What green tests do NOT prove here:** nothing about the 26 type errors, 19 lint errors or 25
-  failing tests is fixed. A ratchet blocks *accumulation*, not *substitution* — fixing one error
-  while introducing another nets zero and passes. The gate is real (proven by breaking it), but it
-  guards a floor that is well below correct.
-- **Disposition:** open
+- **What green tests do NOT prove here:** nothing about the 4 remaining type errors or the 16 lint
+  errors is fixed. A ratchet blocks *accumulation*, not *substitution* — fixing one error while
+  introducing another nets zero and passes. The gate is real (proven by breaking it), but it
+  guards a floor that is below correct.
+- **Disposition:** open for typecheck and lint, both moved on 2026-09-03. **`tests` reached 0**
+  and is no longer a ratchet in practice: any new failure now breaks the gate outright.
+  **`typecheck` fell 26 → 4.** Worth recording precisely, because the obvious explanation is the
+  wrong one: the 22 that went were **not** in the deleted dead-code files — restoring those files
+  left the count at 4. They were in the three rewritten test suites, which type-checked against
+  an auth context that no longer matched them. The 4 that remain are
+  `src/components/ui/data-table.tsx:368` and three `action`-shape errors in
+  `src/hooks/__tests__/use-toast.test.ts`. This entry also recorded `lint=19`, already stale when
+  written — the ratchet had taken it to 16 on its own.
 
 ## 2026-09-01 — 25 of 90 frontend tests fail on main, and one makes a real network call
 - **What:** `npx vitest run` → 25 failed / 65 passed. `AuthContext.test.tsx` is 19/22 failing;
@@ -229,7 +237,9 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 - **What green tests do NOT prove here:** both files are still built, reviewed and maintained while
   serving no user. `src/lib/attendance.ts` still models `studentFirstName` / `studentLastName`, the
   duplicate-student vocabulary the Student entity migration was meant to remove.
-- **Disposition:** open → `/prune`
+- **Disposition:** **partly resolved 2026-09-03.** `src/lib/attendance.ts` is deleted and its
+  exemption is out of `.dependency-cruiser.cjs`; the gate is green with one less carve-out.
+  `src/components/ui/aspect-ratio.tsx` is still exempted — open → `/prune`.
 
 ## 2026-09-01 — src/lib/classes.ts is dead code kept alive by its own tests
 - **What:** `src/lib/classes.ts` and `src/lib/attendance.ts` are localStorage-era modules with
@@ -240,7 +250,14 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 - **What green tests do NOT prove here:** 26 of the 65 currently-passing tests exercise a module
   the application never calls. They inflate both the pass count and the coverage figure while
   guarding nothing a user can reach.
-- **Disposition:** open → `/prune` (this is the profile's "exports used only by tests" blind spot)
+- **Disposition:** **RESOLVED 2026-09-03**, the Owner's call, ahead of `/prune`. Both modules and
+  `src/lib/__tests__/classes.test.ts` are deleted. Proof before deletion: the only reference to
+  either file anywhere in the repo was that test's own `import ... from '../classes'`, and
+  `attendance.ts` had no reference at all. Deleting them also let `src/test/setup.ts` drop its
+  localStorage mock — nothing in `src/` touches localStorage now, by design (the access token is
+  in memory, the refresh token in an HttpOnly cookie). The blind spot itself is now written into
+  `CODING_STANDARDS.md` rather than left as a one-off observation, because the orphan gate still
+  cannot see the next module that hides behind a test.
 
 ## 2026-09-01 — one upward boundary violation exempted: hooks reaches into components
 - **What:** the layering rule `hooks/contexts must not import pages/components` has one carve-out.
