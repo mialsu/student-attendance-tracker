@@ -1,4 +1,6 @@
 name: Frontend
+# TEMPORARY (fix/ci-concurrency-groups): this commit deliberately KEEPS the shared
+# concurrency group so the cancellation can be watched happening. The next commit fixes it.
 
 # Gates run on every push and PR. Deploy runs ONLY after gates and security are green, and only on
 # a push to main — Vercel's git auto-deploy must be turned OFF in the Vercel dashboard for this to

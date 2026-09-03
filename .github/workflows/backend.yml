@@ -1,4 +1,6 @@
 name: Backend
+# TEMPORARY (fix/ci-concurrency-groups): this commit deliberately KEEPS the shared
+# concurrency group so the cancellation can be watched happening. The next commit fixes it.
 
 # Gates and tests run on every push and PR. Deploy runs only after ALL of them are green, and only
 # on a push to main.
