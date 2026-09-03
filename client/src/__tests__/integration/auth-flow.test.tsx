@@ -1,250 +1,241 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@/test/test-utils';
 import userEvent from '@testing-library/user-event';
 import Auth from '@/pages/Auth';
+import type { AuthResponse, User } from '@/api/types';
 
-describe('Authentication Flow Integration Tests', () => {
+// Three seams, and each is something the page hands off rather than owns: the API module (the
+// auth context's only collaborator), the router's navigate, and the toast. Everything between
+// them — the form, its validation, the mode toggle — is the code under test.
+const { navigate, toast } = vi.hoisted(() => ({ navigate: vi.fn(), toast: vi.fn() }));
+
+vi.mock('@/api/auth', () => ({
+  authApi: {
+    login: vi.fn(),
+    signup: vi.fn(),
+    logout: vi.fn(),
+    refreshToken: vi.fn(),
+    getCurrentUser: vi.fn(),
+    updateEmail: vi.fn(),
+    updatePassword: vi.fn(),
+  },
+}));
+
+vi.mock('@/hooks/use-toast', () => ({
+  useToast: () => ({ toast }),
+}));
+
+vi.mock('react-router-dom', async () => {
+  const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom');
+  return { ...actual, useNavigate: () => navigate };
+});
+
+import { authApi } from '@/api/auth';
+
+const teacher: User = {
+  id: 'ac1d0000-0000-0000-0000-000000000001',
+  email: 'teacher@example.com',
+  active: true,
+  created_at: '2026-09-02T00:00:00Z',
+};
+
+const authResponse: AuthResponse = {
+  access_token: 'an-access-token',
+  token_type: 'bearer',
+  user: teacher,
+};
+
+// Codes are issued from the command line and the field asks for sixteen characters.
+const CODE = 'TEST-CODE-000001';
+
+describe('Authentication flow', () => {
   beforeEach(() => {
-    localStorage.clear();
+    vi.clearAllMocks();
   });
 
-  it('should allow user to sign up as a teacher', async () => {
+  const toSignup = (user: ReturnType<typeof userEvent.setup>) =>
+    user.click(screen.getByRole('button', { name: /ei tiliä\? rekisteröidy/i }));
+
+  const fillSignup = async (
+    user: ReturnType<typeof userEvent.setup>,
+    { email, password, confirm, code }: {
+      email: string;
+      password: string;
+      confirm?: string;
+      code?: string;
+    },
+  ) => {
+    await user.type(screen.getByLabelText('Sähköposti'), email);
+    await user.type(screen.getByLabelText('Salasana'), password);
+    await user.type(screen.getByLabelText('Vahvista salasana'), confirm ?? password);
+    if (code) await user.type(screen.getByLabelText('Rekisteröintikoodi'), code);
+  };
+
+  it('signs a teacher up with a registration code', async () => {
     const user = userEvent.setup();
+    vi.mocked(authApi.signup).mockResolvedValue(authResponse);
+
     render(<Auth />);
+    await toSignup(user);
+    await fillSignup(user, { email: teacher.email, password: 'password123', code: CODE });
+    await user.click(screen.getByRole('button', { name: /^rekisteröidy$/i }));
 
-    // Switch to signup mode
-    const switchButton = screen.getByRole('button', { name: /ei tiliä\? rekisteröidy/i });
-    await user.click(switchButton);
-
-    // Fill in signup form
-    const emailInput = screen.getByLabelText('Sähköposti');
-    const passwordInput = screen.getByLabelText('Salasana');
-    const confirmPasswordInput = screen.getByLabelText('Vahvista salasana');
-
-    await user.type(emailInput, 'teacher@test.com');
-    await user.type(passwordInput, 'password123');
-    await user.type(confirmPasswordInput, 'password123');
-
-    // Submit form
-    const submitButton = screen.getByRole('button', { name: /rekisteröidy/i });
-    await user.click(submitButton);
-
-    // Verify user was created in localStorage
     await waitFor(() => {
-      const users = JSON.parse(localStorage.getItem('users') || '[]');
-      expect(users).toHaveLength(1);
-      expect(users[0]).toMatchObject({
-        email: 'teacher@test.com',
+      expect(authApi.signup).toHaveBeenCalledWith({
+        email: teacher.email,
         password: 'password123',
-        isTeacher: true,
+        registration_code: CODE,
       });
     });
+    expect(navigate).toHaveBeenCalledWith('/dashboard');
   });
 
-  it('should allow user to log in with existing credentials', async () => {
+  it('logs an existing teacher in', async () => {
     const user = userEvent.setup();
-
-    // Create a user first
-    const existingUsers = [
-      {
-        email: 'existing@test.com',
-        password: 'existingpass',
-        isTeacher: true,
-      },
-    ];
-    localStorage.setItem('users', JSON.stringify(existingUsers));
+    vi.mocked(authApi.login).mockResolvedValue(authResponse);
 
     render(<Auth />);
+    await user.type(screen.getByLabelText('Sähköposti'), teacher.email);
+    await user.type(screen.getByLabelText('Salasana'), 'password123');
+    await user.click(screen.getByRole('button', { name: /^kirjaudu$/i }));
 
-    // Fill in login form
-    const emailInput = screen.getByLabelText('Sähköposti');
-    const passwordInput = screen.getByLabelText('Salasana');
-
-    await user.type(emailInput, 'existing@test.com');
-    await user.type(passwordInput, 'existingpass');
-
-    // Submit form
-    const submitButton = screen.getByRole('button', { name: /^kirjaudu$/i });
-    await user.click(submitButton);
-
-    // Verify current user was set in localStorage
     await waitFor(() => {
-      const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
-      expect(currentUser).toMatchObject({
-        email: 'existing@test.com',
-        isTeacher: true,
+      expect(authApi.login).toHaveBeenCalledWith({
+        email: teacher.email,
+        password: 'password123',
       });
     });
+    expect(navigate).toHaveBeenCalledWith('/dashboard');
   });
 
-  it('should prevent duplicate email signup', async () => {
+  it('shows the reason and stays put when the code is refused', async () => {
     const user = userEvent.setup();
-
-    // Create existing user
-    const existingUsers = [
-      {
-        email: 'existing@test.com',
-        password: 'password',
-        isTeacher: true,
-      },
-    ];
-    localStorage.setItem('users', JSON.stringify(existingUsers));
-
-    render(<Auth />);
-
-    // Switch to signup
-    const switchButton = screen.getByRole('button', { name: /ei tiliä\? rekisteröidy/i });
-    await user.click(switchButton);
-
-    // Try to signup with existing email
-    const emailInput = screen.getByLabelText('Sähköposti');
-    const passwordInput = screen.getByLabelText('Salasana');
-    const confirmPasswordInput = screen.getByLabelText('Vahvista salasana');
-
-    await user.type(emailInput, 'existing@test.com');
-    await user.type(passwordInput, 'newpassword');
-    await user.type(confirmPasswordInput, 'newpassword');
-
-    const submitButton = screen.getByRole('button', { name: /rekisteröidy/i });
-    await user.click(submitButton);
-
-    // Verify no new user was created
-    await waitFor(() => {
-      const users = JSON.parse(localStorage.getItem('users') || '[]');
-      expect(users).toHaveLength(1);
-    });
-  });
-
-  it('should toggle between login and signup modes', async () => {
-    const user = userEvent.setup();
-    render(<Auth />);
-
-    // Initially in login mode
-    expect(screen.getByRole('heading', { name: /kirjaudu sisään/i })).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: /kirjaudu/i }).length).toBeGreaterThan(0);
-
-    // Switch to signup
-    const toSignupButton = screen.getByRole('button', { name: /ei tiliä\? rekisteröidy/i });
-    await user.click(toSignupButton);
-
-    expect(screen.getByRole('heading', { name: /rekisteröidy/i })).toBeInTheDocument();
-
-    // Switch back to login
-    const toLoginButton = screen.getByRole('button', { name: /takaisin kirjautumiseen/i });
-    await user.click(toLoginButton);
-
-    expect(screen.getByRole('heading', { name: /kirjaudu sisään/i })).toBeInTheDocument();
-  });
-
-  it('should validate email format', async () => {
-    const user = userEvent.setup();
-    render(<Auth />);
-
-    // Switch to signup mode
-    const switchButton = screen.getByRole('button', { name: /ei tiliä\? rekisteröidy/i });
-    await user.click(switchButton);
-
-    // Fill in form with invalid email
-    const emailInput = screen.getByLabelText('Sähköposti');
-    const passwordInput = screen.getByLabelText('Salasana');
-    const confirmPasswordInput = screen.getByLabelText('Vahvista salasana');
-
-    await user.type(emailInput, 'invalid-email');
-    await user.type(passwordInput, 'password123');
-    await user.type(confirmPasswordInput, 'password123');
-
-    // Submit form
-    const submitButton = screen.getByRole('button', { name: /rekisteröidy/i });
-    await user.click(submitButton);
-
-    // Verify error message appears
-    await waitFor(() => {
-      expect(screen.getByText(/sähköpostin tulee olla oikeassa muodossa/i)).toBeInTheDocument();
+    // What the API actually says when a code has already been redeemed (INV-6, single use).
+    vi.mocked(authApi.signup).mockRejectedValue({
+      response: { data: { detail: 'Registration code has already been used' } },
     });
 
-    // Verify no user was created
-    const users = JSON.parse(localStorage.getItem('users') || '[]');
-    expect(users).toHaveLength(0);
+    render(<Auth />);
+    await toSignup(user);
+    await fillSignup(user, { email: teacher.email, password: 'password123', code: CODE });
+    await user.click(screen.getByRole('button', { name: /^rekisteröidy$/i }));
+
+    await waitFor(() => {
+      expect(toast).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: 'Virhe',
+          description: 'Registration code has already been used',
+          variant: 'destructive',
+        }),
+      );
+    });
+    expect(navigate).not.toHaveBeenCalled();
   });
 
-  it('should validate password confirmation match', async () => {
+  it('falls back to its own wording when a failed login carries no detail', async () => {
     const user = userEvent.setup();
+    vi.mocked(authApi.login).mockRejectedValue(new Error('Network Error'));
+
     render(<Auth />);
+    await user.type(screen.getByLabelText('Sähköposti'), teacher.email);
+    await user.type(screen.getByLabelText('Salasana'), 'wrong-password');
+    await user.click(screen.getByRole('button', { name: /^kirjaudu$/i }));
 
-    // Switch to signup mode
-    const switchButton = screen.getByRole('button', { name: /ei tiliä\? rekisteröidy/i });
-    await user.click(switchButton);
+    await waitFor(() => {
+      expect(toast).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: 'Virhe',
+          description: 'Väärä sähköposti tai salasana',
+          variant: 'destructive',
+        }),
+      );
+    });
+    expect(navigate).not.toHaveBeenCalled();
+  });
 
-    // Fill in form with mismatched passwords
-    const emailInput = screen.getByLabelText('Sähköposti');
-    const passwordInput = screen.getByLabelText('Salasana');
-    const confirmPasswordInput = screen.getByLabelText('Vahvista salasana');
+  it('never reaches the API with a malformed email', async () => {
+    // The inline message from validateEmail is NOT what stops this. The field is type="email"
+    // and required, so the browser's own constraint validation refuses to submit the form and
+    // handleSubmit never runs — which leaves that message reachable only for the gap between
+    // native validation and the stricter regex (`a@b` passes one and fails the other).
+    // Confessed in REVIEW-DEBT.md. What is worth asserting is the guarantee that holds: a
+    // malformed address does not become a request.
+    const user = userEvent.setup();
 
-    await user.type(emailInput, 'test@example.com');
-    await user.type(passwordInput, 'password123');
-    await user.type(confirmPasswordInput, 'password456');
+    render(<Auth />);
+    await toSignup(user);
+    await fillSignup(user, { email: 'invalid-email', password: 'password123', code: CODE });
+    await user.click(screen.getByRole('button', { name: /^rekisteröidy$/i }));
 
-    // Submit form
-    const submitButton = screen.getByRole('button', { name: /rekisteröidy/i });
-    await user.click(submitButton);
+    expect(authApi.signup).not.toHaveBeenCalled();
+    expect(navigate).not.toHaveBeenCalled();
+  });
 
-    // Verify error message appears
+  it('refuses mismatched passwords before calling the API', async () => {
+    const user = userEvent.setup();
+
+    render(<Auth />);
+    await toSignup(user);
+    await fillSignup(user, {
+      email: teacher.email,
+      password: 'password123',
+      confirm: 'password456',
+      code: CODE,
+    });
+    await user.click(screen.getByRole('button', { name: /^rekisteröidy$/i }));
+
     await waitFor(() => {
       expect(screen.getByText(/salasanat eivät täsmää/i)).toBeInTheDocument();
     });
-
-    // Verify no user was created
-    const users = JSON.parse(localStorage.getItem('users') || '[]');
-    expect(users).toHaveLength(0);
+    expect(authApi.signup).not.toHaveBeenCalled();
   });
 
-  it('should toggle password visibility', async () => {
+  it('toggles between login and signup', async () => {
     const user = userEvent.setup();
     render(<Auth />);
 
-    // Switch to signup mode to see both password fields
-    const switchButton = screen.getByRole('button', { name: /ei tiliä\? rekisteröidy/i });
-    await user.click(switchButton);
+    expect(screen.getByRole('heading', { name: /kirjaudu sisään/i })).toBeInTheDocument();
+
+    await toSignup(user);
+    expect(screen.getByRole('heading', { name: /rekisteröidy/i })).toBeInTheDocument();
+    expect(screen.getByLabelText('Rekisteröintikoodi')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /takaisin kirjautumiseen/i }));
+    expect(screen.getByRole('heading', { name: /kirjaudu sisään/i })).toBeInTheDocument();
+    expect(screen.queryByLabelText('Rekisteröintikoodi')).not.toBeInTheDocument();
+  });
+
+  it('toggles password visibility', async () => {
+    const user = userEvent.setup();
+    render(<Auth />);
+    await toSignup(user);
 
     const passwordInput = screen.getByLabelText('Salasana') as HTMLInputElement;
     const confirmPasswordInput = screen.getByLabelText('Vahvista salasana') as HTMLInputElement;
 
-    // Initially passwords should be hidden
     expect(passwordInput.type).toBe('password');
     expect(confirmPasswordInput.type).toBe('password');
 
-    // Click the eye icon for password field
-    const showPasswordButtons = screen.getAllByRole('button', { name: /näytä salasana/i });
-    await user.click(showPasswordButtons[0]);
-
-    // Password should now be visible
+    await user.click(screen.getAllByRole('button', { name: /näytä salasana/i })[0]);
     expect(passwordInput.type).toBe('text');
 
-    // Click again to hide
-    const hidePasswordButton = screen.getByRole('button', { name: /piilota salasana/i });
-    await user.click(hidePasswordButton);
-
-    // Password should be hidden again
+    await user.click(screen.getByRole('button', { name: /piilota salasana/i }));
     expect(passwordInput.type).toBe('password');
   });
 
-  it('should clear form when toggling between modes', async () => {
+  it('clears every field when switching modes, the code included', async () => {
     const user = userEvent.setup();
     render(<Auth />);
 
-    // Fill in login form
-    const emailInput = screen.getByLabelText('Sähköposti') as HTMLInputElement;
-    const passwordInput = screen.getByLabelText('Salasana') as HTMLInputElement;
+    await toSignup(user);
+    await fillSignup(user, { email: teacher.email, password: 'password123', code: CODE });
 
-    await user.type(emailInput, 'test@example.com');
-    await user.type(passwordInput, 'password123');
+    await user.click(screen.getByRole('button', { name: /takaisin kirjautumiseen/i }));
+    await toSignup(user);
 
-    // Switch to signup mode
-    const switchButton = screen.getByRole('button', { name: /ei tiliä\? rekisteröidy/i });
-    await user.click(switchButton);
-
-    // Form should be cleared
-    expect(emailInput.value).toBe('');
-    expect(passwordInput.value).toBe('');
+    expect((screen.getByLabelText('Sähköposti') as HTMLInputElement).value).toBe('');
+    expect((screen.getByLabelText('Salasana') as HTMLInputElement).value).toBe('');
+    expect((screen.getByLabelText('Vahvista salasana') as HTMLInputElement).value).toBe('');
+    expect((screen.getByLabelText('Rekisteröintikoodi') as HTMLInputElement).value).toBe('');
   });
 });
