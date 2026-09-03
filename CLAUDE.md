@@ -14,9 +14,9 @@ before trusting anything in this one.
 **client** (`cd client`)
 ```bash
 npm run check              # everything, in order
-npm run gate:typecheck     # tsc ratchet   — baseline 26 errors  (.harness-baseline)
-npm run gate:lint          # eslint ratchet — baseline 19 errors
-npm run gate:tests         # vitest ratchet — baseline 25 FAILING tests
+npm run gate:typecheck     # tsc ratchet   — baseline 4 errors   (.harness-baseline)
+npm run gate:lint          # eslint ratchet — baseline 16 errors
+npm run gate:tests         # vitest ratchet — baseline 0; any failure breaks it
 npm run lint:boundaries    # dependency-cruiser: layering, cycles, orphans, test-in-prod
 npm run drift              # devkit drift gate
 npm run drift:extra        # compound-vocabulary bans the segment matcher cannot express
@@ -77,7 +77,7 @@ explicit choice. Consequence worth knowing: the backend `deploy` job is a rewrit
 execution *is* its verification, so watch the first run. Both workflows also accept
 `workflow_dispatch` if you want to trigger one deliberately.
 
-**Two manual steps this cannot do for you** (both in `client-app/REVIEW-DEBT.md`):
+**Two manual steps this cannot do for you** (both in `client/REVIEW-DEBT.md`):
 
 1. **Disable Vercel git auto-deploy** — Project → Settings → Git → **Connected Git Repository**
    (disconnect, or set an Ignored Build Step that exits 0). Note: an empty **Deploy Hooks** list does
@@ -105,7 +105,7 @@ The figures further down this document were not accurate when measured. Correcti
 
 | Claim in this file | Measured |
 |---|---|
-| frontend "94.14% coverage" | **25 of 90 tests FAIL** on `main`; one makes a real network call |
+| frontend "94.14% coverage" | was **25 of 96 FAILING** with one real network call; **fixed 2026-09-03** — 73 pass, 0 fail |
 | backend "241 tests, 82% coverage" | **262 pass, 77% coverage** (`student_service.py` is at **29%**) |
 | backend "63 tests passing, 69% coverage" | a third, also-stale figure in the same document |
 
@@ -117,7 +117,7 @@ teacher cannot read another teacher's data.
 ### Domain model, crunched 2026-09-01
 
 `/crunch-domain` ran with the Owner. Both `CONTEXT.md` files are no longer gate seeds, and
-**`student-attendance-tracker-api/INVARIANTS.md` now exists** with seven `INV-n` rows, each naming a
+**`api/INVARIANTS.md` now exists** with eight `INV-n` rows (INV-8 added 2026-09-02), each naming a
 real enforcer. Read it before changing anything in the service layer.
 
 - **Domain dial: on**, 4 of 4 triggers. **Contexts: one** — the only `mapped` trigger either repo
@@ -220,7 +220,8 @@ commit ships the whole deployable unit.
 - shadcn/ui + Tailwind CSS
 - TanStack Query (React Query)
 - React Router v6
-- Vitest + React Testing Library — **25 of 90 tests failing** (see client-app/REVIEW-DEBT.md)
+- Vitest + React Testing Library — **73 tests, all passing** since 2026-09-03; a test that reaches
+  the network now fails by construction (`src/test/setup.ts`). See `client/REVIEW-DEBT.md`
 - API integration complete with JWT authentication
 - Deployed to Vercel (free tier)
 
@@ -251,7 +252,7 @@ commit ships the whole deployable unit.
 ### ✅ Completed
 1. **Frontend (✅ Production Ready - Vercel)**
    - Application fully functional with API integration
-   - ⚠️ 25 of 90 tests failing; auth/login/logout effectively untested
+   - Auth, login, logout, email and password change are covered at the `src/api` seam (2026-09-03)
    - UI/UX finalized with Finnish localization
    - JWT authentication integrated
    - Server-side pagination with search/filters
@@ -916,7 +917,7 @@ Closes #123
 
 **Last Completed:**
 - ✅ Backend API fully implemented with all CRUD endpoints
-- 262 backend tests passing, 77% coverage (frontend: 25 of 90 failing)
+- 262 backend tests passing, 77% coverage (frontend: 73 passing, 0 failing)
 - ✅ Frontend API integration complete
 - ✅ Database migrations ready
 - ✅ API documentation complete
