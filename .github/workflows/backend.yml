@@ -53,13 +53,13 @@ jobs:
       run:
         working-directory: api
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # The drift gate is a DIFF gate and needs history to resolve a range. A shallow clone
           # would make it compare nothing and report clean: a false pass.
           fetch-depth: 0
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
@@ -112,9 +112,9 @@ jobs:
       run:
         working-directory: api
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
@@ -150,7 +150,7 @@ jobs:
 
       - name: Upload coverage
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-report
           path: htmlcov/
@@ -178,7 +178,7 @@ jobs:
       run:
         working-directory: api
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         # Shallow is fine now: only pip-audit remains here, and it reads requirements.txt.
         # The full history was for gitleaks, which moved to security.yml.
 
@@ -187,7 +187,7 @@ jobs:
       # ran on whatever Python the runner happened to ship. It matched 3.12 by luck, not by
       # pinning. The input almost certainly got orphaned when this job was trimmed and its
       # setup-python went with gitleaks to security.yml.
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 

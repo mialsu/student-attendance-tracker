@@ -77,18 +77,34 @@ explicit choice. Consequence worth knowing: the backend `deploy` job is a rewrit
 execution *is* its verification, so watch the first run. Both workflows also accept
 `workflow_dispatch` if you want to trigger one deliberately.
 
-**Two manual steps this cannot do for you** (both in `client/REVIEW-DEBT.md`):
+**Manual steps this cannot do for you** (both in `client/REVIEW-DEBT.md`):
 
-1. **Disable Vercel git auto-deploy** — Project → Settings → Git → **Connected Git Repository**
-   (disconnect, or set an Ignored Build Step that exits 0). Note: an empty **Deploy Hooks** list does
-   *not* mean auto-deploy is off; the connected repository is what deploys on push. Until this is
-   done, Vercel and CI both deploy and race, so the CI gate is advisory rather than real.
+1. ~~**Disable Vercel git auto-deploy**~~ — **DONE.** The Owner disconnected the git integration on
+   2026-09-01 and confirmed it again on 2026-09-04, which settles a contradiction that stood in
+   this file for three days: `client/REVIEW-DEBT.md` recorded the disconnect while this section
+   kept listing it as outstanding. **The CI deploy gate is real, not advisory.** Kept here rather
+   than deleted because the trap is worth carrying: an empty **Deploy Hooks** list does *not* mean
+   auto-deploy is off — the **Connected Git Repository** is what deploys on push, so that is the
+   setting to check if a deploy ever races again.
 2. **Set the secrets.** Frontend: `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID` (the last two
    are in the gitignored `.vercel/project.json`). Backend already has `SERVER_HOST`, `SERVER_USER`,
    `SSH_PRIVATE_KEY`, `PROJECT_PATH`.
 
 The **deploy jobs are the one part not proven by breaking them** — exercising them means deploying to
 production. Everything else was. Prefer a `workflow_dispatch` run at a quiet moment for the first one.
+
+**Action versions, bumped 2026-09-04:** `checkout` v4→v7, `setup-python` v5→v7, `setup-node` v4→v7,
+`upload-artifact` v4→v7. This clears the Node 20 deprecation warning every run printed. Checked
+against the release notes rather than assumed safe, because a bad bump here breaks the path that
+deploys: the majors in between move the runtime to Node 24 (needs runner ≥2.327.1, and
+GitHub-hosted `ubuntu-latest` is well past it), `checkout@v6` persists credentials to a separate
+file (no job here pushes or reuses the git credential — the drift gate only reads), `checkout@v7`
+blocks fork-PR checkout for `pull_request_target` and `workflow_run` (these workflows trigger on
+`push`, `pull_request` and `workflow_dispatch`, none of which is affected), and `setup-python@v7`
+removed the `pip-install` input (never passed here — the inputs used are `fetch-depth`,
+`python-version`, `node-version`, `cache` and `cache-dependency-path`, all of which survive).
+**Like the deploy jobs, this bump cannot be proven locally** — the YAML parses and nothing here
+uses a removed input, but its real proof is the next CI run.
 
 Backend deploy rolls back **code** automatically if the health check fails. It does **not** roll back
 a migration — alembic has already run by then. The pre-deploy backup is the schema rollback path and
@@ -105,14 +121,19 @@ The figures further down this document were not accurate when measured. Correcti
 
 | Claim in this file | Measured |
 |---|---|
-| frontend "94.14% coverage" | was **25 of 96 FAILING** with one real network call; **fixed 2026-09-03** — 73 pass, 0 fail |
-| backend "241 tests, 82% coverage" | **262 pass, 77% coverage** (`student_service.py` is at **29%**) |
+| frontend "94.14% coverage" | was **25 of 96 FAILING** with one real network call; **fixed 2026-09-03** — 73 pass, 0 fail. **78 pass as of 2026-09-04** |
+| backend "241 tests, 82% coverage" | was **262 pass, 77% coverage** (`student_service.py` at **29%**); **346 pass as of 2026-09-04**, coverage not re-measured |
 | backend "63 tests passing, 69% coverage" | a third, also-stale figure in the same document |
 
-And the finding that matters most: removing the teacher-ownership filter from
-`app/services/class_service.py:54` leaves **all 262 backend tests passing with byte-identical
-coverage**. The suite does not test authorization from the denied side. Green does not mean a
-teacher cannot read another teacher's data.
+And the finding that mattered most, on 2026-09-01: removing the teacher-ownership filter from
+`app/services/class_service.py:54` left **all 262 backend tests passing with byte-identical
+coverage**. The suite did not test authorization from the denied side.
+
+**That is fixed and stays fixed.** `tests/test_authorization.py` covers all 18 class-reaching
+denials plus 8 positive controls, and since spec 0003 (2026-09-04) INV-1 has **one** enforcement
+site: neutering it turns 17 of the 18 denials red, and dropping the list filter's `WHERE` turns
+the 18th red on its own. `scripts/drift-extra.sh` check 4 now fails any diff that adds a
+`teacher_id` comparison in `app/` outside `class_service.py`.
 
 ### Domain model, crunched 2026-09-01
 
@@ -168,9 +189,11 @@ Refresh tokens are hashed at rest. The access token lives only in memory (`clien
 - **Dependencies are unpinned** — 21 `>=` ranges, no lockfile. The image installs FastAPI
   **0.141.1** while the tests run against **0.121.3**. Both serve correctly, so this is not a live
   break; it means the gates prove nothing about the artifact that deploys.
-- **Three leads nothing in a repo can settle:** the real production `CORS_ORIGINS`; whether Vercel
-  git auto-deploy is still disconnected; and `gitleaks`, which is not installed locally — history
-  was checked independently at file level instead.
+- **Two leads nothing in a repo can settle:** the real production `CORS_ORIGINS`; and `gitleaks`,
+  which is not installed locally — history was checked independently at file level instead.
+  (The third, **whether Vercel git auto-deploy is still disconnected, is CLOSED** — the Owner
+  confirmed it on 2026-09-04. It was never a repo question, which is why it sat open for three
+  days: the answer lives in a dashboard, so asking the Owner was the only way to get it.)
 
 **The `.env`-in-the-image lead is CLOSED (2026-09-03): the production image never had one.** All
 eight backend images on the VM were checked, including seven predating `.dockerignore` and going
@@ -225,13 +248,14 @@ commit ships the whole deployable unit.
 - API integration complete with JWT authentication
 - Deployed to Vercel (free tier)
 
-**Backend (330 tests passing — type gate: mypy ratchet at 16, ADR-0004):**
+**Backend (346 tests passing, measured 2026-09-04 — type gate: mypy ratchet at 15, ADR-0004):**
 - Python 3.12
 - FastAPI 0.104+
 - SQLAlchemy 2.0 (async)
 - Alembic (migrations)
 - PostgreSQL 17 (dev + test databases)
-- pytest + httpx — 262 tests, 77% coverage (measured 2026-09-01)
+- pytest + httpx — **346 tests** (measured 2026-09-04). Coverage was 77% on 2026-09-01 and has
+  not been re-measured since; the count has, three times, so trust the count and not the percentage
 - Paginated API responses with total counts
 - Server-side filtering and search
 - Student entity with course credit tracking
@@ -269,7 +293,8 @@ commit ships the whole deployable unit.
    - Service layer with business logic implemented
    - All CRUD API endpoints: Auth (7), Classes (5), Students (7), Attendance (5)
      — counted from `app.routes`, not from memory
-   - 262 tests passing, 77% coverage; authorization untested from the denied side
+   - 346 tests passing (2026-09-04). Authorization **is** now tested from the denied side —
+     18 denial tests, and INV-1 has one enforcement site since spec 0003
    - Name normalization with case-insensitive uniqueness
    - Bulk attendance logging (1-50 records at once)
    - Student name autocomplete (ordered by frequency)
@@ -659,7 +684,7 @@ docker-compose down
 ## Testing Guidelines
 
 ### Backend Testing (✅ Complete)
-- **262 tests passing** covering all API endpoints (measured 2026-09-01)
+- **346 tests passing** covering all API endpoints (measured 2026-09-04)
 - **77% code coverage** — but `student_service.py` is at 29%, and removing an ownership
   check leaves every test green. Coverage is not a safety metric here.
 - **Integration Tests**: All API endpoints tested against a real PostgreSQL 17 database
@@ -668,16 +693,28 @@ docker-compose down
 
 ### Test Suite Breakdown
 - **Auth API**: 21 tests (signup, login, token refresh, user management)
-- **Classes API**: 26 tests (CRUD operations). NOT ownership validation — removing the
-  ownership filter from `class_service.py:54` leaves all 26 green (see REVIEW-DEBT.md).
+- **Classes API**: 26 tests (CRUD operations), and still **not** where ownership is proven —
+  `class_service.py:54` is the list filter, and dropping it leaves all 26 green. What catches it is
+  `tests/test_authorization.py::test_class_list_does_not_leak_another_teachers_class`, alone.
+- **Authorization**: 26 tests — 18 denials as a second real teacher, 8 positive controls. This is
+  the file that proves INV-1, and the only one that does.
 - **Attendance API**: 21 tests (tracking, filtering, summaries) + 13 for the legacy cutoff
 - **Core API**: 5 tests (health check, root endpoint)
 
 ### Test Database
-- SQLite in-memory for fast test execution
-- Fresh database for each test function
-- Comprehensive fixtures for test data (users, classes, attendance)
-- Test isolation with async sessions
+- **PostgreSQL 17, never SQLite.** This section claimed "SQLite in-memory" until 2026-09-04 while
+  the same document's *Backend Testing* section three headings up said PostgreSQL. `conftest.py`
+  requires `TEST_DATABASE_URL` with no default and the fixtures call `drop_all`, so there is
+  nothing in-memory about it and nothing to guess about the target.
+- `eval "$(just test-db-up)"` starts a disposable database on **port 5439** and prints the export
+  line. Not 5433 — that is another project's container, and the fixtures drop tables.
+- `TEST_DATABASE_URL` alone is not enough: `app/config.py` is an import-time singleton, so
+  `conftest.py` fails at import without `DATABASE_URL`, `SECRET_KEY`, `DOCS_USERNAME` and
+  `DOCS_PASSWORD` too. The `env:` block of the `pytest` step in `.github/workflows/backend.yml`
+  is the only complete written record of the set — mirror it, any throwaway values will do.
+- **Never run two pytest sessions against it at once.** `drop_all` means two runs corrupt each
+  other and neither result means anything. `pgrep -af "[p]ytest"` before starting one.
+- Fresh schema per test function, async sessions, fixtures for users, classes and attendance.
 
 ### Running Tests
 ```bash
@@ -921,7 +958,7 @@ Closes #123
 
 **Last Completed:**
 - ✅ Backend API fully implemented with all CRUD endpoints
-- 262 backend tests passing, 77% coverage (frontend: 73 passing, 0 failing)
+- 346 backend tests passing, 78 frontend (both measured 2026-09-04)
 - ✅ Frontend API integration complete
 - ✅ Database migrations ready
 - ✅ API documentation complete

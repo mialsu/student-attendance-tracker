@@ -23,7 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # History, not a snapshot: a key committed in March and "removed" in April is still
           # leaked. A shallow clone would scan almost nothing and pass.
