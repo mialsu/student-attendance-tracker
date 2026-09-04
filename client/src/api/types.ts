@@ -93,6 +93,8 @@ export interface PaginatedAttendanceSummaryResponse {
   total: number;
   skip: number;
   limit: number;
+  /** Students hidden by the five-year cutoff under the current filters. 0 when legacy is true. */
+  legacy_hidden: number;
 }
 
 export interface AuthTokens {

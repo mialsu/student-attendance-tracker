@@ -92,7 +92,6 @@ async def list_attendance_for_class(
     student_name: str | None = None,
     date_from: datetime | None = None,
     date_to: datetime | None = None,
-    legacy: bool | None = None,
 ) -> tuple[list[AttendanceRecord], int]:
     """
     List attendance records for a class with optional filters.
@@ -106,7 +105,6 @@ async def list_attendance_for_class(
         student_name: Filter by student name (case-insensitive, partial match)
         date_from: Filter by start date
         date_to: Filter by end date
-        legacy: If None or False, exclude students created > 5 years ago
 
     Returns:
         Tuple of (list of attendance records, total count)
@@ -118,33 +116,14 @@ async def list_attendance_for_class(
     # Verify access
     await verify_class_access(db, class_id, teacher)
 
-    # Handle legacy filter: exclude students created > 5 years ago
-    students_to_exclude = set()
-    if legacy is None or legacy is False:
-        five_years_ago = datetime.now(timezone.utc) - timedelta(days=5 * 365)
-
-        # Use Student.created_at instead of grouping by names
-        result = await db.execute(
-            select(Student.id).where(
-                and_(
-                    Student.class_id == class_id, Student.created_at < five_years_ago
-                )
-            )
-        )
-        students_to_exclude = {row[0] for row in result.all()}
-
-    # Build query joining Student table
+    # This endpoint lists records and applies no age cutoff. The five-year rule lives in
+    # get_attendance_summary, which backs the only student list the app renders
+    # (specs/0002-legacy-student-cutoff.md).
     base_query = (
         select(AttendanceRecord)
         .join(Student, Student.id == AttendanceRecord.student_id)
         .where(AttendanceRecord.class_id == class_id)
     )
-
-    # Exclude legacy students
-    if students_to_exclude:
-        base_query = base_query.where(
-            AttendanceRecord.student_id.not_in(students_to_exclude)
-        )
 
     # Filter by student name (now using Student.name)
     if student_name:
@@ -293,6 +272,58 @@ async def delete_attendance_record(
     await db.commit()
 
 
+# A Student is legacy when their first attendance is older than this. The window is a plain
+# 365-day year, carried over from the cutoff this replaced (specs/0002-legacy-student-cutoff.md).
+LEGACY_WINDOW = timedelta(days=5 * 365)
+
+
+async def find_legacy_student_ids(
+    db: AsyncSession,
+    class_id: UUID,
+    search: str | None = None,
+) -> set[UUID]:
+    """
+    Return the ids of the Class's legacy Students, optionally under a name search.
+
+    Legacy means first attendance older than LEGACY_WINDOW, where first attendance is
+    MIN(AttendanceRecord.timestamp) and falls back to Student.created_at for a Student
+    with no records at all — otherwise MIN over zero rows is NULL and the comparison
+    would answer "not legacy" by accident.
+
+    Args:
+        db: Database session
+        class_id: Class UUID
+        search: Optional name filter, applied so the count matches what the caller lists
+
+    Returns:
+        Set of Student UUIDs that the cutoff hides
+    """
+    cutoff = datetime.now(timezone.utc) - LEGACY_WINDOW
+
+    first_attendance = (
+        select(
+            Student.id.label("student_id"),
+            func.coalesce(
+                func.min(AttendanceRecord.timestamp), Student.created_at
+            ).label("first_seen"),
+        )
+        .outerjoin(AttendanceRecord, AttendanceRecord.student_id == Student.id)
+        .where(Student.class_id == class_id)
+        .group_by(Student.id, Student.created_at)
+    )
+
+    if search:
+        first_attendance = first_attendance.where(
+            func.lower(Student.name).like(f"%{search.lower()}%")
+        )
+
+    subquery = first_attendance.subquery()
+    result = await db.execute(
+        select(subquery.c.student_id).where(subquery.c.first_seen < cutoff)
+    )
+    return {row[0] for row in result.all()}
+
+
 async def get_attendance_summary(
     db: AsyncSession,
     class_id: UUID,
@@ -301,7 +332,8 @@ async def get_attendance_summary(
     skip: int = 0,
     limit: int = 20,
     sort_by: str = "attendance_desc",
-) -> tuple[list[dict], int]:
+    legacy: bool | None = None,
+) -> tuple[list[dict], int, int]:
     """
     Get attendance summary grouped by student with pagination and filtering.
 
@@ -315,9 +347,10 @@ async def get_attendance_summary(
         skip: Number of records to skip (pagination offset)
         limit: Maximum number of records to return (page size)
         sort_by: Sort field - 'attendance_desc' or 'name_asc'
+        legacy: True reveals legacy Students; None or False hides them
 
     Returns:
-        Tuple of (list of student summaries, total count of matching students)
+        Tuple of (student summaries, total matching students, legacy students hidden)
 
     Raises:
         NotFoundError: If class not found
@@ -333,6 +366,15 @@ async def get_attendance_summary(
     if search:
         search_pattern = f"%{search.lower()}%"
         query = query.where(func.lower(Student.name).like(search_pattern))
+
+    # Hide legacy Students unless the caller asked for them. The count is reported so the
+    # client can say how many are hidden rather than leaving a list silently short.
+    legacy_hidden = 0
+    if not legacy:
+        legacy_ids = await find_legacy_student_ids(db, class_id, search)
+        legacy_hidden = len(legacy_ids)
+        if legacy_ids:
+            query = query.where(Student.id.not_in(legacy_ids))
 
     # Count total matching students (before pagination)
     count_query = select(func.count()).select_from(query.subquery())
@@ -383,7 +425,7 @@ async def get_attendance_summary(
             }
         )
 
-    return summary, total
+    return summary, total, legacy_hidden
 
 
 async def get_attendance_statistics(

@@ -467,76 +467,6 @@ class TestListAttendanceForClass:
         assert len(records) >= 1
         assert all(r.timestamp <= cutoff for r in records)
 
-    async def test_list_attendance_legacy_filter_excludes_old(
-        self, db: AsyncSession, test_class: Class, test_user: User
-    ):
-        """Test that legacy filter excludes students created > 5 years ago."""
-        # Create old student with old created_at
-        old_date = datetime.now(timezone.utc) - timedelta(days=6 * 365)
-        old_student = Student(
-            name="VeryOld Student",
-            class_id=test_class.id,
-            course_credit_received=False,
-            created_at=old_date,  # Set old created_at
-        )
-        db.add(old_student)
-        await db.flush()
-
-        # Create old attendance record
-        old_record = AttendanceRecord(
-            class_id=test_class.id,
-            student_id=old_student.id,
-            timestamp=old_date,
-        )
-        db.add(old_record)
-        await db.commit()
-
-        # List with legacy=False (default)
-        records, total = await attendance_service.list_attendance_for_class(
-            db, test_class.id, test_user, legacy=False
-        )
-
-        # Should not include old student
-        assert not any(
-            r.student.name == "VeryOld Student"
-            for r in records
-        )
-
-    async def test_list_attendance_legacy_filter_includes_when_true(
-        self, db: AsyncSession, test_class: Class, test_user: User
-    ):
-        """Test that legacy=True includes old students."""
-        # Create old student with old created_at
-        old_date = datetime.now(timezone.utc) - timedelta(days=6 * 365)
-        old_student = Student(
-            name="VeryOld Student",
-            class_id=test_class.id,
-            course_credit_received=False,
-            created_at=old_date,  # Set old created_at
-        )
-        db.add(old_student)
-        await db.flush()
-
-        # Create old attendance record
-        old_record = AttendanceRecord(
-            class_id=test_class.id,
-            student_id=old_student.id,
-            timestamp=old_date,
-        )
-        db.add(old_record)
-        await db.commit()
-
-        # List with legacy=True
-        records, total = await attendance_service.list_attendance_for_class(
-            db, test_class.id, test_user, legacy=True
-        )
-
-        # Should include old student
-        assert any(
-            r.student.name == "VeryOld Student"
-            for r in records
-        )
-
     async def test_list_attendance_ordered_by_timestamp_desc(
         self, db: AsyncSession, test_class: Class, test_user: User
     ):
@@ -601,7 +531,7 @@ class TestGetAttendanceSummary:
 
         await db.commit()
 
-        summary, total = await attendance_service.get_attendance_summary(
+        summary, total, legacy_hidden = await attendance_service.get_attendance_summary(
             db, test_class.id, test_user
         )
 
@@ -642,7 +572,7 @@ class TestGetAttendanceSummary:
         db.add_all(records)
         await db.commit()
 
-        summary, total = await attendance_service.get_attendance_summary(
+        summary, total, legacy_hidden = await attendance_service.get_attendance_summary(
             db, test_class.id, test_user
         )
 
@@ -682,7 +612,7 @@ class TestGetAttendanceSummary:
 
         await db.commit()
 
-        summary, total = await attendance_service.get_attendance_summary(
+        summary, total, legacy_hidden = await attendance_service.get_attendance_summary(
             db, test_class.id, test_user
         )
 

@@ -98,6 +98,13 @@ class PaginatedAttendanceSummaryResponse(BaseModel):
     total: int = Field(..., description="Total number of matching students")
     skip: int = Field(..., description="Number of items skipped (offset)")
     limit: int = Field(..., description="Number of items per page")
+    legacy_hidden: int = Field(
+        0,
+        description=(
+            "Legacy students hidden by the five-year cutoff under the current filters. "
+            "0 when legacy=true, or when nothing is old enough to hide."
+        ),
+    )
 
 
 class DailyStatistic(BaseModel):

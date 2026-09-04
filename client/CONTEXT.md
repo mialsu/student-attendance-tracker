@@ -60,10 +60,13 @@ thumb and **nothing enforces it**. Do not add a progress bar, a badge, or a "cre
 implying the app decides — ask the Owner first.
 
 **Legacy student**:
-A Student whose row is older than five years, hidden by default from attendance listings.
-_Unresolved_: `legacy` exists in this repo's types (`src/api/attendance.ts:20`) and **no component
-ever sets it**, so the cutoff cannot be turned off from the UI. The Owner wants the default kept and
-a way to reveal old Students in order to delete them. Owed as a spec — this is frontend work.
+A Student whose **first attendance** is more than five years old, hidden by default from the
+Läsnäolot list. The rule is enforced server-side; this repo only reveals them and reports the count.
+_Resolved 2026-09-04 — implemented_ (spec 0002): `StudentLogs` passes `legacy` to
+`useAttendanceSummary` and shows a banner — *"N vanhaa opiskelijaa piilotettu · Näytä"* — whenever
+the response's `legacy_hidden` is above zero, so a short list always explains itself. The banner
+renders nothing until a Student is old enough to hide, which on this app's data means around
+November 2030.
 
 **Teacher**:
 The authenticated party who records attendance for a Class. Modelled as `User` in the API, and a

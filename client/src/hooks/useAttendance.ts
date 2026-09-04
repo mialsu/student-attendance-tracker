@@ -1,14 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { attendanceApi } from '../api/attendance';
-import type { CreateAttendanceRequest, ListAttendanceParams, GetSummaryParams } from '../api/attendance';
-
-export function useAttendance(classId: string, params?: ListAttendanceParams) {
-  return useQuery({
-    queryKey: ['attendance', classId, params],
-    queryFn: () => attendanceApi.list(classId, params),
-    enabled: !!classId,
-  });
-}
+import type { CreateAttendanceRequest, GetSummaryParams } from '../api/attendance';
 
 export function useAttendanceSummary(
   classId: string,

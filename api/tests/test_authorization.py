@@ -28,6 +28,10 @@ CLASS_SCOPED_ROUTES = [
     ("DELETE", "/api/classes/{class_id}", None),
     ("GET", "/api/classes/{class_id}/attendance", None),
     ("GET", "/api/classes/{class_id}/attendance/summary", None),
+    # Revealing legacy students is the same read as the summary itself, so it is refused
+    # the same way. Without this row, the parameter added by
+    # specs/0002-legacy-student-cutoff.md would be the one summary call nobody attacks.
+    ("GET", "/api/classes/{class_id}/attendance/summary?legacy=true", None),
     ("GET", "/api/classes/{class_id}/attendance/statistics", None),
     (
         "POST",
@@ -163,6 +167,7 @@ POSITIVE_CONTROL_ROUTES = [
     "/api/classes/{class_id}",
     "/api/classes/{class_id}/attendance",
     "/api/classes/{class_id}/attendance/summary",
+    "/api/classes/{class_id}/attendance/summary?legacy=true",
     "/api/classes/{class_id}/attendance/statistics",
     "/api/classes/{class_id}/students",
     "/api/classes/{class_id}/students/autocomplete?query=jo",

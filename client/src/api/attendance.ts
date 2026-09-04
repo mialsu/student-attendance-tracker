@@ -17,7 +17,6 @@ export interface ListAttendanceParams {
   student_name?: string;
   date_from?: string; // ISO 8601 format
   date_to?: string; // ISO 8601 format
-  legacy?: boolean; // Include students with first attendance > 5 years ago
 }
 
 export interface GetSummaryParams {
@@ -25,6 +24,8 @@ export interface GetSummaryParams {
   limit?: number;
   search?: string;
   sort_by?: 'attendance_desc' | 'name_asc';
+  /** Show students whose first attendance is over five years old. Omitted, they are hidden. */
+  legacy?: boolean;
 }
 
 export interface DailyStatistic {

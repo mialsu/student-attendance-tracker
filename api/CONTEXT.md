@@ -61,12 +61,16 @@ nothing** — deliberately (`INVARIANTS.md`, *Deliberately not invariants*). Do 
 threshold without asking the Owner first.
 
 **Legacy student**:
-A Student whose row is older than five years, excluded by default from attendance listings
-(`attendance_service.py:124`). The cutoff reads `Student.created_at`, **not** first attendance, so
-for every Student the `01edea317e5e` migration created it measures the migration date.
-_Unresolved_: the Owner wants the cutoff kept on by default **plus** a way to show old Students in
-order to delete them. That UI does not exist — `legacy` is declared in the frontend's types and set
-by no code — so the filter is currently unconditional. Owed as a spec.
+A Student whose **first attendance** is more than five years old, hidden by default from the
+attendance summary — `find_legacy_student_ids` in `attendance_service.py` is the one place that
+decides. First attendance is `MIN(AttendanceRecord.timestamp)`, falling back to `Student.created_at`
+for a Student with no records at all. The rule is evaluated per request; nothing is backfilled.
+_Resolved 2026-09-04 — implemented_ (spec 0002): the cutoff used to read `Student.created_at`, which
+measured the migration date for every Student `01edea317e5e` created, and it lived on the records
+endpoint that no screen calls. Both are gone. `GET …/attendance/summary` takes `legacy=true` to
+reveal them and reports `legacy_hidden` so the client can say how many are held back.
+A Student who first attended six years ago is legacy even if they attended yesterday: the Owner
+chose first attendance over last attendance knowingly, and `test_first_attendance_decides_even_when_still_attending` asserts it.
 
 **Teacher**:
 The authenticated party who records attendance for a Class. Modelled as `User`, and a User is

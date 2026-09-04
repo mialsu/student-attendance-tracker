@@ -52,6 +52,7 @@ const StudentLogs = ({ classId }: StudentLogsProps) => {
   const isDesktop = useMediaQuery('(min-width: 768px)');
   const [currentPage, setCurrentPage] = useState(1);
   const [searchInput, setSearchInput] = useState('');
+  const [showLegacy, setShowLegacy] = useState(false);
 
   // Mutation hooks
   const deleteAttendanceMutation = useDeleteAttendance();
@@ -121,6 +122,7 @@ const StudentLogs = ({ classId }: StudentLogsProps) => {
     limit: ITEMS_PER_PAGE,
     search: debouncedSearch || undefined,
     sort_by: 'attendance_desc', // Sort by most attendances first
+    legacy: showLegacy || undefined,
   });
 
   // Edit handlers
@@ -395,9 +397,17 @@ const StudentLogs = ({ classId }: StudentLogsProps) => {
     setCurrentPage(1);
   };
 
+  const handleToggleLegacy = () => {
+    setShowLegacy((shown) => !shown);
+    setCurrentPage(1);
+  };
+
   // Extract data from paginated response
   const students = paginatedResponse?.items || [];
   const total = paginatedResponse?.total || 0;
+  // Students the five-year cutoff is holding back under the current search. 0 while they
+  // are revealed, so the banner below switches on showLegacy for the way back.
+  const legacyHidden = paginatedResponse?.legacy_hidden || 0;
   const totalPages = Math.ceil(total / ITEMS_PER_PAGE);
 
   // Column definitions for desktop DataTable
@@ -604,6 +614,24 @@ const StudentLogs = ({ classId }: StudentLogsProps) => {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
+        {/* Legacy students: shown only when the cutoff is actually holding someone back,
+            or while they are revealed. Nothing renders until a student's first attendance
+            is over five years old. */}
+        {(showLegacy || legacyHidden > 0) && (
+          <div className="flex items-center justify-between gap-2 rounded-md border border-dashed px-3 py-2">
+            <p className="text-sm text-muted-foreground">
+              {showLegacy
+                ? 'Vanhat opiskelijat näkyvissä'
+                : legacyHidden === 1
+                  ? '1 vanha opiskelija piilotettu'
+                  : `${legacyHidden} vanhaa opiskelijaa piilotettu`}
+            </p>
+            <Button variant="outline" size="sm" onClick={handleToggleLegacy}>
+              {showLegacy ? 'Piilota' : 'Näytä'}
+            </Button>
+          </div>
+        )}
+
         {/* Search Bar */}
         <div className="flex gap-2">
           <div className="relative flex-1">

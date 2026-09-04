@@ -100,9 +100,13 @@ cut (`/confess`), read first by any architecture or review session, dispositione
   `../student-attendance-tracker-api/app/services/attendance_service.py:124-128`
 - **What green tests do NOT prove here:** no frontend test touches `legacy`, and none could — the
   parameter reaches no component.
-- **Disposition:** open → spec owed, and the **frontend half is this repo's**. The Owner's decision
-  (2026-09-01): keep the cutoff on by default and add a way to reveal old Students so they can be
-  deleted. That is a real screen, so it wants `/design-brief` before `/implement`.
+- **Disposition:** **RESOLVED 2026-09-04** by spec 0002. The cutoff now measures first attendance,
+  lives on the summary endpoint that `StudentLogs` actually calls, and is revealed by a banner that
+  names how many Students are hidden. `/design-brief` was not run: the surface turned out to be one
+  banner on an existing list rather than a screen, and it is covered by five tests in
+  `src/components/__tests__/StudentLogs.legacy.test.tsx`, each watched failing against a mutated
+  component. What green tests still do not prove: nothing is old enough to hide until roughly
+  November 2030, so every test and the live run use backdated data.
 
 
 ## 2026-09-01 — the Vercel deploy gate is not real until auto-deploy is switched off

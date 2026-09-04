@@ -81,7 +81,6 @@ async def list_attendance(
     student_name: str | None = Query(None, description="Filter by student name (partial match)"),
     date_from: datetime | None = Query(None, description="Filter by start date"),
     date_to: datetime | None = Query(None, description="Filter by end date"),
-    legacy: bool | None = Query(None, description="Include legacy students (created > 5 years ago)"),
 ) -> PaginatedAttendanceResponse:
     """
     List attendance records for a class with pagination.
@@ -89,7 +88,6 @@ async def list_attendance(
     Supports filtering by:
     - Student name (case-insensitive, partial match)
     - Date range (date_from and date_to)
-    - Legacy (exclude students created > 5 years ago)
 
     Args:
         class_id: Class UUID
@@ -100,7 +98,6 @@ async def list_attendance(
         student_name: Optional name filter
         date_from: Optional start date
         date_to: Optional end date
-        legacy: If None or False, excludes legacy students (default: None)
 
     Returns:
         Paginated response with items, total count, skip, and limit
@@ -118,7 +115,6 @@ async def list_attendance(
         student_name=student_name,
         date_from=date_from,
         date_to=date_to,
-        legacy=legacy,
     )
 
     # Build response items with backward compatibility
@@ -262,6 +258,13 @@ async def get_attendance_summary(
         "attendance_desc",
         description="Sort field: 'attendance_desc' (most attendances first) or 'name_asc' (alphabetical)"
     ),
+    legacy: bool | None = Query(
+        None,
+        description=(
+            "Show students whose first attendance is over five years old. "
+            "Omitted or false hides them and reports how many in legacy_hidden."
+        ),
+    ),
 ) -> PaginatedAttendanceSummaryResponse:
     """
     Get attendance summary grouped by student with search, pagination, and sorting.
@@ -277,6 +280,7 @@ async def get_attendance_summary(
     - skip: Number of students to skip (for pagination)
     - limit: Maximum number of students to return (default 20, max 100)
     - sort_by: Sort order - 'attendance_desc' (default) or 'name_asc'
+    - legacy: Show students whose first attendance is over five years old (default: hidden)
 
     Args:
         class_id: Class UUID
@@ -290,7 +294,7 @@ async def get_attendance_summary(
         404: If class not found
         403: If user doesn't own the class
     """
-    summary, total = await attendance_service.get_attendance_summary(
+    summary, total, legacy_hidden = await attendance_service.get_attendance_summary(
         db=db,
         class_id=class_id,
         teacher=current_user,
@@ -298,6 +302,7 @@ async def get_attendance_summary(
         skip=skip,
         limit=limit,
         sort_by=sort_by,
+        legacy=legacy,
     )
 
     return PaginatedAttendanceSummaryResponse(
@@ -305,5 +310,6 @@ async def get_attendance_summary(
         total=total,
         skip=skip,
         limit=limit,
+        legacy_hidden=legacy_hidden,
     )
 

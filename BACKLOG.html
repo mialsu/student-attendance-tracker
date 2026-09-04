@@ -260,7 +260,7 @@ footer p { margin: 0 0 .5rem; }
 <div class="wrap">
 
 <header class="masthead">
-  <p class="eyebrow">Student Attendance Tracker &middot; swept 2 September 2026, updated 3 September after the client suite</p>
+  <p class="eyebrow">Student Attendance Tracker &middot; swept 2 September 2026, updated 4 September after the legacy-student cutoff</p>
   <h1>What to build next, and why in that order</h1>
   <p class="standfirst">
     Everything currently owed across the two repositories, gathered from both
@@ -269,12 +269,12 @@ footer p { margin: 0 0 .5rem; }
     that proves it.
   </p>
   <dl class="tally">
-    <div><dt>Shipped</dt><dd>3</dd></div>
-    <div><dt>Ranked, remaining</dt><dd>3</dd></div>
+    <div><dt>Shipped</dt><dd>4</dd></div>
+    <div><dt>Ranked, remaining</dt><dd>2</dd></div>
     <div><dt>Small &amp; independent</dt><dd>13</dd></div>
-    <div><dt>Live defects</dt><dd>1</dd></div>
+    <div><dt>Live defects</dt><dd>0</dd></div>
     <div><dt>Need your call</dt><dd>5</dd></div>
-    <div><dt>Ready to spec</dt><dd>2</dd></div>
+    <div><dt>Ready to spec</dt><dd>1</dd></div>
   </dl>
 </header>
 
@@ -403,28 +403,48 @@ validateEmail's inline message is unreachable behind type="email"</p>
   </li>
 
   <li class="item">
-    <span class="rank" aria-hidden="true">3</span>
+    <span class="rank" aria-hidden="true">&check;</span>
     <div class="card">
-      <div class="chips"><span class="chip live">live defect</span><span class="chip acc">ready to spec</span><span class="chip rest">both repos</span></div>
+      <div class="chips"><span class="chip done">shipped 4 Sep</span><span class="chip rest">both layers</span></div>
       <h3>The five-year legacy-student filter</h3>
-      <p class="why">Why third &middot; the only defect a user can actually hit</p>
+      <p class="why">Done &middot; spec 0002, one slice, verdict WORKS</p>
       <p>
-        Three faults in one feature. It filters <code>Student.created_at</code> while this repo's
-        own docs, the root <code>CLAUDE.md</code> and the frontend's type comment all say
+        Three faults in one feature. It filtered <code>Student.created_at</code> while this repo's
+        own docs, the root <code>CLAUDE.md</code> and the frontend's type comment all said
         <em>first attendance</em> &mdash; and for every student the entity migration created, that
-        date <strong>is</strong> the migration date. The <code>legacy</code> parameter defaults to
-        on and no component ever sets it, so the cutoff cannot be switched off from the app. And it
+        date <strong>was</strong> the migration date. The <code>legacy</code> parameter defaulted to
+        on and no component ever set it, so the cutoff could not be switched off from the app. And it
         has never once fired: the app launched in November 2025, so the first silent disappearance
         is due around November 2030.
       </p>
       <p>
-        Your decision is already recorded &mdash; keep the cutoff on by default, and add a way to
-        reveal old students so they can be deleted. So this is a small feature, not a removal, and
-        it is ready for <code>/grill-with-docs</code> today. Fix the date field in the same slice.
+        <strong>A fourth fault, found while shaping, decided the scope.</strong> The filter lived on
+        <code>GET&nbsp;/api/classes/{id}/attendance</code>, and <em>no screen calls that endpoint</em> &mdash;
+        <code>useAttendance</code> was exported with zero callers. The list you actually read,
+        Läsnäolot, is built on <code>&hellip;/attendance/summary</code>, which had no cutoff at all. So the
+        feature hid nothing from anyone, and "keep it on by default" meant introducing hiding rather
+        than preserving it.
       </p>
-      <p class="ev">app/services/attendance_service.py:124-128  &mdash; filters created_at
-app/api/attendance.py:84                &mdash; legacy defaults to None = filter on
-client/src/api/attendance.ts:20     &mdash; typed, never set by any component</p>
+      <p>
+        <strong>Built as one slice</strong> &mdash; not the two the handoff suggested, because
+        <code>api/</code> and <code>client/</code> are two layers of one context, and landing the API half alone
+        would bank a change no teacher can exercise. The cutoff now reads
+        <code>COALESCE(MIN(timestamp), created_at)</code>, lives only in
+        <code>find_legacy_student_ids</code>, and the old copy is deleted. Läsnäolot shows
+        <em>"N vanhaa opiskelijaa piilotettu &middot; Näytä"</em> whenever the response's
+        <code>legacy_hidden</code> is above zero, so a short list always explains itself.
+      </p>
+      <p>
+        <strong>Your call on first attendance, kept and asserted.</strong> Last attendance was
+        recommended and declined: first attendance hides a student who started six years ago and
+        came yesterday. <code>test_first_attendance_decides_even_when_still_attending</code> now
+        states that in the suite, so it can never arrive as a bug report &mdash; and reversing it
+        starts by watching one test fail.
+      </p>
+      <p class="ev">341 backend tests (13 new for the cutoff), 78 client tests (5 new for the banner)
+INV-1: the revealed summary joins the denial suite &mdash; guard neutered, watched red, restored
+live: seeded 5440 / API 8099 / page 8098 &mdash; banner, reveal, delete, re-hide, and search
+ruff 93 -> 91, mypy 16 -> 15; client typecheck 4 and lint 16 unchanged</p>
     </div>
   </li>
 

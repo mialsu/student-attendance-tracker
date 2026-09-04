@@ -273,7 +273,10 @@ commit ships the whole deployable unit.
    - Name normalization with case-insensitive uniqueness
    - Bulk attendance logging (1-50 records at once)
    - Student name autocomplete (ordered by frequency)
-   - Legacy student filter (excludes students with first attendance > 5 years)
+   - Legacy student filter on the attendance summary: hides Students whose **first
+     attendance** is over five years old, `legacy=true` reveals them, and `legacy_hidden`
+     reports how many are held back (spec 0002, 2026-09-04). It read `Student.created_at`
+     on an endpoint no screen called until then.
    - JWT authentication with access & refresh tokens
    - Alembic migrations ready
    - **Paginated responses** with total counts for accurate pagination
@@ -444,7 +447,8 @@ POST   /students/{id}/merge              - Merge a duplicate into this student (
 GET    /classes/{id}/attendance         - List attendance records (with student_name)
 POST   /classes/{id}/attendance         - Log attendance (student_name, quantity 1-50)
 DELETE /attendance/{id}                 - Delete attendance record
-GET    /classes/{id}/attendance/summary - Get summary by student (includes course credit)
+GET    /classes/{id}/attendance/summary - Get summary by student (course credit; legacy= reveals
+                                          students whose first attendance is over 5 years old)
 GET    /classes/{id}/attendance/statistics - Daily/monthly aggregates (exclude_dates optional)
 ```
 
@@ -666,7 +670,7 @@ docker-compose down
 - **Auth API**: 21 tests (signup, login, token refresh, user management)
 - **Classes API**: 26 tests (CRUD operations). NOT ownership validation — removing the
   ownership filter from `class_service.py:54` leaves all 26 green (see REVIEW-DEBT.md).
-- **Attendance API**: 21 tests (tracking, filtering, summaries, legacy filter)
+- **Attendance API**: 21 tests (tracking, filtering, summaries) + 13 for the legacy cutoff
 - **Core API**: 5 tests (health check, root endpoint)
 
 ### Test Database
