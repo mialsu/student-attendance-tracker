@@ -6,6 +6,32 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 
 <!-- Newest first. -->
 
+## 2026-09-04 — deleting the dead hook left attendanceApi.list with no callers at all
+- **What:** `useAttendance` was deleted because nothing called it (spec 0002). That leaves
+  `attendanceApi.list` and `ListAttendanceParams` with **zero** callers of their own — the client
+  now has no path whatsoever to `GET /api/classes/{id}/attendance`. They were kept deliberately:
+  the route still exists and this module mirrors the API, and proving an export dead is `/prune`'s
+  job, not a feature slice's.
+- **Where:** `src/api/attendance.ts` — `ListAttendanceParams` and `attendanceApi.list`.
+- **What green tests do NOT prove here:** nothing exercises that method, and the orphan gate cannot
+  see it — `attendance.ts` has other live exports, so the module is not an orphan and an unused
+  member inside it is invisible. This is the same blind spot recorded on 2026-09-01 for
+  `src/lib/classes.ts`, one level down.
+- **Disposition:** open, and it belongs to backlog item 6 (`/prune`), not to a later feature.
+
+## 2026-09-04 — the revealed state is forgotten the moment you navigate away
+- **What:** `showLegacy` is component state. Reveal the old students, open a student's records,
+  come back — they are hidden again, and the page count resets. Deliberate (spec 0002, decision 6):
+  a control that first appears in 2030 to delete a handful of rows did not seem worth a URL
+  parameter, and the alternative is reversible.
+- **Where:** `src/components/StudentLogs.tsx` — `const [showLegacy, setShowLegacy] = useState(false)`.
+- **Criterion:** none. `AC-6` asks only that the banner reveals and a revealed student can be
+  deleted, which it does. This is below the spec, recorded because a user can feel it.
+- **What green tests do NOT prove here:** the tests mount the component once. No test navigates
+  away and back, so nothing would notice if this became annoying in practice.
+- **Disposition:** accepted-with-reason, and listed as open question 2 in the spec. One `useState`
+  becomes one search param if deleting a batch of old students ever feels tedious.
+
 ## 2026-09-03 — a failed logout leaves the teacher looking signed in
 - **What:** `logout()` awaits `authApi.logout()` and only then clears state
   (`src/contexts/AuthContext.tsx:62-64`). `authApi.logout` clears the in-memory access token in a

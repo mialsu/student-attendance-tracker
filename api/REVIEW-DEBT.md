@@ -6,6 +6,57 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 
 <!-- Newest first. -->
 
+## 2026-09-04 — the five-year boundary itself is not tested; only points far from it are
+- **What:** `LEGACY_WINDOW = timedelta(days=5 * 365)` is the whole rule, and no test pins it. The
+  suite hides students at 6, 7 and 8 years and keeps them at 0.1, 0.25 and 0.5 years, so **the
+  constant could be changed to anything between roughly 4 months and 6 years and all 341 tests
+  would still pass.** Nothing exercises just-inside and just-outside the boundary.
+- **Where:** `app/services/attendance_service.py` — `LEGACY_WINDOW` and `find_legacy_student_ids`;
+  `tests/test_legacy_students.py` — `years_ago()` is only ever called far from the cutoff.
+- **Criterion:** `AC-1`, "A student whose first attendance is more than five years old is absent
+  from the default summary". Proven for *more than five years*; the word **five** is not proven.
+- **What green tests do NOT prove here:** that the window is five years. A typo in the constant, or
+  a later "let's make it three", passes the suite in silence.
+- **Disposition:** open. Two tests at `LEGACY_WINDOW ± 1 day` would close it and cost nothing.
+
+## 2026-09-04 — every proof of the legacy cutoff runs on manufactured dates
+- **What:** the app launched in November 2025, so no real row is old enough to hide until around
+  November 2030. All 13 tests and the whole live run backdate `AttendanceRecord.timestamp` (and, for
+  the record-less case, `Student.created_at`) by hand. Against production data the feature is inert.
+- **Where:** `tests/test_legacy_students.py` `years_ago()`; the live run's seed script, which was
+  disposable and is not in the repo.
+- **Criterion:** `AC-6`, proven live only against a seeded database.
+- **What green tests do NOT prove here:** that the first real firing, four years from now, behaves
+  as the tests say. Nobody will observe this feature working on real data before then, and by then
+  the data will have shapes nobody has anticipated — students merged, renamed, or carried across
+  courses. A migration or a merge that rewrites `timestamp` would move the cutoff under it.
+- **Disposition:** open, and arguably unfixable — recorded so that a 2030 session reading a green
+  suite knows the suite has never seen the real case.
+
+## 2026-09-04 — the summary pays for a hidden count that will be 0 for four years
+- **What:** every default summary request now runs a second query — a grouped outer join of the
+  class's Students against their AttendanceRecords — purely to compute `legacy_hidden`, which is 0
+  for every class in production and will stay 0 until roughly November 2030.
+- **Where:** `app/services/attendance_service.py` — `find_legacy_student_ids`, called from
+  `get_attendance_summary` whenever `legacy` is not true.
+- **What green tests do NOT prove here:** the cost. No timing was taken, on any class size. The
+  largest class in the test suite has four students, and nobody has looked at the real distribution.
+  The query is unindexed beyond the existing `ix_attendance_student_id`.
+- **Disposition:** open. Measure before optimising — this is recorded as an unmeasured cost, not a
+  known problem, and *designing for the scale you don't have* is its own anti-pattern.
+
+## 2026-09-04 — "no other cutoff reads created_at" is review-only
+- **What:** half of AC-8 is enforced (`test_records_endpoint_declares_no_legacy_parameter` reads the
+  app's own OpenAPI document). The other half — that nothing in `app/` reintroduces an age cutoff on
+  `Student.created_at` — was checked by grep during review and has no enforcer.
+- **Where:** `app/services/` generally; the deleted block was `attendance_service.py:121-134`.
+- **Criterion:** `AC-8`, "…and nothing in `app/` reads `Student.created_at` for a cutoff".
+- **What green tests do NOT prove here:** a second, differently-worded cutoff added later anywhere
+  in the service layer. The suite would stay green and the vocabulary would fork again — which is
+  precisely how this feature came to have two dates in the first place.
+- **Disposition:** open, `[review-only]`. A `drift-extra.sh` rule matching `created_at` next to a
+  `timedelta` comparison would make it a gate.
+
 ## 2026-09-03 — a verification that cannot tell "found nothing" from "did not run"
 - **What:** before irreversibly deleting four GitHub repositories, a loop checked that every commit
   on each remote existed in the monorepo. It reported `refs=0  missing=0  ✔ safe to delete` and was
