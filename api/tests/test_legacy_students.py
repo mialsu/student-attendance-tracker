@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.attendance import AttendanceRecord
 from app.models.class_ import Class
 from app.models.student import Student
+from app.services import attendance_service
 
 
 def years_ago(years: float) -> datetime:
@@ -175,6 +176,57 @@ class TestLegacyCutoff:
 
         assert names(payload) == ["Tuore Kirjaus"]
         assert payload["legacy_hidden"] == 1
+
+
+def test_the_window_is_five_years():
+    """
+    Asserted against a literal, not against LEGACY_WINDOW itself — a test that derives the
+    expectation from the constant moves with it and proves nothing.
+
+    Sync, and deliberately outside the class below, which carries the asyncio mark.
+    """
+    assert attendance_service.LEGACY_WINDOW == timedelta(days=5 * 365)
+
+
+@pytest.mark.asyncio
+class TestTheWindowIsFiveYears:
+    """
+    The cutoff's own number, which the other tests in this file deliberately do not pin.
+
+    Every other case here sits years away from the line, so the window could be changed to
+    anything between a few months and six years without a single failure. These two, with
+    the literal above, fix it: one either side of the boundary.
+    """
+
+    async def test_a_student_a_day_past_the_line_is_hidden(
+        self,
+        client: AsyncClient,
+        auth_headers: dict,
+        test_class: Class,
+        db: AsyncSession,
+    ):
+        just_over = datetime.now(timezone.utc) - timedelta(days=5 * 365) - timedelta(days=1)
+        await student_with_attendance(db, test_class, "Rajan Takaa", just_over)
+
+        payload = await summary(client, auth_headers, test_class)
+
+        assert names(payload) == []
+        assert payload["legacy_hidden"] == 1
+
+    async def test_a_student_a_day_inside_the_line_is_kept(
+        self,
+        client: AsyncClient,
+        auth_headers: dict,
+        test_class: Class,
+        db: AsyncSession,
+    ):
+        just_under = datetime.now(timezone.utc) - timedelta(days=5 * 365) + timedelta(days=1)
+        await student_with_attendance(db, test_class, "Rajan Sisalta", just_under)
+
+        payload = await summary(client, auth_headers, test_class)
+
+        assert names(payload) == ["Rajan Sisalta"]
+        assert payload["legacy_hidden"] == 0
 
 
 @pytest.mark.asyncio

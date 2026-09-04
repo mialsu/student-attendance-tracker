@@ -6,6 +6,65 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 
 <!-- Newest first. -->
 
+## 2026-09-04 — drift-check's "new dependency with no ADR" check is dead here too, and it is NOT mine to fix
+- **What:** `scripts/drift-check.sh` check 3 refuses a dependency added without an ADR. It never
+  fires in this repo. Adding `httpx-sse>=0.4.0` to `requirements.txt` reported
+  `drift-check: clean` **with and without** an ADR present — a silent pass, not a false alarm.
+- **Where:** `scripts/drift-check.sh:220` (`dep_names`) and `:230` (`adr_added`).
+- **The mechanism**, confirmed by hand rather than guessed:
+  `changed()` returns git-root-relative paths (`api/requirements.txt`), while the script's cwd is
+  the **package** (`api/`) because of the `cd` added on 2026-09-03 for the monorepo. So
+  `git diff -- api/requirements.txt` run from inside `api/` matches no pathspec and returns nothing;
+  `new` is empty and the check reports nothing. `adr_added`'s `^$ADR_DIR/` anchor is wrong for the
+  same reason, and would misfire if the first bug were fixed alone.
+- **Why this entry does not also say FIXED:** `drift-check.sh` is **devkit's template**, kept
+  byte-identical so upstream updates apply cleanly. It already carries exactly one local hunk — the
+  2026-09-03 `cd` — and that hunk is what broke this. Choosing between *cd to the git root and fix
+  the tool paths elsewhere* and *keep the cd and make every path git-root-aware* is a decision about
+  a vendored file, and it belongs to the Owner and to devkit, not to a feature slice. Forking it
+  further is the anti-pattern the file's own header warns about.
+- **What green tests do NOT prove here:** how many of drift-check's other checks take a path from
+  `changed()` / `added_files()` and hand it back to git or the filesystem. Checks 3 and 4 (lockfiles)
+  are the obvious candidates; nobody has audited the rest. Every one of them prints the same
+  `drift-check: clean` whether it ran or never matched a path.
+- **Disposition:** open, and **the highest-value item in this ledger** — a gate that cannot fail is
+  worse than no gate, because the commit message says it passed. The two sibling checks in
+  `drift-extra.sh` were fixed on 2026-09-04 and proven by breaking them; this one is the same defect
+  in a file this repo does not own.
+
+## 2026-09-04 — the drift gate's migration check had been dead since the monorepo merge
+- **What:** `drift-extra.sh` check 2 refuses an edit to an already-applied alembic migration. Its
+  anchor was `^alembic/versions/`, and `git diff --name-only` reports paths from the **git root** —
+  which since the 2026-09-03 merge means `api/alembic/versions/…`. The anchor matched nothing, so
+  the check reported clean while doing nothing, for a day. Found while proving a *new* check in the
+  same file, whose `^app/` anchor failed for exactly the same reason.
+- **Where:** `scripts/drift-extra.sh` — `MIGRATIONS`, now `(^|/)alembic/versions/.*\.py$`.
+- **What green tests did NOT prove here:** the gate's own output. `drift-extra: clean` is printed
+  identically whether the check ran and found nothing or never matched a path. This is the third
+  time this project has hit the same shape — the baseline guard scoring a crashed tool as 0
+  problems (`ab55f49`), and the repo-deletion check whose `ls-remote` failed into `2>/dev/null`.
+- **Disposition:** **FIXED 2026-09-04**, and proven by appending a line to
+  `01edea317e5e_add_student_model.py` and watching the gate fail, then restoring it. The top-of-file
+  comment now records why the anchor is written `(^|/)`.
+- **Still owed:** nobody has audited the *other* repo-relative paths in this repo's scripts against
+  the monorepo layout. `drift-check.sh` is devkit's template and is deliberately byte-identical, so
+  it is the first place to look.
+
+## 2026-09-04 — the attendance summary issues one query per student on every page
+- **What:** `get_attendance_summary` pages students, then loops over them and runs a separate
+  `SELECT` for each student's attendance records. At the default `limit=20` that is 20 round-trips
+  per request, and it is what the measurement below attributes ~59 ms of a 65 ms request to.
+- **Where:** `app/services/attendance_service.py` — the `for student in students:` loop that builds
+  `summary`.
+- **What green tests do NOT prove here:** the shape. Every test in the suite runs against classes of
+  a handful of students, where an N+1 is invisible. Nothing fails as the loop grows.
+- **Measured 2026-09-04:** 200 students, 5,000 records, `limit=20` → 65.1 ms median. It is not
+  slow *yet*, and this teacher's classes are far smaller.
+- **Disposition:** open. Pre-existing, found while measuring spec 0002's hidden-count query, which
+  turned out to be the cheap part. A single `selectinload` on the paged students would replace 20
+  queries with one; that is a change to code no spec is touching today, so it is recorded rather
+  than folded into an unrelated slice.
+
 ## 2026-09-04 — the five-year boundary itself is not tested; only points far from it are
 - **What:** `LEGACY_WINDOW = timedelta(days=5 * 365)` is the whole rule, and no test pins it. The
   suite hides students at 6, 7 and 8 years and keeps them at 0.1, 0.25 and 0.5 years, so **the
@@ -17,7 +76,12 @@ cut (`/confess`), read first by any architecture or review session, dispositione
   from the default summary". Proven for *more than five years*; the word **five** is not proven.
 - **What green tests do NOT prove here:** that the window is five years. A typo in the constant, or
   a later "let's make it three", passes the suite in silence.
-- **Disposition:** open. Two tests at `LEGACY_WINDOW ± 1 day` would close it and cost nothing.
+- **Disposition:** **FIXED 2026-09-04.** `test_the_window_is_five_years` asserts the literal
+  `timedelta(days=5 * 365)` (deriving the expectation from the constant would move with it and
+  prove nothing), and `TestTheWindowIsFiveYears` adds a case a day either side of the line. Proven
+  by mutating the constant both ways: at 3 years the literal and the *inside-the-line* case go red,
+  at 7 years the literal and the *past-the-line* case do. Before this, neither mutation failed
+  anything.
 
 ## 2026-09-04 — every proof of the legacy cutoff runs on manufactured dates
 - **What:** the app launched in November 2025, so no real row is old enough to hide until around
@@ -39,11 +103,21 @@ cut (`/confess`), read first by any architecture or review session, dispositione
   for every class in production and will stay 0 until roughly November 2030.
 - **Where:** `app/services/attendance_service.py` — `find_legacy_student_ids`, called from
   `get_attendance_summary` whenever `legacy` is not true.
-- **What green tests do NOT prove here:** the cost. No timing was taken, on any class size. The
-  largest class in the test suite has four students, and nobody has looked at the real distribution.
-  The query is unindexed beyond the existing `ix_attendance_student_id`.
-- **Disposition:** open. Measure before optimising — this is recorded as an unmeasured cost, not a
-  known problem, and *designing for the scale you don't have* is its own anti-pattern.
+- **What green tests do NOT prove here:** the cost. No timing was taken by the slice that added it.
+- **Measured 2026-09-04**, PostgreSQL 17, one class of **200 students and 5,000 attendance
+  records** — roughly ten times a real class, with `limit=20`:
+
+  | Variant | Median | Min | Max |
+  |---|---|---|---|
+  | hiding (runs the count) | 65.1 ms | 62.0 | 74.6 |
+  | revealed (skips the count) | 58.9 ms | 54.1 | 69.7 |
+  | hiding, with a search | 63.3 ms | 57.2 | 68.5 |
+  | `find_legacy_student_ids` alone | **6.6 ms** | — | — |
+
+  So the hidden count costs about **6 ms, near 10% of the request**, at ten times the size that
+  matters, and it needs no index. The other 59 ms is the summary's own N+1 — see the entry below.
+- **Disposition:** **accepted-with-reason 2026-09-04.** Measured, cheap, and left alone. The
+  measuring script was disposable and is not in the repo; the numbers above are the record.
 
 ## 2026-09-04 — "no other cutoff reads created_at" is review-only
 - **What:** half of AC-8 is enforced (`test_records_endpoint_declares_no_legacy_parameter` reads the
@@ -54,8 +128,10 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 - **What green tests do NOT prove here:** a second, differently-worded cutoff added later anywhere
   in the service layer. The suite would stay green and the vocabulary would fork again — which is
   precisely how this feature came to have two dates in the first place.
-- **Disposition:** open, `[review-only]`. A `drift-extra.sh` rule matching `created_at` next to a
-  `timedelta` comparison would make it a gate.
+- **Disposition:** **FIXED 2026-09-04.** `scripts/drift-extra.sh` check 3 fails any added line under
+  `app/` matching `created_at\s*[<>]`, with `drift-ok` as the escape hatch for a legitimate date
+  filter. Proven by planting `select(Student.id).where(Student.created_at < cutoff)` in
+  `attendance_service.py` and watching the gate go red, then removing it.
 
 ## 2026-09-03 — a verification that cannot tell "found nothing" from "did not run"
 - **What:** before irreversibly deleting four GitHub repositories, a loop checked that every commit
