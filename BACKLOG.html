@@ -260,7 +260,7 @@ footer p { margin: 0 0 .5rem; }
 <div class="wrap">
 
 <header class="masthead">
-  <p class="eyebrow">Student Attendance Tracker &middot; swept 2 September 2026, updated 4 September after the legacy-student cutoff</p>
+  <p class="eyebrow">Student Attendance Tracker &middot; swept 2 September 2026, updated 4 September after the legacy-student cutoff shipped</p>
   <h1>What to build next, and why in that order</h1>
   <p class="standfirst">
     Everything currently owed across the two repositories, gathered from both
@@ -271,7 +271,7 @@ footer p { margin: 0 0 .5rem; }
   <dl class="tally">
     <div><dt>Shipped</dt><dd>4</dd></div>
     <div><dt>Ranked, remaining</dt><dd>2</dd></div>
-    <div><dt>Small &amp; independent</dt><dd>13</dd></div>
+    <div><dt>Small &amp; independent</dt><dd>16</dd></div>
     <div><dt>Live defects</dt><dd>0</dd></div>
     <div><dt>Need your call</dt><dd>5</dd></div>
     <div><dt>Ready to spec</dt><dd>1</dd></div>
@@ -521,13 +521,25 @@ end to end:             staging a type error and running `git commit` was REFUSE
       <h3>The dead-code sweep</h3>
       <p class="why">Why last &middot; real value, no urgency, and it grows while you wait</p>
       <p>
-        Two provably-dead client modules are exempted from the orphan gate rather than deleted;
-        <code>src/lib/classes.ts</code> is kept alive solely by its own tests; one upward boundary
-        violation is exempted where hooks reach into components. Each exemption is a line in a
-        config that reads like policy and is actually debt.
+        <strong>Smaller than it was.</strong> <code>src/lib/attendance.ts</code> and
+        <code>src/lib/classes.ts</code> were deleted on 3 September with the 26 tests holding them
+        up, and <code>src/lib/</code> now contains only <code>utils.ts</code>. One orphan exemption
+        remains &mdash; an unused shadcn primitive &mdash; plus one upward boundary violation where
+        hooks reach into components. Each exemption is a line in a config that reads like policy and
+        is actually debt.
       </p>
-      <p class="ev">client/.dependency-cruiser.cjs &mdash; no-orphans, two baseline exemptions
-src/lib/attendance.ts, src/components/ui/aspect-ratio.tsx</p>
+      <p>
+        <strong>New on 4 September:</strong> spec 0002 deleted the dead <code>useAttendance</code>
+        hook, which leaves <code>attendanceApi.list</code> and <code>ListAttendanceParams</code>
+        with no callers at all &mdash; the client now has no path to
+        <code>GET /api/classes/{id}/attendance</code>. Kept deliberately, because proving an export
+        dead is this item's job rather than a feature slice's. The orphan gate cannot see it: the
+        module has other live exports, so an unused member inside it is invisible &mdash; the same
+        blind spot recorded for <code>classes.ts</code>, one level down.
+      </p>
+      <p class="ev">client/.dependency-cruiser.cjs:104 &mdash; no-orphans, ONE baseline exemption
+src/components/ui/aspect-ratio.tsx
+client/src/api/attendance.ts &mdash; attendanceApi.list, ListAttendanceParams: zero callers</p>
     </div>
   </li>
 
@@ -557,6 +569,38 @@ src/lib/attendance.ts, src/components/ui/aspect-ratio.tsx</p>
     </thead>
     <tbody>
       <tr>
+        <td><strong>The dependency gate catches none of this repo's dependencies.</strong>
+          <code>drift-check.sh</code> refuses a dependency added without an ADR. Its path bug was
+          fixed on 4 Sep (<code>--relative</code> on every <code>git diff</code>, proven in the
+          client both directions), and it now fires for <code>httpx-sse==0.4.0</code> &mdash; but
+          stays silent for <code>httpx-sse&gt;=0.4.0</code>. <code>dep_names</code> cuts the name at
+          the first of <code>["':= ]</code>, leaving the <code>&gt;</code> attached, and the charset
+          filter after it drops the line. All 21 requirements here use <code>&gt;=</code>. The fix
+          is two characters in the cut class, but it changes the vendored template's parsing rather
+          than a path, so it waits for your word</td>
+        <td class="where">api/scripts/drift-check.sh:225-227 &mdash; dep_names</td>
+        <td class="st"><span class="chip hold">needs your call</span></td>
+      </tr>
+      <tr>
+        <td><strong>devkit's own template still has the path bug.</strong> The
+          <code>--relative</code> fix landed in both copies here, but
+          <code>devkit/templates/scripts/drift-check.sh</code> is unchanged, so every project
+          bootstrapped from it inherits a check that dies silently the day the repo stops being
+          alone. Different repository, so it was recorded rather than edited</td>
+        <td class="where">~/code/personal/devkit/templates/scripts/drift-check.sh</td>
+        <td class="st"><span class="chip hold">open</span></td>
+      </tr>
+      <tr>
+        <td>The attendance summary issues <strong>one query per student on every page</strong>
+          &mdash; 20 round-trips at the default limit. Measured 4 Sep while timing spec 0002's
+          hidden-count query, which turned out to be the cheap part: 200 students and 5,000 records
+          give a 65&nbsp;ms request, of which the legacy count is 6.6&nbsp;ms and this loop is most
+          of the rest. Not slow yet, and every test runs against a handful of students, so nothing
+          fails as it grows. One <code>selectinload</code> would replace 20 queries with one</td>
+        <td class="where">app/services/attendance_service.py &mdash; the <code>for student in students:</code> loop</td>
+        <td class="st"><span class="chip rest">open</span></td>
+      </tr>
+      <tr>
         <td><code>student_service.py</code> is a core service at 29% coverage</td>
         <td class="where">app/services/student_service.py</td>
         <td class="st"><span class="chip hold">open</span></td>
@@ -577,8 +621,8 @@ src/lib/attendance.ts, src/components/ui/aspect-ratio.tsx</p>
         <td class="st"><span class="chip rest">open</span></td>
       </tr>
       <tr>
-        <td>55 of the 93 ruff findings are auto-fixable; run as its own commit, not folded into a feature</td>
-        <td class="where">.harness-baseline &mdash; ruff=93</td>
+        <td>53 of the 91 ruff findings are auto-fixable; run as its own commit, not folded into a feature</td>
+        <td class="where">.harness-baseline &mdash; ruff=91</td>
         <td class="st"><span class="chip rest">open</span></td>
       </tr>
       <tr>
