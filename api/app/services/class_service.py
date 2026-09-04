@@ -49,6 +49,11 @@ async def get_classes_for_teacher(
     Returns:
         List of classes belonging to the teacher
     """
+    # INV-1's *filter* site, and the only one. It enforces the same rule as
+    # verify_class_ownership over many rows instead of one, so it cannot call it -- there is no
+    # single class_id to check. Removing this WHERE leaks every teacher's classes into every
+    # other teacher's list, which is what test_class_list_does_not_leak_another_teachers_class
+    # exists to catch. See specs/0003-consolidate-inv-1.md, decision 4.
     result = await db.execute(
         select(Class)
         .where(Class.teacher_id == teacher_id)
@@ -143,13 +148,9 @@ async def update_class(
         NotFoundError: If class not found
         ForbiddenException: If user is not the class owner
     """
-    class_obj = await get_class_by_id(db, class_id)
-    if not class_obj:
-        raise NotFoundError("Class not found")
-    
-    # Check ownership
-    if class_obj.teacher_id != teacher.id:
-        raise ForbiddenException("You don't have permission to update this class")
+    class_obj = await verify_class_ownership(
+        db, class_id, teacher, action="update this class"
+    )
     
     # Update fields
     if class_data.name is not None:
@@ -186,13 +187,9 @@ async def delete_class(
         NotFoundError: If class not found
         ForbiddenException: If user is not the class owner
     """
-    class_obj = await get_class_by_id(db, class_id)
-    if not class_obj:
-        raise NotFoundError("Class not found")
-    
-    # Check ownership
-    if class_obj.teacher_id != teacher.id:
-        raise ForbiddenException("You don't have permission to delete this class")
+    class_obj = await verify_class_ownership(
+        db, class_id, teacher, action="delete this class"
+    )
     
     # Delete class (cascade will delete attendance records)
     await db.delete(class_obj)
@@ -203,14 +200,27 @@ async def verify_class_ownership(
     db: AsyncSession,
     class_id: UUID,
     teacher: User,
+    *,
+    action: str = "access this class",
 ) -> Class:
     """
     Verify that a teacher owns a specific class.
+
+    The one place in `app/` that decides single-class ownership (INV-1). Every other service
+    calls this rather than comparing `teacher_id` itself; `scripts/drift-extra.sh` check 4
+    fails a diff that adds such a comparison anywhere else. See
+    `specs/0003-consolidate-inv-1.md`.
+
+    The class's absence is reported before its ownership is considered, so a 404 never becomes
+    a 403 and no teacher learns that a class id exists.
 
     Args:
         db: Database session
         class_id: Class UUID
         teacher: Teacher to verify
+        action: The phrase after "You don't have permission to" in the refusal, so a caller
+            refusing an update says so rather than saying "access". Callers pass what they
+            were about to do.
 
     Returns:
         Class object
@@ -222,10 +232,10 @@ async def verify_class_ownership(
     class_obj = await get_class_by_id(db, class_id)
     if not class_obj:
         raise NotFoundError("Class not found")
-    
+
     if class_obj.teacher_id != teacher.id:
-        raise ForbiddenException("You don't have permission to access this class")
-    
+        raise ForbiddenException(f"You don't have permission to {action}")
+
     return class_obj
 
 

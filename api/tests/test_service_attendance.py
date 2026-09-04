@@ -68,77 +68,6 @@ class TestGetAttendanceById:
 
 
 @pytest.mark.asyncio
-class TestGetClassById:
-    """Tests for get_class_by_id in attendance service."""
-
-    async def test_get_class_by_id_found(
-        self, db: AsyncSession, test_class: Class
-    ):
-        """Test getting class by ID when it exists."""
-        result = await attendance_service.get_class_by_id(db, test_class.id)
-
-        assert result is not None
-        assert result.id == test_class.id
-
-    async def test_get_class_by_id_not_found(self, db: AsyncSession):
-        """Test getting class by ID when it doesn't exist."""
-        from uuid import uuid4
-
-        result = await attendance_service.get_class_by_id(db, uuid4())
-
-        assert result is None
-
-
-@pytest.mark.asyncio
-class TestVerifyClassAccess:
-    """Tests for verify_class_access."""
-
-    async def test_verify_class_access_success(
-        self, db: AsyncSession, test_class: Class, test_user: User
-    ):
-        """Test successful class access verification."""
-        result = await attendance_service.verify_class_access(
-            db, test_class.id, test_user
-        )
-
-        assert result.id == test_class.id
-
-    async def test_verify_class_access_not_found(
-        self, db: AsyncSession, test_user: User
-    ):
-        """Test class access when class doesn't exist."""
-        from uuid import uuid4
-
-        with pytest.raises(NotFoundError) as exc:
-            await attendance_service.verify_class_access(db, uuid4(), test_user)
-
-        assert "not found" in str(exc.value).lower()
-
-    async def test_verify_class_access_forbidden(
-        self, db: AsyncSession, test_class: Class
-    ):
-        """Test class access when user doesn't own the class."""
-        from app.core.security import hash_password
-
-        # Create another user
-        other_user = User(
-            email="other_user@example.com",
-            password_hash=hash_password("password123"),
-            active=True,
-        )
-        db.add(other_user)
-        await db.commit()
-        await db.refresh(other_user)
-
-        with pytest.raises(ForbiddenException) as exc:
-            await attendance_service.verify_class_access(
-                db, test_class.id, other_user
-            )
-
-        assert "permission" in str(exc.value).lower()
-
-
-@pytest.mark.asyncio
 class TestCreateAttendanceRecord:
     """Tests for create_attendance_record."""
 
@@ -253,7 +182,52 @@ class TestDeleteAttendanceRecord:
                 db, test_attendance.id, other_user
             )
 
+        # The record's own wording, not the helper's generic default. This check folded into
+        # class_service.verify_class_ownership on 2026-09-04 and passes `action` to keep it.
+        assert "You don't have permission to delete this attendance record" in str(exc.value)
+
+
+@pytest.mark.asyncio
+class TestGetAttendanceStatisticsOwnership:
+    """INV-1 at the statistics service seam.
+
+    Until 2026-09-04 `get_attendance_statistics` took no teacher at all: the check lived in
+    `app/api/attendance.py`, one line above the call. The route was covered from the denied side
+    by tests/test_authorization.py, so the endpoint was safe — but the service function was not,
+    and a second caller would have read any teacher's class with nothing failing. These three
+    tests are what makes the function, rather than its one caller, the thing that is proven.
+    """
+
+    async def test_owner_reads_statistics(
+        self, db: AsyncSession, test_class: Class, test_user: User
+    ):
+        """The owning teacher gets the aggregates."""
+        stats = await attendance_service.get_attendance_statistics(
+            db, test_class.id, test_user
+        )
+
+        assert stats["total_records"] == 0
+        assert stats["daily_stats"] == []
+
+    async def test_other_teacher_is_refused(
+        self, db: AsyncSession, test_class: Class, other_teacher: User
+    ):
+        """A second real teacher is refused at the service, not only at the route."""
+        with pytest.raises(ForbiddenException) as exc:
+            await attendance_service.get_attendance_statistics(
+                db, test_class.id, other_teacher
+            )
+
         assert "permission" in str(exc.value).lower()
+
+    async def test_missing_class_is_not_found(
+        self, db: AsyncSession, test_user: User
+    ):
+        """A class that does not exist 404s before ownership is considered."""
+        from uuid import uuid4
+
+        with pytest.raises(NotFoundError):
+            await attendance_service.get_attendance_statistics(db, uuid4(), test_user)
 
 
 @pytest.mark.asyncio

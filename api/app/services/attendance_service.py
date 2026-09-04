@@ -6,13 +6,12 @@ from uuid import UUID
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import BadRequestException, ForbiddenException, NotFoundError
+from app.core.exceptions import BadRequestException, NotFoundError
 from app.models.attendance import AttendanceRecord
-from app.models.class_ import Class
 from app.models.student import Student
 from app.models.user import User
 from app.schemas.attendance import AttendanceRecordCreate
-from app.services import student_service
+from app.services import class_service, student_service
 
 
 async def get_attendance_by_id(
@@ -33,54 +32,6 @@ async def get_attendance_by_id(
         select(AttendanceRecord).where(AttendanceRecord.id == attendance_id)
     )
     return result.scalar_one_or_none()
-
-
-async def get_class_by_id(
-    db: AsyncSession,
-    class_id: UUID,
-) -> Class | None:
-    """
-    Retrieve a class by ID.
-
-    Args:
-        db: Database session
-        class_id: Class UUID
-
-    Returns:
-        Class if found, None otherwise
-    """
-    result = await db.execute(select(Class).where(Class.id == class_id))
-    return result.scalar_one_or_none()
-
-
-async def verify_class_access(
-    db: AsyncSession,
-    class_id: UUID,
-    teacher: User,
-) -> Class:
-    """
-    Verify that a teacher has access to a class.
-
-    Args:
-        db: Database session
-        class_id: Class UUID
-        teacher: Teacher to verify
-
-    Returns:
-        Class object
-
-    Raises:
-        NotFoundError: If class not found
-        ForbiddenException: If user doesn't own the class
-    """
-    class_obj = await get_class_by_id(db, class_id)
-    if not class_obj:
-        raise NotFoundError("Class not found")
-    
-    if class_obj.teacher_id != teacher.id:
-        raise ForbiddenException("You don't have permission to access this class")
-    
-    return class_obj
 
 
 async def list_attendance_for_class(
@@ -114,7 +65,7 @@ async def list_attendance_for_class(
         ForbiddenException: If user doesn't own the class
     """
     # Verify access
-    await verify_class_access(db, class_id, teacher)
+    await class_service.verify_class_ownership(db, class_id, teacher)
 
     # This endpoint lists records and applies no age cutoff. The five-year rule lives in
     # get_attendance_summary, which backs the only student list the app renders
@@ -187,7 +138,7 @@ async def create_attendance_record(
         BadRequestException: If class is not active or student name is invalid
     """
     # Verify access and active status
-    class_obj = await verify_class_access(db, class_id, teacher)
+    class_obj = await class_service.verify_class_ownership(db, class_id, teacher)
 
     if not class_obj.active:
         raise BadRequestException(
@@ -257,15 +208,10 @@ async def delete_attendance_record(
     if not attendance:
         raise NotFoundError("Attendance record not found")
     
-    # Verify class ownership
-    class_obj = await get_class_by_id(db, attendance.class_id)
-    if not class_obj:
-        raise NotFoundError("Associated class not found")
-    
-    if class_obj.teacher_id != teacher.id:
-        raise ForbiddenException(
-            "You don't have permission to delete this attendance record"
-        )
+    # Verify class ownership -- INV-1's single site (specs/0003-consolidate-inv-1.md)
+    await class_service.verify_class_ownership(
+        db, attendance.class_id, teacher, action="delete this attendance record"
+    )
     
     # Delete record
     await db.delete(attendance)
@@ -357,7 +303,7 @@ async def get_attendance_summary(
         ForbiddenException: If user doesn't own the class
     """
     # Verify access
-    await verify_class_access(db, class_id, teacher)
+    await class_service.verify_class_ownership(db, class_id, teacher)
 
     # Build base query for students
     query = select(Student).where(Student.class_id == class_id)
@@ -431,6 +377,7 @@ async def get_attendance_summary(
 async def get_attendance_statistics(
     db: AsyncSession,
     class_id: UUID,
+    teacher: User,
     exclude_dates: list[str] | None = None,
 ) -> dict:
     """
@@ -439,14 +386,25 @@ async def get_attendance_statistics(
     Uses database aggregation for efficient queries.
     Compatible with both PostgreSQL (date_trunc) and SQLite (date).
 
+    Refuses a teacher who does not own the class, like every other read in this module. It took
+    no teacher until 2026-09-04 and was guarded only by its route, one line above the call, which
+    made the function unsafe to call from anywhere else (specs/0003-consolidate-inv-1.md).
+
     Args:
         db: Database session
         class_id: Class UUID
+        teacher: Teacher reading the statistics
         exclude_dates: Optional list of dates to exclude (format: "YYYY-MM-DD")
 
     Returns:
         Dictionary with statistics including daily and monthly aggregations
+
+    Raises:
+        NotFoundError: If class not found
+        ForbiddenException: If user doesn't own the class
     """
+    await class_service.verify_class_ownership(db, class_id, teacher)
+
     # Total records count (ALL data, not filtered)
     total_result = await db.execute(
         select(func.count(AttendanceRecord.id))

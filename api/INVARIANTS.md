@@ -25,7 +25,7 @@ Domain dial: **on**, 4 of 4 triggers (METHOD.md). Contexts: **one**.
 
 | # | Must always be true | Violated when | Enforced by | Owner in code |
 |---|---|---|---|---|
-| INV-1 | Only a Teacher associated with a Class may read or change that Class, its Students, or its Attendance records | a second authenticated Teacher reads or changes a Class they do not own — including merely seeing it in their own class list | `test:tests/test_authorization.py` (17 denial tests + 7 positive controls) | ⚠ **7 sites, not 1** — `class_service.py:54,151,194,226`, `student_service.py:579`, `attendance_service.py:80,286`. Intended single owner: `class_service.verify_class_ownership`. Confessed 2026-09-01 |
+| INV-1 | Only a Teacher associated with a Class may read or change that Class, its Students, or its Attendance records | a second authenticated Teacher reads or changes a Class they do not own — including merely seeing it in their own class list | `test:tests/test_authorization.py` (18 denial tests + 8 positive controls) and `gate:scripts/drift-extra.sh` check 4 | **One check site and one filter site.** `class_service.verify_class_ownership` decides it for a single Class and is the only thing in `app/` that compares a `teacher_id`; `class_service.get_classes_for_teacher`'s `WHERE` clause enforces the same rule over many rows and cannot call it, there being no single class to check. Consolidated 2026-09-04 from the seven sites confessed on 2026-09-01 (spec 0003), which were two duplicate helpers — one under the second name `verify_class_access` — three inline comparisons, and the filter. Named by **function rather than file:line on purpose**: the row this replaces pointed at `attendance_service.py:286`, which had already rotted to :265 |
 | INV-2 | A Student's name is unique, case-insensitively, within its Class | two Students in one Class named `matti virtanen` and `Matti Virtanen` both exist | `constraint:ix_students_name_class_unique` | `app/models/student.py:61`, created in `alembic/versions/01edea317e5e:48` |
 | INV-3 | A new Attendance record may only be created against an **active** Class | `POST /api/classes/{id}/attendance` succeeds against a Class with `active = false` | `test:test_create_attendance_inactive_class`, `test:test_bulk_attendance_inactive_class_fails`, `test:test_create_attendance_for_inactive_class` | `app/services/attendance_service.py:213` |
 | INV-4 | Every Student belongs to exactly one Class; the same name in two Classes is two Students | a Student row exists with no Class, or code treats two same-named Students in different Classes as one person | `constraint:students.class_id NOT NULL` + FK to `classes.id` | `app/models/student.py:30-34` |
@@ -57,9 +57,14 @@ the Owner and declined, with the reason.
 
 The Owner intends **shared Classes** — two Teachers on one Class — alongside individual ones. INV-1
 is deliberately worded "a Teacher **associated with** a Class" rather than "the Teacher who owns it",
-so the rule survives that change and only the definition of *associated* moves. That change is
-cheap at one enforcement site and expensive at seven, which is the concrete cost of INV-1's
-confessed duplication.
+so the rule survives that change and only the definition of *associated* moves.
+
+**That change now costs two edits** — `verify_class_ownership` and the list filter — where it used
+to cost seven. Paying that down was the whole of spec 0003, done on 2026-09-04 *before* shared
+classes were designed, on the reasoning that a permission change is the wrong moment to discover
+you have seven copies of the permission. The word *ownership* in the function name is the current
+shape of *associated with*, not a synonym for it; when shared classes land, the name is what
+changes, not the number of places.
 
 ## Retired invariants
 

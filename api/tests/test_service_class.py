@@ -282,7 +282,11 @@ class TestUpdateClass:
                 db, test_class.id, update_data, other_user
             )
 
-        assert "permission" in str(exc.value).lower()
+        # The exact phrase, not just the word "permission": update_class folded into
+        # verify_class_ownership on 2026-09-04 and passes `action` to keep this wording.
+        # Asserting only "permission" would pass against the helper's generic default and the
+        # refusal would quietly stop saying what it refused (specs/0003-consolidate-inv-1.md).
+        assert "You don't have permission to update this class" in str(exc.value)
 
 
 @pytest.mark.asyncio
@@ -342,7 +346,7 @@ class TestDeleteClass:
         with pytest.raises(ForbiddenException) as exc:
             await class_service.delete_class(db, test_class.id, other_user)
 
-        assert "permission" in str(exc.value).lower()
+        assert "You don't have permission to delete this class" in str(exc.value)
 
 
 @pytest.mark.asyncio
@@ -392,6 +396,48 @@ class TestVerifyClassOwnership:
             )
 
         assert "permission" in str(exc.value).lower()
+
+
+@pytest.mark.asyncio
+class TestVerifyClassOwnershipRefusalWording:
+    """The `action` phrase, which is the whole reason the parameter exists.
+
+    Three call sites refuse with three different phrases. Before 2026-09-04 each had its own
+    inline `teacher_id !=` comparison; now they pass `action` to the one helper. If this
+    parameter is ever dropped, every refusal says "access this class" and a teacher debugging a
+    403 loses the only clue about which operation was refused.
+    """
+
+    async def test_default_action_is_access(
+        self, db: AsyncSession, test_class: Class, other_teacher: User
+    ):
+        """Called with no action, the refusal is about access."""
+        with pytest.raises(ForbiddenException) as exc:
+            await class_service.verify_class_ownership(db, test_class.id, other_teacher)
+
+        assert "You don't have permission to access this class" in str(exc.value)
+
+    async def test_the_action_reaches_the_message(
+        self, db: AsyncSession, test_class: Class, other_teacher: User
+    ):
+        """A caller's phrase is what the refused teacher is told."""
+        with pytest.raises(ForbiddenException) as exc:
+            await class_service.verify_class_ownership(
+                db, test_class.id, other_teacher, action="delete this attendance record"
+            )
+
+        assert "You don't have permission to delete this attendance record" in str(exc.value)
+
+    async def test_a_missing_class_is_reported_before_ownership(
+        self, db: AsyncSession, other_teacher: User
+    ):
+        """404 before 403, so no teacher learns that a class id exists (decision 6)."""
+        from uuid import uuid4
+
+        with pytest.raises(NotFoundError):
+            await class_service.verify_class_ownership(
+                db, uuid4(), other_teacher, action="delete this class"
+            )
 
 
 @pytest.mark.asyncio

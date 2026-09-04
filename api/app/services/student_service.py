@@ -7,14 +7,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import (
     BadRequestException,
-    ForbiddenException,
     NotFoundError,
 )
 from app.models.attendance import AttendanceRecord
-from app.models.class_ import Class
 from app.models.student import Student
 from app.models.user import User
 from app.schemas.student import StudentCreate, StudentUpdate
+from app.services import class_service
 
 
 def normalize_name(name: str) -> str:
@@ -123,7 +122,7 @@ async def get_student_by_id(
         raise NotFoundError("Student not found")
 
     # Verify class ownership
-    await verify_class_ownership(db, student.class_id, teacher)
+    await class_service.verify_class_ownership(db, student.class_id, teacher)
 
     # Get total attendance count
     count_result = await db.execute(
@@ -166,7 +165,7 @@ async def list_students_for_class(
         ForbiddenException: If user doesn't own the class
     """
     # Verify class ownership
-    await verify_class_ownership(db, class_id, teacher)
+    await class_service.verify_class_ownership(db, class_id, teacher)
 
     # Build base query
     base_query = select(Student).where(Student.class_id == class_id)
@@ -231,7 +230,7 @@ async def create_student(
         BadRequestException: If student with same name exists
     """
     # Verify class ownership
-    await verify_class_ownership(db, class_id, teacher)
+    await class_service.verify_class_ownership(db, class_id, teacher)
 
     # Normalize name
     normalized_name = normalize_name(student_data.name)
@@ -303,7 +302,7 @@ async def update_student(
         raise NotFoundError("Student not found")
 
     # Verify class ownership
-    await verify_class_ownership(db, student.class_id, teacher)
+    await class_service.verify_class_ownership(db, student.class_id, teacher)
 
     # Update name if provided
     if student_data.name is not None:
@@ -375,7 +374,7 @@ async def delete_student(
         raise NotFoundError("Student not found")
 
     # Verify class ownership
-    await verify_class_ownership(db, student.class_id, teacher)
+    await class_service.verify_class_ownership(db, student.class_id, teacher)
 
     # Delete student (cascade will delete attendance records)
     await db.delete(student)
@@ -407,7 +406,7 @@ async def get_autocomplete_suggestions(
         ForbiddenException: If user doesn't own the class
     """
     # Verify class ownership
-    await verify_class_ownership(db, class_id, teacher)
+    await class_service.verify_class_ownership(db, class_id, teacher)
 
     if not query or len(query) < 2:
         return []
@@ -498,7 +497,7 @@ async def merge_students(
         raise NotFoundError("Target student not found")
 
     # Verify class ownership
-    await verify_class_ownership(db, target_student.class_id, teacher)
+    await class_service.verify_class_ownership(db, target_student.class_id, teacher)
 
     # Fetch duplicate student
     duplicate_result = await db.execute(
@@ -514,7 +513,7 @@ async def merge_students(
         raise BadRequestException("Cannot merge students from different classes")
 
     # Verify ownership of duplicate student's class (should be same, but explicit check)
-    await verify_class_ownership(db, duplicate_student.class_id, teacher)
+    await class_service.verify_class_ownership(db, duplicate_student.class_id, teacher)
 
     # Transfer all attendance records from duplicate to target
     # Use SQLAlchemy update statement for efficient bulk update
@@ -548,35 +547,3 @@ async def merge_students(
     setattr(target_student, "total_attendance", total_count)
 
     return target_student
-
-
-async def verify_class_ownership(
-    db: AsyncSession,
-    class_id: UUID,
-    teacher: User,
-) -> Class:
-    """
-    Verify that a teacher owns a specific class.
-
-    Args:
-        db: Database session
-        class_id: Class UUID
-        teacher: Teacher to verify
-
-    Returns:
-        Class object
-
-    Raises:
-        NotFoundError: If class not found
-        ForbiddenException: If user doesn't own the class
-    """
-    result = await db.execute(select(Class).where(Class.id == class_id))
-    class_obj = result.scalar_one_or_none()
-
-    if not class_obj:
-        raise NotFoundError("Class not found")
-
-    if class_obj.teacher_id != teacher.id:
-        raise ForbiddenException("You don't have permission to access this class")
-
-    return class_obj

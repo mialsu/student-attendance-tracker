@@ -55,17 +55,14 @@ async def get_attendance_statistics(
         404: If class not found
         403: If user doesn't own the class
     """
-    # Verify class access
-    await attendance_service.verify_class_access(db, class_id, current_user)
-
     # Parse exclude_dates
     excluded_dates_list = []
     if exclude_dates:
         excluded_dates_list = [d.strip() for d in exclude_dates.split(",") if d.strip()]
 
-    # Get statistics
+    # Ownership is checked inside the service, like every other route here (INV-1).
     stats = await attendance_service.get_attendance_statistics(
-        db, class_id, exclude_dates=excluded_dates_list
+        db, class_id, current_user, exclude_dates=excluded_dates_list
     )
 
     return AttendanceStatistics(**stats)

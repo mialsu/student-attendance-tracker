@@ -84,6 +84,19 @@ response, and no `/api/admin` route.
 _Planned_: the Owner intends **shared Classes** — two Teachers on one Class — alongside individual
 ones. `INV-1` is worded "associated with" for that reason.
 
+**Class ownership**:
+The relationship that decides whether a Teacher may read or change a Class, its Students or its
+Attendance records (`INV-1`). One function decides it — `class_service.verify_class_ownership` —
+and one query filters by it, `class_service.get_classes_for_teacher`. Nothing else in `app/`
+compares a `teacher_id`; `scripts/drift-extra.sh` check 4 fails a diff that adds such a
+comparison.
+_Avoid_: — see the note below. The banned name is the compound `verify_class_access`, a second
+name this rule carried at three call sites until 2026-09-04 (spec 0003), and compounds are banned
+in `drift-extra.sh` rather than here.
+_Note_: the Owner intends **shared Classes** later, so *ownership* is the current shape of
+*associated with*, not a synonym for it. `INV-1` is worded to survive that change; the point of
+having one site is that the change costs one edit.
+
 **Registration code**:
 A code the Owner issues from the command line that lets someone create a Teacher account. It names
 **exactly one email address** and only that address may redeem it (`INV-7`); there is no universal
