@@ -517,6 +517,46 @@ class TestGetAttendanceSummary:
         assert alice_summary["total_attendance"] == 3
         assert len(alice_summary["records"]) == 3
 
+    async def test_each_students_records_are_newest_first(
+        self, db: AsyncSession, test_class: Class, test_user: User
+    ):
+        """Records come back newest-first, per student, across more than one student.
+
+        The summary stopped issuing one query per student on 2026-09-04 and now fetches the
+        whole page in one `WHERE student_id IN (...)` with a single `ORDER BY timestamp DESC`.
+        That global ordering is the only thing keeping each student's list sorted -- rows arrive
+        newest-first and are appended into per-student buckets. Nothing asserted this before,
+        so the ordering the response advertises was free to break silently, and two students are
+        used deliberately: one student cannot tell a correct bucket from a lucky one.
+        """
+        alice = Student(name="Alice Ordering", class_id=test_class.id)
+        bob = Student(name="Bob Ordering", class_id=test_class.id)
+        db.add_all([alice, bob])
+        await db.flush()
+
+        base = datetime.now(timezone.utc)
+        # Interleaved in time and added in an order that is neither sorted nor grouped, so a
+        # bucket that merely preserved insertion order would fail this.
+        for student, days in ((alice, 3), (bob, 1), (alice, 0), (bob, 4), (alice, 2)):
+            db.add(
+                AttendanceRecord(
+                    class_id=test_class.id,
+                    student_id=student.id,
+                    timestamp=base - timedelta(days=days),
+                )
+            )
+        await db.commit()
+
+        summary, _, _ = await attendance_service.get_attendance_summary(
+            db, test_class.id, test_user
+        )
+        by_name = {s["student_name"]: s for s in summary}
+
+        for name, expected in (("Alice Ordering", 3), ("Bob Ordering", 2)):
+            stamps = [r["timestamp"] for r in by_name[name]["records"]]
+            assert len(stamps) == expected, name
+            assert stamps == sorted(stamps, reverse=True), f"{name}: {stamps}"
+
     async def test_summary_case_insensitive_grouping(
         self, db: AsyncSession, test_class: Class, test_user: User
     ):

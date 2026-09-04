@@ -349,14 +349,27 @@ async def get_attendance_summary(
 
     # Build summary
     summary = []
-    for student in students:
-        # Get all attendance records for this student
+    # One query for the whole page's records, not one per student. This loop issued a SELECT
+    # per student until 2026-09-04 -- 24 queries for a 20-student page, and the count grew with
+    # the page rather than staying flat. Every test in the suite runs against classes of a
+    # handful of students, where an N+1 is invisible; nothing failed as the loop grew, which is
+    # why this was found by measuring rather than by a gate (api/REVIEW-DEBT.md).
+    #
+    # The single ORDER BY is what keeps each student's list newest-first: rows arrive in that
+    # order globally, so appending them per student preserves it within each bucket.
+    student_ids = [student.id for student in students]
+    records_by_student: dict[UUID, list[AttendanceRecord]] = {sid: [] for sid in student_ids}
+    if student_ids:
         records_result = await db.execute(
             select(AttendanceRecord)
-            .where(AttendanceRecord.student_id == student.id)
+            .where(AttendanceRecord.student_id.in_(student_ids))
             .order_by(AttendanceRecord.timestamp.desc())
         )
-        records = list(records_result.scalars().all())
+        for record in records_result.scalars():
+            records_by_student[record.student_id].append(record)
+
+    for student in students:
+        records = records_by_student[student.id]
 
         summary.append(
             {

@@ -80,10 +80,38 @@ cut (`/confess`), read first by any architecture or review session, dispositione
   a handful of students, where an N+1 is invisible. Nothing fails as the loop grows.
 - **Measured 2026-09-04:** 200 students, 5,000 records, `limit=20` → 65.1 ms median. It is not
   slow *yet*, and this teacher's classes are far smaller.
-- **Disposition:** open. Pre-existing, found while measuring spec 0002's hidden-count query, which
-  turned out to be the cheap part. A single `selectinload` on the paged students would replace 20
-  queries with one; that is a change to code no spec is touching today, so it is recorded rather
-  than folded into an unrelated slice.
+- **Disposition:** **FIXED 2026-09-04**, the Owner's call, in its own commit rather than folded
+  into the INV-1 consolidation that shipped the same day. One `SELECT ... WHERE student_id IN
+  (:page)` replaces the loop; the single `ORDER BY timestamp DESC` is what keeps each student's
+  records newest-first, because rows arrive in that order globally and are appended per student.
+  Not `selectinload` as this entry originally proposed: `Student.attendance_records` carries no
+  `order_by`, so the relationship would have loaded them unordered and needed a sort in Python,
+  which hides the ordering guarantee the response depends on.
+- **The ordering was untested before this fix depended on it.** Nothing asserted that a student's
+  `records` come back newest-first — `test_service_attendance.py:477` asserts it for
+  `list_attendance_for_class`, not for the summary — so the response's advertised order was free
+  to break in silence. `test_each_students_records_are_newest_first` now covers it with two
+  students and interleaved timestamps, added in an order that is neither sorted nor grouped, so a
+  bucket preserving insertion order fails it. Proven by flipping the `ORDER BY` to `asc()` and
+  watching it go red.
+- **Measured before and after**, same shape as above (200 students, 5,000 records), by a
+  disposable script that counted queries with a SQLAlchemy `before_cursor_execute` listener:
+
+  | Page size | Queries before | Queries after | Median before | Median after |
+  |---|---|---|---|---|
+  | `limit=20` (the default) | 24 | **5** | 19.2 ms | 17.7 ms |
+  | `limit=200` (whole class) | 204 | **5** | 125.9 ms | 88.6 ms |
+
+  Both page sizes returned byte-identical contents before and after — 20 and 200 students,
+  500 and 5,000 records, `total=200`, `legacy_hidden=0` — which is the behaviour-unchanged
+  evidence. The query count is now **flat in page size**; it was `limit + 4`.
+- **This entry's own arithmetic was wrong, and the correction matters more than the fix.** The
+  measurement below attributed "the other 59 ms" of a 65.1 ms request to this N+1 by subtracting
+  the hidden count from the total. At `limit=20` the N+1 is worth **1.5 ms of 19.2 ms** on this
+  machine, and the 65.1 ms baseline does not reproduce at all. Subtracting one measured component
+  from a total and labelling the remainder is not a measurement of the remainder — the 59 ms was
+  never attributed to anything, it was what was left over. The real defect was the growth rate,
+  which needed no timing to see: a `SELECT` inside a `for` loop over a paged list.
 
 ## 2026-09-04 — the five-year boundary itself is not tested; only points far from it are
 - **What:** `LEGACY_WINDOW = timedelta(days=5 * 365)` is the whole rule, and no test pins it. The
@@ -135,7 +163,10 @@ cut (`/confess`), read first by any architecture or review session, dispositione
   | `find_legacy_student_ids` alone | **6.6 ms** | — | — |
 
   So the hidden count costs about **6 ms, near 10% of the request**, at ten times the size that
-  matters, and it needs no index. The other 59 ms is the summary's own N+1 — see the entry below.
+  matters, and it needs no index. ~~The other 59 ms is the summary's own N+1 — see the entry
+  below.~~ **Struck 2026-09-04:** that sentence attributed a leftover to a cause. Re-measured
+  directly, the N+1 was 1.5 ms of a 19.2 ms request at this page size, and the 65.1 ms figure
+  above does not reproduce. See the N+1 entry for what was actually measured.
 - **Disposition:** **accepted-with-reason 2026-09-04.** Measured, cheap, and left alone. The
   measuring script was disposable and is not in the repo; the numbers above are the record.
 
