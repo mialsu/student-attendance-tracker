@@ -222,12 +222,20 @@ fi
 # A dependency line is one that carries a VERSION. That discriminates a real dep from a manifest
 # key far better than a denylist of key names — and a version *bump* shows the same name on both
 # sides of the diff, so only genuinely NEW names survive.
+#
+# The name is cut at the first version operator. The cut class carried only ["':= ] until
+# 2026-09-04, which is enough for JSON ("pkg": "^1.0") and for a pinned pip line (pkg==1.0) and
+# WRONG for everything else: `pkg>=1.0` cut at the `=` left `pkg>` with the operator attached, and
+# the charset filter below then dropped it. Every requirement in this project uses `>=`, so the
+# check saw none of them. `<>~!` and `[` are now in the class too — the last one for extras, since
+# `uvicorn[standard]>=0.24.0` otherwise survives as `uvicorn[standard]` and fails the same filter.
+# Verified against all 22 requirement lines here plus JSON, scoped-JSON and pyproject shapes.
 dep_names() {                   # dep_names <manifest> <+|->
   git diff --relative --unified=0 "${RANGE[@]}" -- "$1" \
     | grep "^[$2]" | grep -Ev '^[-+]{3}' | grep -v 'drift-ok' \
     | { if printf '%s' "$1" | grep -q 'requirements'; then cat; \
         else grep -E '[0-9]+\.[0-9]+|"\*"|latest|\{'; fi; } \
-    | sed 's/^.//; s/^[[:space:]]*//; s/^["'"'"']//' | sed 's/["'"'"':= ].*$//' \
+    | sed 's/^.//; s/^[[:space:]]*//; s/^["'"'"']//' | sed 's/["'"'"':=<>~![ ].*$//' \
     | grep -E '^[A-Za-z0-9@._/-]+$' \
     | grep -Eiv '^(version|name|description|license|author|authors|readme|repository|keywords|main|types|type|private|files|exports|scripts|engines|node|npm|packageManager|requires-python|python|edition|go|rust-version|module|require|tool|project|package|lib|bin|workspace|features|profile|target|(dev-|build-|optional|peer|dev|Dev|Peer|Optional|Build)?[dD]ependenc(y|ies)|dependency-groups|build-system|plugins|resolutions|overrides)$' \
     | sort -u
