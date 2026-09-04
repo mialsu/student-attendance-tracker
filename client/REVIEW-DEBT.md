@@ -6,6 +6,25 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 
 <!-- Newest first. -->
 
+## 2026-09-04 — today's server changes were verified over HTTP, not through the screen
+- **What:** the attendance summary stopped issuing one query per student, and INV-1's seven
+  enforcement sites became one. Both are server-side, and the client change was a deletion of
+  three exports no screen referenced — so the live exercise was run against the real API over
+  HTTP with two authenticated teachers, and **the Läsnäolot screen itself was never opened.**
+- **What was proven live:** the summary returns each student's records newest-first (two students,
+  interleaved timestamps, seeded in an order neither sorted nor grouped); the statistics endpoint
+  refuses a second teacher with 403 now that its check sits in the service rather than its route;
+  all four refusal phrases are distinct and correct; a missing class 404s before ownership is
+  considered; and the owning teacher still gets 200 on class, students and summary.
+- **What that does NOT prove:** that `StudentLogs.tsx` renders the reordered records the way a
+  teacher reads them. The endpoint's contract is unchanged and 78 client tests pass, so the risk is
+  low — but "the API returns them newest-first" and "the teacher sees them newest-first" are two
+  claims and only the first was exercised.
+- **Disposition:** open, and it is the Owner's five minutes: open Läsnäolot on a class with a
+  student who has several records and confirm the newest is on top. Recorded rather than claimed,
+  because this project's own history is that a green suite and a rendered screen are different
+  things.
+
 ## 2026-09-04 — deleting the dead hook left attendanceApi.list with no callers at all
 - **What:** `useAttendance` was deleted because nothing called it (spec 0002). That leaves
   `attendanceApi.list` and `ListAttendanceParams` with **zero** callers of their own — the client

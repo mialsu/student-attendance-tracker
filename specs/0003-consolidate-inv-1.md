@@ -163,6 +163,31 @@ Seven decisions. D1–D4 follow `INVARIANTS.md`'s own stated intent; D5–D7 are
 | AC-8 | Both gate sets green on the commit: `just check` and `npm run check` | `gate:` | — | **WORKS** api: boundaries 4 kept 0 broken, drift and drift-extra clean, ruff 91 and mypy 15 both **at** baseline, 345 tests. client: typecheck 4, lint 16, tests 0, drift clean, build green — untouched by this commit, run to make the claim true rather than assumed |
 | AC-9 | `INVARIANTS.md`'s INV-1 row names one check site and one filter site, carries the true test count, and has no stale line numbers | `review-only` | US-1, US-2 | **WORKS** the row now reads *one check site and one filter site* and names **functions, not lines**, because the row it replaces pointed at `attendance_service.py:286` which had already rotted to :265 |
 
+## Live verification, 2026-09-04
+
+Run against the real app over HTTP — uvicorn on 127.0.0.1:8010 against a disposable PostgreSQL on
+port 5439, seeded with two real teachers, two classes and five interleaved attendance records. Not
+port 8000, which another project holds, and not 5433, which is another project's database.
+
+| What | Result |
+|---|---|
+| statistics as the owner | **200**, `total_records: 5` |
+| statistics as a second teacher | **403** `You don't have permission to access this class` — the check that moved out of the route |
+| `GET` another teacher's class | **403** `...to access this class` |
+| `PUT` another teacher's class | **403** `...to update this class` |
+| `DELETE` another teacher's class | **403** `...to delete this class` |
+| `DELETE` another teacher's attendance record | **403** `...to delete this attendance record` |
+| `GET` a class id that does not exist | **404** `Class not found`, before ownership is considered |
+| owner on class / students / summary | **200, 200, 200** — positive controls |
+
+The four distinct 403 phrases are the `action` parameter's whole justification, and this is where
+it is proven: a single fixed message would have made all four read "access this class", which no
+test asserted before today and no gate would have caught.
+
+**What this did not exercise:** the browser. The Läsnäolot screen was never opened, so "the API
+returns records newest-first" is proven and "the teacher sees them newest-first" is not. Confessed
+in `client/REVIEW-DEBT.md`.
+
 ## Tracer Slices
 
 One slice. The refactor has no demoable halves — a consolidation that lands in two commits leaves

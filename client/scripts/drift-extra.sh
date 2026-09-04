@@ -35,7 +35,13 @@ student_(first|last)_name	same: use `name`
 EOT
 )
 
-SKIP='(^|/)(CHANGELOG|README|REVIEW-DEBT|CODING_STANDARDS|CONTEXT|CONTEXT-MAP)\.md$|\.(md|txt|snap|svg|png|jpg|lock)$|(^|/)(vendor|node_modules|dist|build|coverage)/|-lock\.(json|yaml)$|(^|/)bun\.lockb$|(^|/)scripts/drift-extra\.sh$'
+# BACKLOG.html is exempt for the same reason the ledgers are: it is a document whose job is to
+# NAME the banned identifiers, and on 2026-09-04 it was the first file this check ever failed --
+# for a paragraph explaining that those identifiers are still in the client and still owed. A gate
+# that fires on the document describing it teaches you to add `drift-ok` to prose, which is how an
+# escape hatch becomes a habit. Only this one file, not all HTML: a template with real code in it
+# should still be judged.
+SKIP='(^|/)(CHANGELOG|README|REVIEW-DEBT|CODING_STANDARDS|CONTEXT|CONTEXT-MAP)\.md$|\.(md|txt|snap|svg|png|jpg|lock)$|(^|/)(vendor|node_modules|dist|build|coverage)/|-lock\.(json|yaml)$|(^|/)bun\.lockb$|(^|/)scripts/drift-extra\.sh$|(^|/)BACKLOG\.html$'
 
 RANGE=("$@")
 if [ ${#RANGE[@]} -eq 0 ]; then RANGE=(HEAD); fi

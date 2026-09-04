@@ -260,7 +260,7 @@ footer p { margin: 0 0 .5rem; }
 <div class="wrap">
 
 <header class="masthead">
-  <p class="eyebrow">Student Attendance Tracker &middot; swept 2 September 2026, updated 4 September after the legacy-student cutoff shipped</p>
+  <p class="eyebrow">Student Attendance Tracker &middot; swept 2 September 2026, updated 4 September after INV-1 was consolidated and the summary&rsquo;s N+1 fixed</p>
   <h1>What to build next, and why in that order</h1>
   <p class="standfirst">
     Everything currently owed across the two repositories, gathered from both
@@ -269,9 +269,9 @@ footer p { margin: 0 0 .5rem; }
     that proves it.
   </p>
   <dl class="tally">
-    <div><dt>Shipped</dt><dd>4</dd></div>
+    <div><dt>Shipped</dt><dd>5</dd></div>
     <div><dt>Ranked, remaining</dt><dd>2</dd></div>
-    <div><dt>Small &amp; independent</dt><dd>16</dd></div>
+    <div><dt>Small &amp; independent</dt><dd>13</dd></div>
     <div><dt>Live defects</dt><dd>0</dd></div>
     <div><dt>Need your call</dt><dd>5</dd></div>
     <div><dt>Ready to spec</dt><dd>1</dd></div>
@@ -451,27 +451,41 @@ ruff 93 -> 91, mypy 16 -> 15; client typecheck 4 and lint 16 unchanged</p>
   <li class="item">
     <span class="rank" aria-hidden="true">4</span>
     <div class="card">
-      <div class="chips"><span class="chip hold">two slices, this order</span><span class="chip acc">ready to spec</span></div>
-      <h3>Consolidate INV-1, then shared classes</h3>
-      <p class="why">Why fourth &middot; the second slice is cheap only after the first</p>
+      <div class="chips"><span class="chip acc">slice one shipped</span><span class="chip hold">shared classes still owed</span></div>
+      <h3><s>Consolidate INV-1</s>, then shared classes</h3>
+      <p class="why">Why still here &middot; the expensive half is paid; the feature itself is not built</p>
       <p>
         You intend shared classes &mdash; two teachers on one class. <code>INV-1</code> is worded
         &ldquo;a teacher <em>associated with</em> a class&rdquo; precisely so the rule survives that
         change and only the definition of <em>associated</em> moves.
       </p>
       <p>
-        But it is implemented at <strong>seven</strong> sites, three of them raising the same
-        refusal with three different messages. Shared classes against seven sites is seven edits
-        with an eighth easy to miss; against one owner it is a single edit.
-        <code>get_attendance_statistics</code> folds into the same work &mdash; it takes no
-        <code>teacher</code> at all, so its only check lives in the route and any second caller
-        gets none.
+        <strong>Slice one shipped 4 September</strong> (<code>d854eec</code>, spec&nbsp;0003). The
+        seven sites are one: <code>class_service.verify_class_ownership</code>, which now carries
+        an <code>action</code> phrase so the four refusals still say what they refused. Two of the
+        seven were duplicate helpers, one under a second name; a <em>fourth</em> duplicate turned
+        up during the work &mdash; <code>attendance_service.get_class_by_id</code>, byte-identical
+        to the real one. <code>get_attendance_statistics</code> takes a <code>teacher</code> and
+        refuses inside the service instead of relying on a line in its route.
       </p>
-      <p class="ev">class_service.py:54, :151, :194, :226
-student_service.py:579
-attendance_service.py:80, :286
-attendance_service.py:389  &mdash; get_attendance_statistics, no teacher argument
-target seam: verify_class_ownership(db, class_id, teacher)</p>
+      <p>
+        <strong>What remains is the feature.</strong> Two teachers on one class: a join table, a
+        definition of <em>associated</em> that replaces <em>owns</em>, and a decision you have not
+        made yet &mdash; whether a shared teacher may delete the class, delete students, or only
+        record attendance. That question is the reason this is not just a schema change, and it is
+        yours (<code>INVARIANTS.md</code>, <em>Known future change</em>).
+      </p>
+      <p>
+        The cost is now what the wording always promised: <strong>two edits</strong>, the check and
+        the list filter, where it would have been seven. <code>drift-extra.sh</code> check&nbsp;4
+        fails any diff that adds a teacher-id comparison in <code>app/</code> outside
+        <code>class_service.py</code>, so it cannot quietly become eight again.
+      </p>
+      <p class="ev">DONE: class_service.verify_class_ownership &mdash; the one check site
+DONE: class_service.get_classes_for_teacher &mdash; the one filter site, WHERE not a check
+DONE: drift-extra.sh check 4 &mdash; proven against four operand spellings
+OWED: shared classes &mdash; needs your call on what a shared teacher may do
+tests/test_authorization.py &mdash; 18 denials, 8 positive controls; neuter the check, 17 go red</p>
     </div>
   </li>
 
@@ -529,17 +543,26 @@ end to end:             staging a type error and running `git commit` was REFUSE
         is actually debt.
       </p>
       <p>
-        <strong>New on 4 September:</strong> spec 0002 deleted the dead <code>useAttendance</code>
-        hook, which leaves <code>attendanceApi.list</code> and <code>ListAttendanceParams</code>
-        with no callers at all &mdash; the client now has no path to
-        <code>GET /api/classes/{id}/attendance</code>. Kept deliberately, because proving an export
-        dead is this item's job rather than a feature slice's. The orphan gate cannot see it: the
-        module has other live exports, so an unused member inside it is invisible &mdash; the same
-        blind spot recorded for <code>classes.ts</code>, one level down.
+        <strong>Smaller again on 4 September</strong> (<code>fae1c76</code>).
+        <code>attendanceApi.list</code> and <code>ListAttendanceParams</code> are gone, taken out
+        of this item early because one deletion is not a sweep. Following the chain took a third:
+        <code>PaginatedAttendanceResponse</code> existed only as <code>list</code>'s return type.
+        Proof came before deletion &mdash; <code>grep</code>, then <code>tsc</code> agreeing
+        nothing resolved to them, with typecheck and lint both holding at baseline, since dead code
+        carries no findings and a drop would have meant the code was live.
+      </p>
+      <p>
+        <strong>Found while deleting, and left alone:</strong>
+        <code>CreateAttendanceRequest</code> still carries <code>student_first_name</code> and
+        <code>student_last_name</code> marked DEPRECATED, three lines from the deletion. Both match
+        a pattern the client's <em>own</em> <code>drift-extra.sh</code> check&nbsp;1 bans; they pass
+        only because that gate judges diffs and these lines predate it. Squarely this item's, and
+        the reason it is still worth doing.
       </p>
       <p class="ev">client/.dependency-cruiser.cjs:104 &mdash; no-orphans, ONE baseline exemption
 src/components/ui/aspect-ratio.tsx
-client/src/api/attendance.ts &mdash; attendanceApi.list, ListAttendanceParams: zero callers</p>
+client/src/api/attendance.ts &mdash; CreateAttendanceRequest.student_first_name / _last_name
+client/scripts/drift-extra.sh:34 &mdash; the check that would ban them in a new diff</p>
     </div>
   </li>
 
@@ -778,8 +801,19 @@ client/src/api/attendance.ts &mdash; attendanceApi.list, ListAttendanceParams: z
     accepted), not the 27 the earlier sweep reported under a rule this file never wrote down.
   </p>
   <p>
-    This file lives at the project root, which is not a git repository, so it is not versioned.
-    Move it into one of the four repositories if you want its history.
+    <strong>Updated 4 September, second pass</strong>, after INV-1 was consolidated
+    (<code>d854eec</code>), the summary's N+1 fixed (<code>91e98ed</code>), three dead client
+    exports deleted (<code>fae1c76</code>) and the Vercel contradiction settled
+    (<code>7ceb7a3</code>). Item&nbsp;4 lost its first slice but stays ranked, because the feature
+    it was clearing the way for is still unbuilt and still needs a decision only you can make.
+    Three rows were <em>added</em> by the work rather than found by it: a hole in the new gate's
+    first version, coverage last measured on 1 September against a suite that has since moved four
+    times, and an action bump whose only proof is the next CI run.
+  </p>
+  <p>
+    This file is versioned. It lives at the root of the repository the four repos were merged into
+    on 3 September, which the sentence here previously denied &mdash; it said the root "is not a
+    git repository" and told you to move the file into one of the four.
   </p>
 </footer>
 

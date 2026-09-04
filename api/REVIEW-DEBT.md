@@ -6,6 +6,61 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 
 <!-- Newest first. -->
 
+## 2026-09-04 — drift-extra check 4 is textual, and its first version had a hole I put there
+- **What:** check 4 enforces INV-1's single site by failing any diff that adds a teacher-id
+  comparison in `app/` outside `class_service.py` (spec 0003). **The version I first wrote matched
+  only `teacher_id` followed by an operator, so a reversed comparison —
+  `if teacher.id != class_obj.teacher_id` — planted in `student_service.py` produced
+  `drift-extra: clean`.** Found by planting it, not by reading it. The check now requires a
+  teacher id *and* a comparison anywhere on the line, and all four spellings were caught:
+  `class_obj.teacher_id != teacher.id`, the reversed form, `current_user.id != class_obj.teacher_id`,
+  and the `==` variant.
+- **Where:** `scripts/drift-extra.sh` — check 4.
+- **What green gates do NOT prove here**, and these are the limits that remain:
+  - It reads **added lines in a diff**, so it prevents a fourth copy rather than detecting an
+    existing one. That is sound only because `app/` was verified to contain **zero** such lines
+    outside `class_service.py` at the moment the check landed. If that ever stops being true, the
+    check will happily keep passing over it.
+  - It is **textual**. A copy that compares ids it obtained under other names, or one that
+    reimplements the decision without comparing anything (a join, a subquery, a cached flag),
+    passes. The invariant's real proof stays `tests/test_authorization.py`.
+  - It is **deliberately broad**, so a legitimate new `WHERE Class.teacher_id == ...` filter
+    elsewhere in `app/` will fire and need `drift-ok`. That is the intended trade: the false
+    positive is visible and one comment long, the false negative is a data leak.
+  - **A root-only commit skips both gate sets entirely** (the hook says so out loud), so the check
+    protects `app/` only on commits that touch `app/`. CI re-runs it over the pushed range.
+- **Disposition:** **the hole is FIXED 2026-09-04** and re-proven four ways. The four limits above
+  are accepted-with-reason: each is a property of being a diff gate over text, and the alternative
+  — parsing `app/` into an AST and reasoning about authorization — is a static analyser, not a
+  30-line shell check.
+
+## 2026-09-04 — coverage has not been measured since 2026-09-01, and the count has moved four times
+- **What:** the suite went 262 → 330 → 344 → 345 → **346** while `77%` has been repeated
+  throughout. Today's two commits added 7 tests and deleted 5; no coverage run was taken, so the
+  percentage in root `CLAUDE.md` and in this repo's docs is a 2026-09-01 figure being quoted about
+  2026-09-04 code.
+- **Where:** root `CLAUDE.md` (now labelled as not re-measured), this ledger, `student_service.py`
+  at 29% as of the last real measurement.
+- **What green tests do NOT prove here:** nothing new — that is the point. Coverage was never the
+  safety metric in this repo, and the project already proved why: the 24 authorization tests added
+  on 2026-09-01 moved coverage **not at all** while closing a real leak.
+- **Disposition:** open, low priority, deliberately. Re-measuring is one flag on a run that takes
+  three minutes; the reason it is not urgent is that no decision here depends on the number. What
+  *was* urgent was stopping the stale figure from being quoted as current, and that is done.
+
+## 2026-09-04 — the action bump cannot be proven locally; its first CI run is its proof
+- **What:** `checkout` v4→v7, `setup-python` v5→v7, `setup-node` v4→v7, `upload-artifact` v4→v7,
+  to clear the Node 20 deprecation warning. Every intervening major was read (Node 24 runtime and
+  the runner floor, `checkout@v6`'s separate credential file, `checkout@v7`'s fork-PR block,
+  `setup-python@v7` dropping `pip-install`) and none touches an input or trigger this repo uses.
+- **Where:** `.github/workflows/backend.yml`, `frontend.yml`, `security.yml`.
+- **What green gates do NOT prove here:** that the workflows still run. The YAML parses and no
+  removed input is passed, which is the whole of the local evidence. **Every green push to `main`
+  deploys both halves**, so the same push that proves the bump also ships whatever it is carrying.
+- **Disposition:** open until the next CI run reports. The cheap mitigation is a
+  `workflow_dispatch` run before relying on a push, which is the same advice this repo already
+  gives for the deploy jobs — the one part never proven by breaking it.
+
 ## 2026-09-04 — drift-check's "new dependency with no ADR" check is dead here too, and it is NOT mine to fix
 - **What:** `scripts/drift-check.sh` check 3 refuses a dependency added without an ADR. It never
   fires in this repo. Adding `httpx-sse>=0.4.0` to `requirements.txt` reported

@@ -51,7 +51,13 @@ verify_class_access	INV-1 has one check and one name: class_service.verify_class
 EOT
 )
 
-SKIP='(^|/)(CHANGELOG|README|REVIEW-DEBT|CODING_STANDARDS|CONTEXT|CONTEXT-MAP)\.md$|\.(md|txt|snap|svg|png|jpg|lock)$|(^|/)(venv|htmlcov|__pycache__)/|(^|/)scripts/drift-extra\.sh$'
+# BACKLOG.html is exempt for the same reason the ledgers are: it is a document whose job is to
+# NAME the banned identifiers, and on 2026-09-04 it was the first file this check ever failed --
+# for a paragraph explaining that those identifiers are still in the client and still owed. A gate
+# that fires on the document describing it teaches you to add `drift-ok` to prose, which is how an
+# escape hatch becomes a habit. Only this one file, not all HTML: a template with real code in it
+# should still be judged.
+SKIP='(^|/)(CHANGELOG|README|REVIEW-DEBT|CODING_STANDARDS|CONTEXT|CONTEXT-MAP)\.md$|\.(md|txt|snap|svg|png|jpg|lock)$|(^|/)(venv|htmlcov|__pycache__)/|(^|/)scripts/drift-extra\.sh$|(^|/)BACKLOG\.html$'
 # Anchored with (^|/) rather than ^: `git diff --name-only` reports paths from the GIT ROOT,
 # which since the 2026-09-03 monorepo merge means `api/alembic/versions/...`. The bare ^ anchor
 # matched nothing from that day until 2026-09-04, so this check reported clean while doing
@@ -127,9 +133,16 @@ fi
 # Scoped to app/: a test may legitimately compare teacher_id (and does), production code
 # deciding who may touch a class may not. class_service.py is the one file exempt, because it
 # holds both the check and the list filter that cannot use it. Escape hatch: `drift-ok`.
+# Operand order is deliberately NOT assumed. `teacher_id != x`, `teacher.id != x` and
+# `current_user.id != x.teacher_id` are the same defect written three ways, and the first version
+# of this check only caught the first -- proven by planting a reversed comparison and watching
+# the gate report clean. So the rule is: a teacher's id mentioned on a line that also compares.
+# Broad on purpose; `app/` outside class_service.py contains no such line at all, so the false
+# positive rate is measured rather than hoped for, and `drift-ok` covers the exception.
 ownership_checks="$(
   printf '%s\n' "$LINES" | awk -F'\t' '
-    $1 ~ /(^|\/)app\// && $1 !~ /class_service\.py$/ && $3 ~ /teacher_id[[:space:]]*(!=|==)/
+    $1 ~ /(^|\/)app\// && $1 !~ /class_service\.py$/ &&
+    $3 ~ /(teacher_id|teacher\.id)/ && $3 ~ /(!=|==)/
   ' || true
 )"
 if [ -n "$ownership_checks" ]; then
