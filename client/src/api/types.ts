@@ -81,13 +81,6 @@ export interface AttendanceSummary {
   records: AttendanceRecordInSummary[];
 }
 
-export interface PaginatedAttendanceResponse {
-  items: AttendanceRecord[];
-  total: number;
-  skip: number;
-  limit: number;
-}
-
 export interface PaginatedAttendanceSummaryResponse {
   items: AttendanceSummary[];
   total: number;

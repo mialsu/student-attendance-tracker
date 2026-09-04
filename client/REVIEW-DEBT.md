@@ -17,7 +17,22 @@ cut (`/confess`), read first by any architecture or review session, dispositione
   see it — `attendance.ts` has other live exports, so the module is not an orphan and an unused
   member inside it is invisible. This is the same blind spot recorded on 2026-09-01 for
   `src/lib/classes.ts`, one level down.
-- **Disposition:** open, and it belongs to backlog item 6 (`/prune`), not to a later feature.
+- **Disposition:** **FIXED 2026-09-04**, the Owner's call, taken out of backlog item 6's territory
+  early because it was one deletion rather than a sweep. Both are gone, and following the chain
+  took a third with them: `PaginatedAttendanceResponse` in `src/api/types.ts` existed only as
+  `list`'s return type, so deleting `list` orphaned it. Left behind, it would have been a fresh
+  orphan *created* by the commit that closed this entry, which is how a sweep never finishes.
+- **Proof before deletion**, in `/prune`'s sense: `grep` found `ListAttendanceParams` referenced
+  only by its own definition and by `list`; the only `.list(` calls in `src/` are `studentsApi.list`;
+  `PaginatedAttendanceResponse` had one reference, its own declaration. Then `tsc` passed with the
+  three removed, which is the compiler agreeing nothing resolved to them. Typecheck stayed at
+  baseline 4 and lint at 16 — dead code carries no findings, so a drop would have meant the code
+  was live.
+- **Not touched, and still item 6's:** `CreateAttendanceRequest` still carries
+  `student_first_name` / `student_last_name` marked DEPRECATED, three lines below the deletion.
+  Both match a pattern the client's own `drift-extra.sh` check 1 bans, and they pass only because
+  the gate judges diffs and these lines predate it. That is a real find, and expanding a
+  one-deletion job into it is how scope creeps.
 
 ## 2026-09-04 — the revealed state is forgotten the moment you navigate away
 - **What:** `showLegacy` is component state. Reveal the old students, open a student's records,

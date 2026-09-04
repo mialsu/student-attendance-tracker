@@ -1,5 +1,5 @@
 import { apiClient } from './client';
-import type { AttendanceRecord, AttendanceSummary, PaginatedAttendanceResponse, PaginatedAttendanceSummaryResponse } from './types';
+import type { AttendanceRecord, AttendanceSummary, PaginatedAttendanceSummaryResponse } from './types';
 
 export interface CreateAttendanceRequest {
   student_name: string;      // NEW: Single field
@@ -9,14 +9,6 @@ export interface CreateAttendanceRequest {
   // DEPRECATED: Keep for backward compatibility during migration
   student_first_name?: string;
   student_last_name?: string;
-}
-
-export interface ListAttendanceParams {
-  skip?: number;
-  limit?: number;
-  student_name?: string;
-  date_from?: string; // ISO 8601 format
-  date_to?: string; // ISO 8601 format
 }
 
 export interface GetSummaryParams {
@@ -48,13 +40,6 @@ export interface AttendanceStatistics {
 }
 
 export const attendanceApi = {
-  async list(classId: string, params?: ListAttendanceParams): Promise<PaginatedAttendanceResponse> {
-    const response = await apiClient.get(`/api/classes/${classId}/attendance`, {
-      params,
-    });
-    return response.data;
-  },
-
   async create(classId: string, data: CreateAttendanceRequest): Promise<AttendanceRecord> {
     const response = await apiClient.post(`/api/classes/${classId}/attendance`, data);
     return response.data;
