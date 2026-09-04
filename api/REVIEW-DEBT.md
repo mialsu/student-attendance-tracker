@@ -17,12 +17,32 @@ cut (`/confess`), read first by any architecture or review session, dispositione
   `git diff -- api/requirements.txt` run from inside `api/` matches no pathspec and returns nothing;
   `new` is empty and the check reports nothing. `adr_added`'s `^$ADR_DIR/` anchor is wrong for the
   same reason, and would misfire if the first bug were fixed alone.
-- **Why this entry does not also say FIXED:** `drift-check.sh` is **devkit's template**, kept
-  byte-identical so upstream updates apply cleanly. It already carries exactly one local hunk — the
-  2026-09-03 `cd` — and that hunk is what broke this. Choosing between *cd to the git root and fix
-  the tool paths elsewhere* and *keep the cd and make every path git-root-aware* is a decision about
-  a vendored file, and it belongs to the Owner and to devkit, not to a feature slice. Forking it
-  further is the anti-pattern the file's own header warns about.
+- **PATH HALF FIXED 2026-09-04, on the Owner's instruction.** All five `git diff` calls in both
+  copies of `drift-check.sh` now carry `--relative`, which makes them agree with `git ls-files` and
+  is a **no-op when the cwd is the git root** — so the file stays compatible with devkit's template
+  instead of forking its behaviour, and it belongs upstream as-is. Proven in the client: adding
+  `nanoid` to `package.json` went red naming the package, and adding an ADR made it clean again.
+  **The same fix belongs in devkit's `templates/scripts/drift-check.sh`, which still has the bug**
+  — every project bootstrapped from it inherits a dead check the moment it stops being a lone repo.
+
+## 2026-09-04 — and the dependency check is STILL blind to every dependency this repo actually adds
+- **What:** with the path bug fixed, `drift-check.sh` check 3 fires for `httpx-sse==0.4.0` and stays
+  silent for `httpx-sse>=0.4.0`. **This repo pins nothing** — all 21 requirements use `>=` — so the
+  revived check still catches none of them. Found immediately after fixing the paths, by probing
+  with the repo's own dependency style rather than a textbook one.
+- **Where:** `scripts/drift-check.sh:225-227`, the `dep_names` parser.
+- **The mechanism:** the name is extracted by cutting at the first character of `["':= ]`. For
+  `httpx-sse>=0.4.0` that cuts at the `=` and leaves `httpx-sse>` — with the `>` still attached.
+  The next filter, `grep -E '^[A-Za-z0-9@._/-]+$'`, rejects it, and the dependency vanishes. Verified
+  by running the pipeline by hand and by probing both forms against the real gate.
+- **What green tests do NOT prove here:** any of it. A gate has no tests; `drift-check: clean` is
+  what a working check and a blind one both print.
+- **The fix is two characters** — add `<` and `>` to the cut class, so it becomes `["':=<>~ ]` and
+  the name is cut at the first version operator whichever one is used. That changes the template's
+  *parsing*, not just a path, so unlike `--relative` it is not self-evidently a no-op elsewhere and
+  wants the Owner's word.
+- **Disposition:** open, awaiting that decision. Recorded rather than applied so the ledger does not
+  claim a gate works when it only works for a style this repo does not use.
 - **What green tests do NOT prove here:** how many of drift-check's other checks take a path from
   `changed()` / `added_files()` and hand it back to git or the filesystem. Checks 3 and 4 (lockfiles)
   are the obvious candidates; nobody has audited the rest. Every one of them prints the same

@@ -32,6 +32,15 @@ set -uo pipefail
 # Anchor on THIS package, not on the git root. They were the same thing while the API was its
 # own repository; in the monorepo the git root is one level up and every relative path below
 # (./venv/bin/ruff, .harness-baseline, app/, tests/) silently pointed at nothing.
+#
+# The cd alone was not enough, and the second half was missing until 2026-09-04. `git ls-files`
+# reports paths relative to the cwd; `git diff` reports them from the GIT ROOT unless told
+# otherwise. So every check that took a path from a diff and handed it back to git — the
+# dependency/ADR check above all — passed a pathspec like `api/requirements.txt` while standing
+# in `api/`, matched nothing, and reported clean. Every `git diff` below therefore carries
+# `--relative`, which is a NO-OP when the cwd is the git root and so keeps this file compatible
+# with devkit's template rather than forking its behaviour. It also scopes each package's gate to
+# its own files, which is what the cd was reaching for.
 cd "$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)" || exit 2
 
 MAX_NEW_FILE_LINES="${MAX_NEW_FILE_LINES:-400}"
@@ -92,12 +101,12 @@ else
   UNTRACKED=""
 fi
 
-changed()     { { git diff --name-only "${RANGE[@]}"; printf '%s' "$UNTRACKED"; } | grep -v '^$' | sort -u; }
-added_files() { { git diff --diff-filter=A --name-only "${RANGE[@]}"; printf '%s' "$UNTRACKED"; } | grep -v '^$' | sort -u; }
+changed()     { { git diff --relative --name-only "${RANGE[@]}"; printf '%s' "$UNTRACKED"; } | grep -v '^$' | sort -u; }
+added_files() { { git diff --relative --diff-filter=A --name-only "${RANGE[@]}"; printf '%s' "$UNTRACKED"; } | grep -v '^$' | sort -u; }
 
 # path<TAB>lineno<TAB>content, for every ADDED line in the range (untracked files: every line).
 added_lines() {
-  git diff --unified=0 "${RANGE[@]}" -- "$@" | awk '
+  git diff --relative --unified=0 "${RANGE[@]}" -- "$@" | awk '
     /^\+\+\+ /{ f=substr($0,5); sub(/^b\//,"",f); next }
     /^@@ /{ if (match($0, /\+[0-9]+/)) n = substr($0, RSTART+1, RLENGTH-1) + 0; next }
     /^\+/{ print f "\t" n "\t" substr($0,2); n++; next }
@@ -109,7 +118,7 @@ added_lines() {
 }
 # Number of added lines per newly-added file: count<TAB>path.
 added_sizes() {
-  git diff --diff-filter=A --numstat "${RANGE[@]}" | awk -F'\t' '$1!="-"{ print $1 "\t" $3 }'
+  git diff --relative --diff-filter=A --numstat "${RANGE[@]}" | awk -F'\t' '$1!="-"{ print $1 "\t" $3 }'
   while IFS= read -r u; do
     [ -n "$u" ] && [ -f "$u" ] && printf '%s\t%s\n' "$(wc -l <"$u" | tr -d ' ')" "$u"
   done <<<"$UNTRACKED"
@@ -218,7 +227,7 @@ fi
 # key far better than a denylist of key names — and a version *bump* shows the same name on both
 # sides of the diff, so only genuinely NEW names survive.
 dep_names() {                   # dep_names <manifest> <+|->
-  git diff --unified=0 "${RANGE[@]}" -- "$1" \
+  git diff --relative --unified=0 "${RANGE[@]}" -- "$1" \
     | grep "^[$2]" | grep -Ev '^[-+]{3}' | grep -v 'drift-ok' \
     | { if printf '%s' "$1" | grep -q 'requirements'; then cat; \
         else grep -E '[0-9]+\.[0-9]+|"\*"|latest|\{'; fi; } \
