@@ -44,6 +44,14 @@ set -uo pipefail
 cd "$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)" || exit 2
 
 MAX_NEW_FILE_LINES="${MAX_NEW_FILE_LINES:-400}"
+# A separate, looser cap for test files, and NOT a blanket exemption — see CODING_STANDARDS.md.
+# The 400 cap's stated anti-pattern is "several modules in a trench coat", which is about a
+# production module with muddled responsibilities. A test file's length tracks the surface it
+# covers: this repo's convention is one test file per service, and tests/test_service_attendance.py
+# was already 637 lines before this gate existed. Splitting tests/test_service_student.py to satisfy
+# a byte count would have forked that convention at seams chosen by arithmetic. The cap stays alive
+# at 1000 rather than being removed, because a 3000-line test file really would be several files.
+MAX_NEW_TEST_FILE_LINES="${MAX_NEW_TEST_FILE_LINES:-1000}"
 LEDGER="${LEDGER:-REVIEW-DEBT.md}"
 ADR_DIR="${ADR_DIR:-docs/adr}"
 MIN_TERM_LEN="${MIN_TERM_LEN:-3}"
@@ -285,10 +293,12 @@ fi
 while IFS=$'\t' read -r add path; do
   [ -n "${path:-}" ] || continue
   printf '%s\n' "$path" | grep -Eq "$SKIP_CONTENT" && continue
-  if [ "$add" -gt "$MAX_NEW_FILE_LINES" ]; then
-    report "size — new file is $add lines (cap $MAX_NEW_FILE_LINES)" \
+  cap="$MAX_NEW_FILE_LINES"
+  printf '%s\n' "$path" | grep -Eq '(^|/)tests?/' && cap="$MAX_NEW_TEST_FILE_LINES"
+  if [ "$add" -gt "$cap" ]; then
+    report "size — new file is $add lines (cap $cap)" \
             "backend/layer-only progress: a file this big is usually several modules in a trench coat" \
-            "split it at a real seam, or raise MAX_NEW_FILE_LINES with a reason in CODING_STANDARDS.md"
+            "split it at a real seam, or raise the cap with a reason in CODING_STANDARDS.md"
     say "     $path"
   fi
 done < <(added_sizes)

@@ -6,6 +6,44 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 
 <!-- Newest first. -->
 
+## 2026-09-07 — the drift gate's size check now differs from devkit's template, in a third way
+- **What:** `scripts/drift-check.sh` here grew a second cap, `MAX_NEW_TEST_FILE_LINES` at 1000, for
+  paths under `tests/`. The 400 cap is unchanged everywhere else and both were watched fire (1100
+  lines under `tests/`, 500 under `app/`). The reasoning is in `CODING_STANDARDS.md`.
+- **Where:** `api/scripts/drift-check.sh:46`. **Not** in `client/scripts/drift-check.sh`, and
+  **not** in devkit's template.
+- **What green tests do NOT prove here:** that the three copies of this script agree about
+  anything. They now differ in at least two known ways — this cap, and the `--`-as-comment fix
+  that landed in the client's copy on 2026-09-07 and in neither of the others. A gate whose copies
+  disagree gives a different verdict per package, which is how `client/e2e/fixtures.ts` passed
+  every local hook and failed the same check in CI.
+- **Disposition:** open, and the fix is not "copy this cap around". The three copies should come
+  from one source, which is devkit's job (`/harness`); until then each divergence is a decision
+  somebody has to rediscover. Whether the test cap belongs in the template at all is the Owner's
+  call — a TypeScript project's test files are usually smaller, and the client's own e2e toolkit
+  was **split** rather than exempted on the same day, which is the opposite judgement for a
+  defensible reason.
+
+## 2026-09-07 — normalize_name lowercases the second half of a hyphenated name
+- **What:** `student_service.normalize_name` is `" ".join(word.capitalize() for word in ...)`, and
+  `str.capitalize()` uppercases the first character and lowercases **the rest** — so it treats a
+  hyphenated name as one word. `"aino-kaarina mäkeläinen-virtanen"` is stored as
+  `"Aino-kaarina Mäkeläinen-virtanen"`. Apostrophes go the same way: `"o'brien"` → `"O'brien"`.
+- **Where:** `app/services/student_service.py:36`. Documented, not asserted-as-correct, by
+  `tests/test_service_student.py::TestNormalizeName::test_a_hyphenated_name_keeps_its_second_half_lowercase`
+  — the test states the behaviour and points here.
+- **What green tests do NOT prove here:** that names render the way a Finnish teacher wrote them.
+  Double-barrelled first names and surnames are ordinary in Finnish and this register is Finnish;
+  the browser walk's own stress fixture is "Aino-Kaarina Mäkeläinen-Virtanen", which this function
+  would store mangled. **It is cosmetic, not a duplicate-Student risk:** INV-2's uniqueness index is
+  on `LOWER(name)`, so matching is unaffected and no second row can appear. The damage is on the
+  teacher's screen.
+- **Disposition:** open, and deliberately not fixed with the tests. A fix changes how names are
+  *stored* from that moment on and leaves every existing row in the old shape, so it wants a
+  decision about a backfill — and the naive fix (splitting on `-` and `'` too) is wrong for names
+  where the second part is genuinely lowercase. That is the Owner's call about their own domain
+  (PRINCIPLES #11), not a test's.
+
 ## 2026-09-07 — I promoted a generated planning dump to an ADR, and the ADR directory is the worst place for one
 - **What:** deleting the root `docs/` directory, I judged `ARCHITECTURE.md`'s *Monolith vs
   Microservices* section the one part worth keeping and wrote it up as

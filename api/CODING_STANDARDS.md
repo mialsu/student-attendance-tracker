@@ -57,13 +57,24 @@ Enforced by `[tool.importlinter]` in `pyproject.toml`; each contract was proven 
 - `app.models` never reaches into transport or business logic. `[boundary]`
 - Keep services thin at the route layer: business logic lives in `app/services`, not in
   `app/api`. `[review-only]`
-- A new file over 400 added lines needs a reason. `[script]`
+- A new file over 400 added lines needs a reason. Under `tests/` the cap is **1000**. `[script]`
+  The looser cap is a category judgement, not a concession: the 400 rule's anti-pattern is
+  "several modules in a trench coat", which describes a production module with muddled
+  responsibilities. A test file's length tracks the surface it covers, this repo's convention is
+  one test file per service, and `tests/test_service_attendance.py` was already 637 lines before
+  the gate existed. `tests/test_service_student.py` covers a 549-line service with nine functions
+  in 979 lines; splitting it to satisfy a byte count would have forked the convention at seams
+  chosen by arithmetic. The cap is raised rather than removed, because a 3000-line test file
+  really would be several files. Contrast `client/e2e/fixtures.ts` on the same day, which hit the
+  same check and was **split** — data, mocks, assertions and harness were genuinely four things.
 
 ## Authorization — the rules this repo most needs and least enforces
 
 - **Every endpoint that reads or writes a row scoped to a teacher must filter by the authenticated
-  teacher, and a test must prove a *different* teacher is denied.** Today no such test exists for
-  the class list. `[review-only]`
+  teacher, and a test must prove a *different* teacher is denied.** `tests/test_authorization.py`
+  does this for every class-reaching route, and since spec 0003 INV-1 has one enforcement site, so
+  neutering it turns 17 of the 18 denials red. This line said "today no such test exists for the
+  class list" until 2026-09-07, which stopped being true on 2026-09-01. `[test]`
 - **Prefer a database constraint to a service-layer check.** A constraint holds when a new code path
   forgets; a service check holds only for the paths that remember. The
   `(LOWER(name), class_id)` unique index is the model to follow. `[constraint]`
