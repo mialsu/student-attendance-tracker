@@ -19,8 +19,8 @@ standard usually reserved for larger teams.
 ```
 api/          FastAPI backend. Gates, tests, invariants, ADRs, review debt.
 client/       React frontend.
-deployment/   Docker Compose, nginx, SSL and backup scripts for the Hetzner VM.
-docs/         Architecture, and the SSL / firewall / backend setup guides.
+deployment/   Docker Compose, nginx, SSL and backup scripts for the Hetzner VM,
+              and the operational notes that go with them.
 CLAUDE.md     How the whole thing is built, and what the gates do and do not prove.
 BACKLOG.html  What is owed, ranked, with the evidence for each item.
 ```

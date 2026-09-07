@@ -232,9 +232,8 @@ traffic to the deployed app. Static and local only; nothing left this machine.
 student-attendance-tracker/          ONE repository, github.com/mialsu (since 2026-09-03)
 ├── api/                             FastAPI backend — gates, invariants, ADRs, review debt
 ├── client/                          React 18 + TypeScript frontend
-├── deployment/                      compose, nginx, SSL and backup scripts
-│   ├── local/  production/  scripts/
-├── docs/                            architecture + the SSL / firewall / backend setup guides
+├── deployment/                      compose, nginx, SSL and backup scripts, plus the
+│   ├── local/  production/ scripts/ operational notes that go with them
 ├── .github/workflows/               backend.yml · frontend.yml · security.yml
 ├── CLAUDE.md  BACKLOG.html  README.md
 ```
@@ -335,16 +334,17 @@ commit ships the whole deployable unit.
    - CORS configured for Vercel domain
    - Multi-backend setup documentation (host multiple projects on same VM)
 
-4. **Documentation (✅ Comprehensive)**
-   - Architecture documentation (ARCHITECTURE.md)
-   - API reference with examples (API_REFERENCE.md)
-   - Testing guides (TESTING_GUIDE.md, TEST_QUICK_START.md)
-   - Deployment README with instructions
-   - **Vercel Deployment Guide** (VERCEL_DEPLOYMENT.md) - Frontend deployment
-   - **SSL Setup Guide** (SSL_SETUP.md) - Let's Encrypt + Hetzner VM
-   - **Firewall Configuration Guide** (FIREWALL_SETUP.md) - UFW + Hetzner Cloud
-   - Backend Setup Guide (BACKEND_SETUP.md)
-   - Multi-backend hosting documentation
+4. **Documentation**
+   - API reference with examples (`api/docs/API_REFERENCE.md`)
+   - Testing guides (`api/docs/TESTING_GUIDE.md`, `api/docs/TEST_QUICK_START.md`)
+   - Decisions with their rejected alternatives (`api/docs/adr/`, `client/docs/adr/`)
+   - Deployment, SSL, backups and the operational notes (`deployment/README.md`)
+   - **Vercel Deployment Guide** (`deployment/VERCEL_DEPLOYMENT.md`) - Frontend deployment
+   - Multi-backend hosting documentation (`deployment/README.md`)
+   - **The root `docs/` directory was deleted on 2026-09-07.** It held an architecture document
+     that carried the schema in three copies, a first-week setup guide still listing shipped work
+     under "What's Next", and 1,372 lines of generic UFW and certbot tutorial. What was worth
+     keeping went to ADR-0005 and `deployment/README.md`; the rest is in git history.
 
 ### ✅ Deployed to Production
 1. **Frontend**: Deployed to Vercel at `https://app-attendance.kotoio.fi`
@@ -966,7 +966,7 @@ Closes #123
 - Authentication strategy (JWT)
 - Deployment architecture (Vercel frontend + Hetzner backend)
 - Frontend tech stack (React + TypeScript)
-- API structure (already documented in ARCHITECTURE.md)
+- API structure (documented in `api/docs/API_REFERENCE.md`)
 
 ## Current Task Context
 

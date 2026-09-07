@@ -189,6 +189,10 @@ The deployment script will:
 - Apply database migrations
 - Start all services (database, backend, nginx as API gateway)
 
+> **nginx runs ONLY as a container here.** Never enable the host `nginx` service: it takes
+> port 80 at boot, and the container then cannot start. If the stack comes up broken after a
+> reboot, check `systemctl is-enabled nginx` on the host first.
+
 5. **Setup SSL certificates** (optional, recommended for production):
 ```bash
 # Only if using a custom domain
@@ -236,7 +240,13 @@ git pull origin main
 ./deployment/scripts/backup-db.sh local
 ```
 
-Backups are stored in `deployment/<environment>/backups/`
+Backups are stored in `deployment/<environment>/backups/`, and `backup-db.sh` keeps the last
+seven archives.
+
+> **Backups are manual. Nothing schedules them.** Verified on the server 2026-08-16: no cron
+> entry, no systemd timer, and exactly one backup on disk. Automating it was deferred
+> deliberately, so treat this section as the whole of the backup story rather than as the
+> description of a running job.
 
 ### Restore Database
 

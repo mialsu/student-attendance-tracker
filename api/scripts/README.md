@@ -187,7 +187,7 @@ chmod +x scripts/*.sh
 
 ## Related Documentation
 
-- API Documentation: `/docs` (when server is running)
-- Testing Guide: `/docs/TESTING_GUIDE.md`
-- Architecture: `/docs/ARCHITECTURE.md`
-- Deployment: `/deployment/README.md`
+- API Documentation: `/docs` (the running server's OpenAPI UI, not a file in this repository)
+- Architecture: `docs/adr/` — the decisions, each with its rejected alternatives
+- Invariants: `INVARIANTS.md` — the rules, each naming its enforcer
+- Deployment and operations: `../deployment/README.md`
