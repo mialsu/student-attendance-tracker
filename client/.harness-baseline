@@ -1,3 +1,4 @@
 typecheck=4
 lint=16
 tests=0
+a11y=0

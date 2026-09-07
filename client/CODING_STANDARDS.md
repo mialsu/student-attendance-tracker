@@ -30,9 +30,14 @@ harness was installed (`/harness` retrofit, baseline in `.harness-baseline`):
 
 | Gate | Baseline | Means |
 |---|---|---|
-| `[types]` | 26 errors | a diff may not ADD a type error. The 26 are debt, not permission. |
-| `[lint]` | 19 errors | same, for lint. |
-| `[test]` | 25 failing | same, for tests. **65 of 90 tests pass; 25 fail on `main`.** |
+| `[types]` | 4 errors | a diff may not ADD a type error. The 4 are debt, not permission. |
+| `[lint]` | 16 errors | same, for lint. |
+| `[test]` | 0 failing | same, for tests. **105 of 105 pass** (2026-09-07). |
+| `[a11y]` | 0 errors | jsx-a11y, on its own ratchet so an a11y error cannot be netted out against a lint fix. |
+
+Those numbers are read from `.harness-baseline`, and three of the four have moved since the
+harness was installed on 2026-09-01 — the table said 26 / 19 / 25 until 2026-09-07. Trust the
+file, not a document.
 
 A ratchet blocks accumulation, not substitution: fixing one error while adding another nets zero
 and passes. Every baseline number has a `REVIEW-DEBT.md` entry. When a number drops the script
@@ -43,9 +48,13 @@ lowers the baseline automatically — commit that change, it is ground you canno
 `eslint.config.js` sets `@typescript-eslint/no-unused-vars: "off"`. So `[types]` is a much weaker
 claim here than it looks: a null-dereference or an unused export will not be caught by anything.
 
-**No accessibility enforcer exists in this repo.** No `eslint-plugin-jsx-a11y`, no `axe`, no
-Playwright. Every accessibility rule is therefore `[review-only]`, and the web profile's three
-cheap enforcers are all unwired. This is confessed, not accepted.
+**Two of the three cheap accessibility enforcers are now wired** (2026-09-07, ADR-0004):
+`eslint-plugin-jsx-a11y` as `npm run gate:a11y` at baseline 0, and `axe-core` over six rendered
+states in `src/components/__tests__/surfaces.a11y.test.tsx`. Contrast is enforced separately over
+the token pairs, because axe cannot evaluate it in jsdom — that reasoning is ADR-0004's. **There is
+still no Playwright**, so keyboard operability, focus order and reflow at 320px are `[live]`: real
+enforcers, human-run. `DESIGN.md` §5 is the row-by-row list and §6 is what none of it catches.
+This paragraph said no enforcer existed at all until 2026-09-07.
 
 ## Language
 
@@ -125,17 +134,26 @@ these `[script]` before `gitleaks` exists would be the false-enforcer mistake th
 
 ## Accessibility
 
-All `[review-only]` — no enforcer is installed (see *Known gaps*). The cheapest next win is
-`eslint-plugin-jsx-a11y`, which the web profile names first; it was deliberately not installed
-during this harness run because it would add an unmeasured number of errors to a lint baseline
-recorded the same day. That is an Owner call, not an agent's.
+**The rules live in `DESIGN.md` §5**, one `A11Y-n` row each, and every row names the enforcer that
+fails when it is broken — `scripts/drift-check.sh` check 8 fails any row that does not. Do not
+restate them here; two homes for one artifact is the defect that document spends a section on.
+
+- A new interactive element carries an accessible name. `[lint]` (`npm run gate:a11y`) +
+  `[test]` (axe, per state)
+- A new colour token pair clears 4.5:1, or 3:1 for a boundary that identifies a control.
+  `[test]` (`src/__tests__/tokens-contrast.test.ts`, computed from `src/index.css`)
+- A control that appears on hover reveals itself on `focus-visible` too. `[review-only]` — the
+  per-row edit button was reachable by Tab while fully transparent until 2026-09-07
+- A name written in English in this Finnish UI is a defect. `[review-only]` — axe reads a name's
+  presence, never its language
 
 ## What tooling already enforces (deliberately not restated above)
 
-- Types: `npm run gate:typecheck` (ratchet, baseline 26)
-- Lint: `npm run gate:lint` (ratchet, baseline 19)
+- Types: `npm run gate:typecheck` (ratchet, baseline 4)
+- Lint: `npm run gate:lint` (ratchet, baseline 16)
+- Accessibility: `npm run gate:a11y` (ratchet, baseline 0)
 - Boundaries: `npm run lint:boundaries`
-- Tests: `npm run gate:tests` (ratchet, baseline 25)
+- Tests: `npm run gate:tests` (ratchet, baseline 0)
 - Drift: `npm run drift`
 - Compound vocabulary + repo-specific checks: `npm run drift:extra`
 - Build: `npm run build`

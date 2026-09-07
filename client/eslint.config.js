@@ -3,6 +3,9 @@ import globals from "globals";
 import reactHooks from "eslint-plugin-react-hooks";
 import reactRefresh from "eslint-plugin-react-refresh";
 import tseslint from "typescript-eslint";
+// The a11y rules live in their own file because gate:a11y ratchets them separately. Spread here
+// so `npm run lint` and the editor see them too.
+import a11y from "./eslint.a11y.config.js";
 
 export default tseslint.config(
   { ignores: ["dist"] },
@@ -23,4 +26,5 @@ export default tseslint.config(
       "@typescript-eslint/no-unused-vars": "off",
     },
   },
+  ...a11y,
 );
