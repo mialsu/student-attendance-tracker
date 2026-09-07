@@ -168,6 +168,25 @@ describe('AuthContext', () => {
       expect(result.current.user).toBeNull();
     });
 
+    it('stops loading, so a deep-linked /auth cannot land on the session spinner', async () => {
+      // `/auth` is the one surface wrapping neither Index nor ProtectedRoute, so a visitor who
+      // arrives there directly — a bookmark, or the API client's own hard redirect on a 401 —
+      // never runs checkAuth and `loading` is still the `true` it starts as. login() held the
+      // user but not `loading`, so the dashboard it navigates to rendered
+      // "Tarkistetaan istuntoa..." for ever. Found by the Playwright walk, 2026-09-07.
+      vi.mocked(authApi.login).mockResolvedValue(authResponse(teacher));
+
+      const { result } = renderAuth();
+      expect(result.current.loading).toBe(true);
+
+      await act(async () => {
+        await result.current.login('teacher@example.com', 'a-password');
+      });
+
+      expect(result.current.user).toEqual(teacher);
+      expect(result.current.loading).toBe(false);
+    });
+
     it('still works after a cold check found no session', async () => {
       vi.mocked(authApi.refreshToken).mockRejectedValue(new Error('no refresh cookie'));
       vi.mocked(authApi.login).mockResolvedValue(authResponse(teacher));
@@ -194,6 +213,19 @@ describe('AuthContext', () => {
       });
 
       expect(result.current.user).toEqual(teacher);
+    });
+
+    it('stops loading, for the same reason login does', async () => {
+      vi.mocked(authApi.signup).mockResolvedValue(authResponse(teacher));
+
+      const { result } = renderAuth();
+      expect(result.current.loading).toBe(true);
+
+      await act(async () => {
+        await result.current.signup('teacher@example.com', 'a-password', 'A-CODE');
+      });
+
+      expect(result.current.loading).toBe(false);
     });
 
     it('sends the registration code under the name the API expects', async () => {
