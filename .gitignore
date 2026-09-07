@@ -3,6 +3,12 @@
 .env.*
 !.env.example
 !.env.test.example
+# Two client env files carry no secret and have to travel with the repo: the production build's
+# API URL, which is public and already tracked, and the browser walk's, which points at its own
+# preview server. Named one by one rather than loosening `.env.*` — and .env.production was
+# tracked without a rule saying so, which would have silently refused a re-add.
+!client/.env.production
+!client/.env.e2e
 
 # python
 venv

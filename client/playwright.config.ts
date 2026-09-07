@@ -18,9 +18,12 @@
  * port. With `false` plus `--strictPort`, anything already holding 4174 fails the run loudly
  * instead of quietly answering for it.
  *
- * **The webServer builds.** Every entry point then tests the current tree: `npm run check` builds
- * once for its own build gate and once here, which is ~4s to remove "the walk passed against a
- * dist from an hour ago" from the list of things that can happen.
+ * **The webServer builds, in the walk's own mode.** `--mode e2e` loads `.env.e2e`, which points
+ * the bundle at this same origin; `npm run build` would load `.env.production` and bake in
+ * https://attendance-api.kotoio.fi, leaving the walk one missed route pattern away from the real
+ * API. `.env.e2e` says the rest. Building here also means every entry point tests the current
+ * tree: `npm run check` builds twice, ~4s to remove "the walk passed against an hour-old dist"
+ * from the list of things that can happen.
  */
 import { defineConfig, devices } from '@playwright/test';
 
@@ -59,7 +62,7 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: `npm run build && npm run preview -- --port ${PORT} --strictPort`,
+    command: `npm run build:e2e && npm run preview -- --port ${PORT} --strictPort`,
     url: BASE_URL,
     reuseExistingServer: false,
     stdout: 'ignore',
