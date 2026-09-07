@@ -44,9 +44,14 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 - **What green tests do NOT prove here:** nothing new — that is the point. Coverage was never the
   safety metric in this repo, and the project already proved why: the 24 authorization tests added
   on 2026-09-01 moved coverage **not at all** while closing a real leak.
-- **Disposition:** open, low priority, deliberately. Re-measuring is one flag on a run that takes
-  three minutes; the reason it is not urgent is that no decision here depends on the number. What
-  *was* urgent was stopping the stale figure from being quoted as current, and that is done.
+- **Disposition:** **CLOSED 2026-09-07 — measured, because a README going public was about to
+  quote it.** 346 passed, **80%** total: 1150 statements, 231 missed, a 3m25s run against the
+  throwaway database on 5439. The repeated 77% was three points *low*, so the stale figure
+  understated the code rather than flattering it — which is the harmless direction, and still a
+  reason to stop quoting it. `student_service.py` is unchanged at **29%** and is the
+  least-covered file in the backend; `app/api/classes.py` (53%), `app/database.py` (56%) and
+  `app/api/auth.py` (56%) come next. Nothing about the safety argument above changes: coverage
+  still is not the metric that caught the ownership leak.
 
 ## 2026-09-04 — the action bump cannot be proven locally; its first CI run is its proof
 - **What:** `checkout` v4→v7, `setup-python` v5→v7, `setup-node` v4→v7, `upload-artifact` v4→v7,
@@ -107,8 +112,15 @@ cut (`/confess`), read first by any architecture or review session, dispositione
   the name is cut at the first version operator whichever one is used. That changes the template's
   *parsing*, not just a path, so unlike `--relative` it is not self-evidently a no-op elsewhere and
   wants the Owner's word.
-- **Disposition:** open, awaiting that decision. Recorded rather than applied so the ledger does not
-  claim a gate works when it only works for a style this repo does not use.
+- **Disposition:** **FIXED 2026-09-04** on the Owner's word, in `cfc7bee`. The two-character
+  estimate above was wrong, and the commit message says so: it took five. `["':= ]` became
+  `["':=<>~![ ]` at `scripts/drift-check.sh:242` — `<>~!` for the operators, and `[` for extras,
+  since `uvicorn[standard]>=0.24.0` survives the operator fix as `uvicorn[standard]` and then fails
+  the charset filter anyway. Verified against all 22 requirement lines here plus JSON, scoped-JSON
+  and pyproject shapes. **devkit's `templates/scripts/drift-check.sh` carries the same fix**, so a
+  project bootstrapped from it no longer inherits the dead check.
+  *(This disposition sat at "open, awaiting that decision" for three days after the fix landed. The
+  ledger over-reported its own debt, which is the same defect as under-reporting it.)*
 - **What green tests do NOT prove here:** how many of drift-check's other checks take a path from
   `changed()` / `added_files()` and hand it back to git or the filesystem. Checks 3 and 4 (lockfiles)
   are the obvious candidates; nobody has audited the rest. Every one of them prints the same
@@ -856,7 +868,14 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 - **What green tests do NOT prove here:** anyone reading the root workflow would believe backend
   tests run on push to `develop` with codecov reporting. They do not. The real pipeline is this
   repo's `deploy.yml`, which runs tests then deploys to production on push to `main`.
-- **Disposition:** open — delete the root workflow, or make the root a repository.
+- **Disposition:** **CLOSED 2026-09-07 — both halves, in that order.** The 3 September merge made
+  the root a repository, and the workflow this entry describes (`backend-tests.yml`, pushing to
+  `develop` with codecov) no longer exists: the live CI is `backend.yml`, `frontend.yml` and
+  `security.yml`, all three green on `7a813e6`, the last push before this one. The final trace of
+  the old layout went today — `api/.github/CICD_SETUP.md`, 250 lines documenting a `deploy.yml`
+  that no longer exists, referenced by no file in the repository, and naming the production host in
+  four `ssh root@` lines. It was deleted rather than scrubbed because a scrubbed copy would still
+  describe a pipeline that does not run, which is what this entry was about.
 
 ## 2026-09-01 — formatting is not gated
 - **What:** `ruff format --check` would reformat **33 of 51** files. Not wired into any gate.

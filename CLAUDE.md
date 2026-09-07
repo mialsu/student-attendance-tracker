@@ -122,7 +122,7 @@ The figures further down this document were not accurate when measured. Correcti
 | Claim in this file | Measured |
 |---|---|
 | frontend "94.14% coverage" | was **25 of 96 FAILING** with one real network call; **fixed 2026-09-03** — 73 pass, 0 fail. **78 pass as of 2026-09-04** |
-| backend "241 tests, 82% coverage" | was **262 pass, 77% coverage** (`student_service.py` at **29%**); **346 pass as of 2026-09-04**, coverage not re-measured |
+| backend "241 tests, 82% coverage" | was **262 pass, 77% coverage** (`student_service.py` at **29%**); **346 pass at 80% coverage, measured 2026-09-07** |
 | backend "63 tests passing, 69% coverage" | a third, also-stale figure in the same document |
 
 And the finding that mattered most, on 2026-09-01: removing the teacher-ownership filter from
