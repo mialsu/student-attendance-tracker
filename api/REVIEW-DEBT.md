@@ -6,6 +6,35 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 
 <!-- Newest first. -->
 
+## 2026-09-07 — I promoted a generated planning dump to an ADR, and the ADR directory is the worst place for one
+- **What:** deleting the root `docs/` directory, I judged `ARCHITECTURE.md`'s *Monolith vs
+  Microservices* section the one part worth keeping and wrote it up as
+  `api/docs/adr/0005-modular-monolith.md`. The Owner asked what it was, which is the question that
+  should have been asked before the file existed.
+- **Where:** deleted in this commit; written in `c7af928`. The source text is in `a638ab6`
+  ("Initial knowledge base commit", 2025-10-26) and reached the repository root via `9697e8f`.
+- **Two independent defects, either one fatal:**
+  1. **Provenance.** The six reasons were boilerplate in a document generated before any code
+     existed. No decision was ever deliberated, so the ADR asserted one had been — the
+     pseudo-artifact `ANTI-PATTERNS.md` describes, placed in the directory `README.md` sends
+     readers to for "decisions with their rejected alternatives", which is the most authoritative
+     spot in the repository.
+  2. **The number was taken.** `specs/0004-shared-classes.md:11` had already reserved **ADR-0005**
+     for the `class_teachers` schema decision, which is a one-way door and is being implemented
+     now. Two documents would have claimed one id.
+- **What the gates did NOT catch, and could not:** all of it. The fast gates and CI passed on
+  `c7af928`, and the file was pushed and deployed. No gate reads an ADR's provenance, and the
+  drift gate's ADR check only asks whether an ADR *exists* for a new dependency — never whether
+  the one that exists records anything real.
+- **The lesson, stated so it survives this session:** hedging inside a document does not fix its
+  provenance. The ADR said in as many words that it was retroactive and that only one alternative
+  had been recorded, and it was still wrong to exist. **Trace where a harvested claim came from
+  before promoting it, not after.** The monolith itself is real and enforced; it is description,
+  and it lives in `CLAUDE.md` where description belongs.
+- **Disposition:** **FIXED 2026-09-07** by deletion, on the Owner's instruction, in this commit.
+  The class of defect is open: nothing prevents the next cleanup from harvesting the same text out
+  of git history, which is why this entry names the source commit.
+
 ## 2026-09-04 — drift-extra check 4 is textual, and its first version had a hole I put there
 - **What:** check 4 enforces INV-1's single site by failing any diff that adds a teacher-id
   comparison in `app/` outside `class_service.py` (spec 0003). **The version I first wrote matched

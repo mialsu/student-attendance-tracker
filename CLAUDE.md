@@ -343,8 +343,18 @@ commit ships the whole deployable unit.
    - Multi-backend hosting documentation (`deployment/README.md`)
    - **The root `docs/` directory was deleted on 2026-09-07.** It held an architecture document
      that carried the schema in three copies, a first-week setup guide still listing shipped work
-     under "What's Next", and 1,372 lines of generic UFW and certbot tutorial. What was worth
-     keeping went to ADR-0005 and `deployment/README.md`; the rest is in git history.
+     under "What's Next", and 1,372 lines of generic UFW and certbot tutorial. Two observed facts
+     about the server were carried into `deployment/README.md`: the host-nginx port-80 trap and
+     the manual-backup reality. The rest is in git history.
+   - **Its *monolith vs microservices* section was NOT preserved, and the attempt is worth
+     remembering.** It was promoted to `api/docs/adr/0005-modular-monolith.md` on 7 September and
+     deleted the same day. Its six reasons trace to `a638ab6` — "Initial knowledge base commit",
+     26 October 2025 — a planning dump written before the code existed, so the file recorded a
+     decision nobody had made, in the directory this project points readers at for decisions. It
+     also took the number `specs/0004-shared-classes.md` had already reserved for the
+     `class_teachers` schema decision. The monolith is stated as description under *Architecture
+     Decisions Already Made*, and its enforcer is the four import-linter contracts in
+     `api/pyproject.toml`.
 
 ### ✅ Deployed to Production
 1. **Frontend**: Deployed to Vercel at `https://app-attendance.kotoio.fi`
