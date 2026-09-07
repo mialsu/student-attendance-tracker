@@ -6,6 +6,36 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 
 <!-- Newest first. -->
 
+## 2026-09-07 — AttendanceRecord requires two fields the server no longer sends
+- **What:** `src/api/types.ts` declares `student_first_name: string` and `student_last_name: string`
+  as **required** on `AttendanceRecord`, marked `DEPRECATED: Keep for backward compatibility during
+  migration`. The migration is done — the API sends a `student` object and a `student_name` — so
+  any code reading either field gets `undefined` while TypeScript promises a `string`.
+- **Where:** `src/api/types.ts`. Found while typing the browser walk's fixtures against the app's
+  own interfaces: a truthful mock cannot supply them, and `scripts/drift-extra.sh` bans the
+  identifiers outright, so `e2e/fixtures.ts` types its response as a `Pick` of the fields the
+  server actually sends.
+- **What green tests do NOT prove here:** nothing reads those fields today — `grep` finds them only
+  in the type declaration and in `BACKLOG.html`, which is exempt from the drift gate precisely
+  because its job is to name them. So this is a latent type lie, not a live break. It becomes one
+  the moment someone trusts the type.
+- **Disposition:** open. The fix is to delete both fields, which the drift gate will then keep
+  deleted. Not done here because it is a contract change in a shared type and this session's
+  subject was the walk.
+
+## 2026-09-07 — the browser walk's CI job has never run
+- **What:** `frontend.yml` gained a `Browser walk` job that `deploy` needs. The YAML parses, the
+  job graph resolves to gates → walk → deploy, and `npm run e2e` is exactly the command the job
+  runs and passes locally 40/40 — but the job itself has never executed on a runner.
+- **Where:** `.github/workflows/frontend.yml`
+- **What green tests do NOT prove here:** that Chromium installs on the runner, that
+  `--with-deps` has the packages it needs on `ubuntu-latest`, that a 320px viewport renders the
+  same there as here, or that the artifact upload paths exist when a walk fails. This is the same
+  class of unproven as the deploy jobs, which `CLAUDE.md` already flags: exercising it means
+  running it.
+- **Disposition:** open until the next push to `main` under `client/**`, or a deliberate
+  `workflow_dispatch`. Watch the first run.
+
 ## 2026-09-07 — two rendered contrast failures the browser walk found, and the token test cannot see
 - **What:** the Playwright sweep runs axe with `color-contrast` **enabled** over real screens, and
   two failures stand after the plumbing ones were fixed:
