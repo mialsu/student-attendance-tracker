@@ -34,6 +34,7 @@ MODE=lines
 case "$NAME" in
   typecheck) PATTERN='error TS[0-9]+' ;;
   lint)      PATTERN='^[[:space:]]+[0-9]+:[0-9]+[[:space:]]+error' ;;
+  a11y)      PATTERN='^[[:space:]]+[0-9]+:[0-9]+[[:space:]]+error' ;;
   tests)     MODE=extract; PATTERN='Tests' ;;
   *)         PATTERN='error' ;;
 esac

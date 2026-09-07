@@ -6,6 +6,92 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 
 <!-- Newest first. -->
 
+## 2026-09-07 — three surfaces render a failed request as an empty state
+- **What:** none of the read surfaces consults its query's `error`. A failed fetch falls through to
+  the empty branch, so the screen states something false and actionable in the wrong direction: the
+  dashboard invites a teacher who owns a Kurssi to create her first one, *Läsnäolot* says "Ei
+  opiskelijoita vielä" about a register that has thirty, and *Tilastot* tells someone with two
+  hundred records to go and record some attendance.
+- **Where:** `src/components/StudentLogs.tsx:120`, `src/pages/TeacherDashboard.tsx:19`,
+  `src/pages/ClassStatistics.tsx:27` — each destructures `data` and `isLoading` and stops
+- **What green tests do NOT prove here:** all 105 tests pass with this in place, because every one
+  of them supplies data. The mutation paths *do* surface errors as toasts; only the read paths are
+  blind, and a mocked read never fails.
+- **Disposition:** open, and it is the first item of the re-skin rather than a later polish —
+  an error state is one of the four states in `DESIGN.md` §3 and this one does not exist. Found by
+  `/design-brief`, which is what §3 is for.
+
+## 2026-09-07 — the mobile per-Student menu is unreachable by assistive technology
+- **What:** the menu button is a `<button>` nested inside Radix's `AccordionTrigger` `<button>`.
+  Invalid HTML, `nested-interactive` under axe, and on a phone that menu is the **only** route to
+  rename a Student, tick a credit or delete anything — so for a keyboard or screen-reader user the
+  narrow surface has no actions at all.
+- **Where:** `src/components/StudentLogs.tsx:703-788`, inside `<AccordionTrigger>`
+- **What green tests do NOT prove here:** it is *gated* rather than fixed —
+  `src/components/__tests__/surfaces.a11y.test.tsx` carries it as a shrink-only `KNOWN_VIOLATIONS`
+  row, so a new violation fails and fixing this one also fails, telling you to delete the row. The
+  gate proves the defect has not spread; it does not make the menu reachable.
+- **Disposition:** open — **first item for the mobile pass.** Not fixed in the session that found
+  it because the fix moves the menu out of the trigger and reorders the row (the chevron lands
+  between the count and the menu), a visible layout change, and that session's scope held layouts.
+
+## 2026-09-07 — seven colour-token pairs fail WCAG AA, one of them on every button
+- **What:** measured, not intended. `primary-foreground` on `primary` is **2.61:1** in light mode —
+  white on the cyan accent, below even the 3:1 large-text floor — and `button.tsx:12`'s default
+  variant is `bg-primary text-primary-foreground`, so this is every primary button in production,
+  "Kirjaa läsnäolo" included. `ring` on `background` shares the same cyan at 2.61:1, under WCAG
+  1.4.11's 3:1, across 23 components. `input` on `background` is 1.25:1 light and 1.42:1 dark, so a
+  form field has no perceivable boundary. Plus `destructive-foreground`/`destructive` at 3.78:1,
+  `muted-foreground`/`muted` at 4.36:1, and the dark-mode primary at 2.12:1.
+- **Where:** `src/index.css` (`:root` and `.dark`); the full table is `DESIGN.md` §5
+- **What green tests do NOT prove here:** the gate is a ratchet, not a fix —
+  `src/__tests__/tokens-contrast.test.ts` holds each as a shrink-only `KNOWN_FAILING` row. It also
+  proves only that the *palette* can clear AA, never that a rendered screen does: nothing there
+  covers a disabled control at 50% opacity or text over the primary-tinted count pill.
+- **Disposition:** open, and owned by `frontend-design` — devkit does not pick the palette
+  (METHOD.md's reuse table). The accent must move for AA, which makes it a constraint on the
+  re-skin rather than a taste question.
+
+## 2026-09-07 — one a11y suppression, and three rules scoped off for the shadcn primitives
+- **What:** `jsx-a11y/no-autofocus` is disabled at one site, the inline name editor, where the user
+  has just clicked "edit" and focus is the affordance — the rule targets focus stolen on page load.
+  Separately, `heading-has-content` and `anchor-has-content` are off for `src/components/ui/**`,
+  because those primitives forward children through `{...props}` and the rules fire on
+  `<h3 {...props} />` without seeing what the caller passes.
+- **Where:** `src/components/StudentLogs.tsx` (the disable, with its reasoning inline),
+  `eslint.a11y.config.js` (the scoped block)
+- **What green tests do NOT prove here:** the scoping was proven correct — a contentless `<h1>` in
+  `src/pages` still fails — but nothing checks that a *caller* passes real content to a
+  `CardTitle`. And the suppressed autofocus is covered only by the keyboard walk, which is
+  human-run.
+- **Disposition:** accepted with reason, recorded per PRINCIPLES #5. Revisit the autofocus if the
+  inline editor is ever replaced by a dialog, where Radix would handle focus itself.
+
+## 2026-09-07 — A11Y-1, A11Y-2 and A11Y-7 have no automated enforcer, and three rows have none at all
+- **What:** no Playwright, so keyboard operability, focus order and reflow at 320px are `[live]` —
+  real enforcers, but human-run. `A11Y-6` (`prefers-reduced-motion`), `A11Y-8` (200% zoom) and
+  `A11Y-9` (a control announcing itself in the wrong language) are `[review-only]` with nothing
+  behind them. `animate-fade-in`, `transition-smooth` and `active:scale-[0.98]` all ignore
+  reduced-motion today.
+- **Where:** `DESIGN.md` §5; ADR-0004 records why Playwright was rejected for now
+- **What green tests do NOT prove here:** seven `sr-only` strings in `src/components/ui/**`
+  announce in English ("Close", "More pages") in an otherwise Finnish app, two of them on
+  components in daily use, and app code has no `sr-only` text at all. axe reads a name's presence,
+  never its language, so `A11Y-9` is the row that names this and it has no gate.
+- **Disposition:** open — Playwright is the single change that would convert three rows from
+  `[live]`/`[review-only]` to `[test]`. Revisit when a second surface or a second user arrives.
+
+## 2026-09-07 — DESIGN.md's loading thresholds are decided but not implemented
+- **What:** §3 decides that nothing shows a spinner before 300ms, that a Card's frame never waits
+  for its body, and that a mutation disables its control instead of blanking a region. The code
+  does none of the first two: every read surface spins immediately, and `/class/:id` blanks the
+  whole surface including its tabs behind one spinner.
+- **Where:** `DESIGN.md` §3; `src/pages/ClassView.tsx`, `src/components/ProtectedRoute.tsx`
+- **What green tests do NOT prove here:** nothing tests a delay threshold, and jsdom cannot show a
+  flicker. This is a decision waiting for the re-skin slice, recorded so the gap between the
+  contract and the code is visible rather than discovered later.
+- **Disposition:** open → the re-skin.
+
 ## 2026-09-04 — today's server changes were verified over HTTP, not through the screen
 - **What:** the attendance summary stopped issuing one query per student, and INV-1's seven
   enforcement sites became one. Both are server-side, and the client change was a deletion of
@@ -366,7 +452,11 @@ cut (`/confess`), read first by any architecture or review session, dispositione
   reflow at 320px, or accessible names. `jsx-a11y` was deliberately not installed during this
   harness run because it would add an unmeasured error count to a lint baseline recorded the same
   day — an Owner call, not an agent's.
-- **Disposition:** open → `/design-brief`, then wire jsx-a11y first
+- **Disposition:** **largely closed 2026-09-07** by `/design-brief` and ADR-0004. `DESIGN.md` now
+  exists, `eslint-plugin-jsx-a11y` runs as its own ratchet at baseline 0, and `axe-core` covers six
+  rendered states — the opening measurement was 7 lint findings (4 fixed, 3 scoped) and axe found 2
+  defects the linter structurally could not see. What remains open is narrower and has its own
+  entries above: no Playwright, so A11Y-1/2/7 stay `[live]`; and A11Y-6/8/9 have no enforcer.
 
 ## 2026-09-01 — type strictness is off, so the [types] tag is a weak claim
 - **What:** `tsconfig.app.json` sets `strict: false`, `strictNullChecks: false`,

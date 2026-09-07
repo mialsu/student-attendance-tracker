@@ -436,6 +436,12 @@ const StudentLogs = ({ classId }: StudentLogsProps) => {
                   if (e.key === 'Escape') handleCancelEdit();
                 }}
                 onClick={(e) => e.stopPropagation()}
+                // The user has just clicked "edit" on this row and this input replaced the name
+                // in place. Focus IS the affordance: without it a keyboard user is left with no
+                // indication of where the editor went. jsx-a11y/no-autofocus targets focus
+                // stolen on page load, which this is not. Confessed in REVIEW-DEBT.md; the
+                // keyboard walk (A11Y-1) is what actually covers this control.
+                // eslint-disable-next-line jsx-a11y/no-autofocus
                 autoFocus
                 className="h-8"
                 disabled={editingStudent.isSubmitting}
@@ -451,6 +457,7 @@ const StudentLogs = ({ classId }: StudentLogsProps) => {
                   editingStudent.isSubmitting || !editingStudent.editedName.trim()
                 }
                 className="h-8 w-8"
+                aria-label="Tallenna nimi"
               >
                 {editingStudent.isSubmitting ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
@@ -467,6 +474,7 @@ const StudentLogs = ({ classId }: StudentLogsProps) => {
                 }}
                 disabled={editingStudent.isSubmitting}
                 className="h-8 w-8"
+                aria-label="Peruuta muokkaus"
               >
                 <X className="w-4 h-4 text-muted-foreground" />
               </Button>
@@ -490,7 +498,8 @@ const StudentLogs = ({ classId }: StudentLogsProps) => {
                 e.stopPropagation();
                 handleStartEdit(row);
               }}
-              className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+              className="h-6 w-6 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity"
+              aria-label={`Muokkaa nimeä - ${row.student_name}`}
             >
               <Pencil className="w-3 h-3" />
             </Button>
@@ -517,12 +526,10 @@ const StudentLogs = ({ classId }: StudentLogsProps) => {
       headerAlign: 'center',
       width: 'w-[20%]',
       cell: (row) => (
-        <div
-          className="flex justify-center items-center gap-2"
-          onClick={(e) => e.stopPropagation()}
-        >
+        <div className="flex justify-center items-center gap-2">
           <Checkbox
             checked={row.course_credit_received}
+            onClick={(e) => e.stopPropagation()}
             onCheckedChange={() =>
               handleToggleCourseCredit(row.student_id, row.course_credit_received)
             }
@@ -718,7 +725,7 @@ const StudentLogs = ({ classId }: StudentLogsProps) => {
                                 variant="ghost"
                                 size="icon"
                                 className="h-8 w-8"
-                                aria-label="Student actions"
+                                aria-label="Opiskelijan toiminnot"
                               >
                                 <MoreVertical className="h-4 w-4" />
                               </Button>
@@ -1047,7 +1054,6 @@ const StudentLogs = ({ classId }: StudentLogsProps) => {
                 }}
                 placeholder="Opiskelijan nimi"
                 disabled={editingStudent?.isSubmitting}
-                autoFocus
               />
             </div>
             <DialogFooter className="flex-col sm:flex-row gap-2">
