@@ -24,6 +24,15 @@ cut (`/confess`), read first by any architecture or review session, dispositione
   student who has several records and confirm the newest is on top. Recorded rather than claimed,
   because this project's own history is that a green suite and a rendered screen are different
   things.
+- **Shipped 2026-09-07 without closing this**, which is the point of writing it down. Production
+  serves the new artifact — `attendance-api.kotoio.fi/health` 200, `/docs` still 401,
+  `app-attendance.kotoio.fi` 200 on a **new** bundle (`index-CWseqqTz.js`, where the previous
+  deploy served `index-CFvpiltm.js`; the CSS hash is unchanged, which matches a TypeScript-only
+  change). That proves the *artifact* deployed. It does not exercise the two changed code paths:
+  the summary's ordering and the statistics endpoint's ownership check both need a signed-in
+  teacher, and auth runs before everything, so an unauthenticated probe returns 401 whatever the
+  code behind it does. Both were verified locally over HTTP with two real sessions; on production
+  they are deployed and unexercised.
 
 ## 2026-09-04 — deleting the dead hook left attendanceApi.list with no callers at all
 - **What:** `useAttendance` was deleted because nothing called it (spec 0002). That leaves

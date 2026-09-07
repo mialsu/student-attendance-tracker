@@ -57,9 +57,20 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 - **What green gates do NOT prove here:** that the workflows still run. The YAML parses and no
   removed input is passed, which is the whole of the local evidence. **Every green push to `main`
   deploys both halves**, so the same push that proves the bump also ships whatever it is carrying.
-- **Disposition:** open until the next CI run reports. The cheap mitigation is a
-  `workflow_dispatch` run before relying on a push, which is the same advice this repo already
-  gives for the deploy jobs — the one part never proven by breaking it.
+- **Disposition:** **CLOSED 2026-09-07.** Shipped on `7a813e6` and all four actions ran green,
+  named individually in the step logs rather than inferred from a green run:
+
+  | Action | Where it ran |
+  |---|---|
+  | `checkout@v7` | all seven jobs across the three workflows |
+  | `setup-python@v7` | backend Gates, Tests, Deploy |
+  | `setup-node@v7` | frontend Gates, Security, Deploy |
+  | `upload-artifact@v7` | backend Tests, the *Upload coverage* step |
+
+  Runs 34090876510 (Security), 34090876521 (Backend), 34090876583 (Frontend) — all success,
+  including both deploy jobs. The Node 20 deprecation warning is gone. The Owner chose to push
+  straight to `main` rather than prove it on a PR first, having been offered both: the risk was a
+  red `main` and a wasted run, not a bad deploy, because every deploy job sits behind its gates.
 
 ## 2026-09-04 — drift-check's "new dependency with no ADR" check is dead here too, and it is NOT mine to fix
 - **What:** `scripts/drift-check.sh` check 3 refuses a dependency added without an ADR. It never
