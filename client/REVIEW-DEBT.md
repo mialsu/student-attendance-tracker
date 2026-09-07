@@ -6,6 +6,56 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 
 <!-- Newest first. -->
 
+## 2026-09-07 — the browser walk proves the screen, not the integration
+- **What:** `e2e/` mocks `/api/*` at the browser boundary, so nothing in the walk exercises the real
+  API, the database, or the two together from a browser. Forty green tests say the screens behave
+  correctly *given the responses the fixtures invent*.
+- **Where:** `client/e2e/fixtures.ts`, and ADR-0005's *Consequences*, which names this and points
+  here.
+- **What green tests do NOT prove here:** that the API answers the shapes the fixtures claim. The
+  fixtures are typed against `src/api/types.ts`, so a **client-side** contract change turns
+  `typecheck:e2e` red — but `src/api/types.ts` is hand-written and can itself be wrong about the
+  server, which the entry above about `AttendanceRecord` demonstrates. The backend's own 346 tests
+  own that tier; nothing joins the two.
+- **Disposition:** accepted, with the revival condition stated in ADR-0005: the full stack in the
+  CI job — a `postgres:17-alpine` service plus uvicorn plus the built client, which `backend.yml`
+  already runs for pytest — was the strongest rejected alternative, and it comes back the day the
+  walk needs to assert something only a real API can produce. It was rejected on coupling: the two
+  workflows are deliberately independent on separate path filters, and this would make a
+  frontend-only change need a Python toolchain, alembic and a seeded database to go green.
+
+## 2026-09-07 — the sweep covers three states per surface, because the fourth would lock in a bug
+- **What:** `DESIGN.md` §3 lists four states — empty, loading, refused, success. The walk sweeps
+  **three**. The error state is one mocked 500 away and is deliberately absent.
+- **Where:** `client/e2e/states.spec.ts`, and the hole itself at `StudentLogs.tsx:120`,
+  `TeacherDashboard.tsx:19`, `ClassStatistics.tsx:27` — all three destructure `data` and
+  `isLoading` and never consult `error`.
+- **What green tests do NOT prove here:** anything about what a teacher sees when a request fails.
+  All three read surfaces render a **failed** request as the **empty** state: the dashboard tells a
+  teacher who owns a Kurssi that she has none and invites her to create one; *Läsnäolot* says "no
+  Students yet" about a register that has thirty; *Tilastot* tells someone with two hundred records
+  to go and record some attendance. Each sentence is false and actionable in the wrong direction,
+  which is worse than an error message.
+- **Disposition:** open, and this entry is the *reason* the state is missing rather than an excuse
+  for it. Asserting the empty copy on an error would make the walk defend the defect. Fixing the
+  three components turns three states per surface into four, the sweep gains a row per read
+  surface, and the walk then holds the fix. `DESIGN.md` §3 has called it "one bug in three places"
+  since it was written.
+
+## 2026-09-07 — the e2e typecheck is stricter than the app it tests, which buys less than it looks
+- **What:** `tsconfig.e2e.json` runs `strict` and `noUncheckedIndexedAccess` over `e2e/` and
+  `playwright.config.ts`. The app's own project runs `strict: false` and `strictNullChecks: false`.
+- **Where:** `client/tsconfig.e2e.json` vs `client/tsconfig.app.json`, and ADR-0005's
+  *Consequences*, which records the same caveat.
+- **What green tests do NOT prove here:** that the walk's calls into app types are sound in the way
+  the same file would be in a strict repo. The strictness applies to the walk's own code, and it
+  earns its keep there — it caught `MonthlyStatistic.year_month` being written as `month`, and an
+  unguarded `split('?')[0]` in `src/api/client.ts`. But the types it checks against were declared
+  under `strict: false`, so a nullable field the app models as non-nullable is invisible to it.
+- **Disposition:** accepted. The app's four typecheck findings are ratcheted at baseline 4 and
+  raising its strictness is a separate piece of work with its own baseline; the e2e project is held
+  to the rules the app cannot meet yet rather than lowered to match it.
+
 ## 2026-09-07 — AttendanceRecord requires two fields the server no longer sends
 - **What:** `src/api/types.ts` declares `student_first_name: string` and `student_last_name: string`
   as **required** on `AttendanceRecord`, marked `DEPRECATED: Keep for backward compatibility during
