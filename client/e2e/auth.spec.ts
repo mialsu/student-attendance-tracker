@@ -10,7 +10,10 @@
  * so a cold visit here makes no auth request at all, and the `/refresh` mock only matters on the
  * way out.
  */
-import { test, expect, mockJson, oneKurssi, SESSION, toast } from './fixtures';
+import { SESSION } from './rows';
+import { mockJson, oneKurssi } from './mocks';
+import { toast } from './assertions';
+import { expect, test } from './fixtures';
 
 /**
  * `{ exact: true }` on every label is not tidiness. `getByLabel` matches a substring, and the

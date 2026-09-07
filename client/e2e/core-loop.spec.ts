@@ -14,19 +14,10 @@
  * Both halves assert the POST body rather than only the toast. "Läsnäolo kirjattu" proves the
  * screen reacted; only the request proves the Kurssi was told the right name and the right count.
  */
-import {
-  KURSSI,
-  SUGGESTIONS,
-  attendanceLogging,
-  expect,
-  oneKurssi,
-  register,
-  signedIn,
-  tabSequence,
-  tabTo,
-  test,
-  toast,
-} from './fixtures';
+import { KURSSI, SUGGESTIONS } from './rows';
+import { attendanceLogging, oneKurssi, register, signedIn } from './mocks';
+import { tabSequence, tabTo, toast } from './assertions';
+import { expect, test } from './fixtures';
 
 const classUrl = `/class/${KURSSI.id}`;
 

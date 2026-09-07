@@ -15,23 +15,10 @@
  * calls it "one bug in three places". When it is fixed, the fourth state joins this table and the
  * walk holds the fix.
  */
-import {
-  EMPTY_REGISTER,
-  KURSSI,
-  LONGEST_NAME,
-  NO_STATISTICS,
-  ROUTES,
-  expectNoAxeViolations,
-  expectNoHorizontalScroll,
-  noKurssi,
-  oneKurssi,
-  pending,
-  register,
-  signedIn,
-  statistics,
-  test,
-  expect,
-} from './fixtures';
+import { EMPTY_REGISTER, KURSSI, LONGEST_NAME, NO_STATISTICS } from './rows';
+import { noKurssi, oneKurssi, pending, register, ROUTES, signedIn, statistics } from './mocks';
+import { expectNoAxeViolations, expectNoHorizontalScroll } from './assertions';
+import { expect, test } from './fixtures';
 import type { Page } from '@playwright/test';
 
 type SweptState = {
