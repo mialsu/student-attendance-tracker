@@ -6,6 +6,62 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 
 <!-- Newest first. -->
 
+## 2026-09-07 — two rendered contrast failures the browser walk found, and the token test cannot see
+- **What:** the Playwright sweep runs axe with `color-contrast` **enabled** over real screens, and
+  two failures stand after the plumbing ones were fixed:
+  1. **The register's badge.** `Badge variant="default"` is `bg-primary/10 text-primary`, which
+     paints `#0d968b` on `#e7f5f3` = **3.25:1** where WCAG 1.4.3 wants 4.5:1. It appears at both
+     viewports, on the register — the surface the teacher reads most.
+  2. **The 404.** `text-blue-500` on `bg-gray-100` = **3.34:1**, at both viewports.
+- **Where:** `src/components/ui/badge.tsx` (the `default` and `destructive` variants),
+  `src/pages/NotFound.tsx`. Listed in `e2e/states.spec.ts`'s `KNOWN_VIOLATIONS`, which is
+  shrink-only in both directions: fixing either one turns the sweep red and names the row to delete.
+- **What green tests do NOT prove here:** `src/__tests__/tokens-contrast.test.ts` is green and
+  always was. Its `PAIRS` asserts `primary-foreground` on `primary` — white on solid teal, the
+  Button — and it has **no way to express a 10%-alpha composite over a Card**, because its maths
+  takes two solid HSL tokens. So the badge variant this app paints on every register row was never
+  covered, and `destructive` has the identical shape and will surface the day a destructive badge
+  renders in a swept state. The token test proves the palette; only a browser can prove the screen,
+  which is ADR-0005's whole argument, now with numbers.
+- **And a third row, which is two of this repo's gates disagreeing.** axe's
+  `scrollable-region-focusable` fires on the register's scroll container in the **empty** state at
+  **320px only** — the one state where the table still spans `min-w-[34rem]` and holds nothing
+  focusable, so a keyboard user has no way to scroll it. `tabIndex={0}` on
+  `src/components/ui/table.tsx` fixes it and immediately trips
+  `jsx-a11y/no-noninteractive-tabindex`, breaking the lint ratchet at 17 against a baseline of 16.
+  It was applied, watched break the other gate, and reverted. Satisfying both honestly means
+  giving `ui/table.tsx` and `ui/data-table.tsx` an `aria-label` API and adding `region` to that
+  lint rule's `roles` option — a design decision about two shared primitives, for a defect whose
+  only victim is a keyboard user sideways-scrolling an *empty* table. Listed in
+  `KNOWN_VIOLATIONS` under the `reflow-320` key alone, because at 1280px there is nothing to
+  scroll and therefore nothing to report.
+- **Disposition:** open, and deliberately **not** fixed here. Both are decisions the Owner owns:
+  the badge is a palette change (`DESIGN.md` delegates the look to `frontend-design`, and the
+  token values live in `src/index.css`), and the 404 needs tokenizing *and* translating — it is
+  the only untokenized, English surface in the app, which `DESIGN.md` §1 already records. The
+  three defects that were pure plumbing — two missing accessible names and one keyboard-unreachable
+  scroll region — were fixed in the same commit instead of listed.
+
+## 2026-09-07 — the sweep measured contrast mid-animation before it was told not to
+- **What:** the first run of the state sweep reported `color-contrast` on `/settings`'s inactive
+  tab trigger at **4.43:1** against a 4.5:1 requirement — at 320px and not at 1280px. A
+  width-dependent contrast ratio is impossible, which is what gave it away: axe composites what is
+  actually painted, `animate-fade-in` runs for 0.3s, and `#637081` is `--muted-foreground`
+  (`#48566a`) at **0.83 alpha** over `#e9f2f4` — the same alpha on all three channels. The pair
+  itself is asserted by `tokens-contrast.test.ts` and passes.
+- **Where:** fixed in `e2e/fixtures.ts` — `settleAnimations()` awaits every **finite** animation
+  before axe or the reflow measurement runs. Infinite ones are excluded on purpose: the loading
+  states hold `animate-spin`, and awaiting it would hang the walk.
+- **What green tests do NOT prove here:** that no other timing-dependent measurement remains. The
+  walk waits for `document.fonts.ready` and for finite animations, and nothing else — a CSS
+  transition started by a hover or focus the walk performs would be settled, but one started by an
+  effect after the assertion would not. `retries: 0` means such a thing shows up as a real red
+  rather than an intermittent pass, which is the point of forbidding retries.
+- **Disposition:** fixed. Recorded because it is the exact shape of a false positive a generated
+  test suite hides — a plausible-looking violation with a real number attached, in a gate nobody
+  would think to doubt. `A11Y-6` (`prefers-reduced-motion`) still has no enforcer, and this is a
+  second reason it should: an app that honoured it would have had no animation to wait for.
+
 ## 2026-09-07 — variant A landed without anyone looking at the result
 - **What:** the fold-in of variant A is a visible change to the surface the Owner uses weekly —
   new palette (education teal replacing the cyan), new typeface (Fira Sans replacing Inter), 36px
