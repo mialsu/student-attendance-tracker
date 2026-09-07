@@ -15,10 +15,15 @@
 
     <!-- Fira Sans: variant A's pairing for a dense register (ui-ux-pro-max typography.csv,
          "dashboards, analytics, admin panels"). Replaced Inter on 2026-09-07 with the rest of
-         variant A. Reverting is this link plus the fontFamily in tailwind.config.ts. -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Fira+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+         variant A. Self-hosted since 2026-09-07 — the @font-face rules and the reasoning are in
+         src/index.css, the files in public/fonts/. Reverting the typeface is those rules plus the
+         fontFamily in tailwind.config.ts.
+
+         Only the two weights every screen renders are preloaded: 400 is body text and 500 is the
+         41 font-medium utilities. 600 and 700 are discovered from the CSS, because preloading a
+         weight a screen does not use buys a console warning and a wasted request. -->
+    <link rel="preload" href="/fonts/fira-sans-400-latin.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="/fonts/fira-sans-500-latin.woff2" as="font" type="font/woff2" crossorigin>
   </head>
 
   <body>
