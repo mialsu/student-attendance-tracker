@@ -76,10 +76,15 @@ jobs:
       - name: Lint (ratchet)
         run: npm run gate:lint
 
-      # KNOWN RISK: 25 of 90 tests fail on main and are absorbed by the ratchet baseline. One of
-      # them makes a real HTTP call to localhost:8000, so the failure COUNT could differ on a runner
-      # with no server there. If this step flakes, the fix is to mock at the src/api seam (or
-      # quarantine AuthContext.test.tsx with a REVIEW-DEBT entry) — not to raise the baseline.
+      # jsx-a11y, ratcheted separately from lint so an a11y error cannot be netted out against an
+      # unrelated lint fix (ADR-0004). Baseline 0 — any finding fails this step.
+      - name: Accessibility (ratchet)
+        run: npm run gate:a11y
+
+      # The note here used to warn that 25 of 90 tests failed on main and that one made a real HTTP
+      # call to localhost:8000, so the failure COUNT could differ on a runner with no server there.
+      # Both are fixed: src/test/setup.ts refuses the network by construction since 2026-09-03, and
+      # the baseline is 0 with 105 of 105 passing. A failure here is a real failure.
       - name: Tests (ratchet)
         run: npm run gate:tests
 

@@ -72,7 +72,17 @@ in production — chief among them.
 
 ## Consequences
 
-`gate:a11y` is in `npm run check` and therefore in the pre-commit hook and CI. Both ratchets are
+`gate:a11y` is in `npm run check`, and it had to be added to `.githooks/pre-commit` and
+`.github/workflows/frontend.yml` **separately** — both enumerate the gates one by one rather than
+calling `check`, so a new script reaches neither by default. That was found by watching the hook
+run on this ADR's own commit and print no a11y line.
+
+The hook was then proven: a commit carrying an unnamed `<img>` was refused. Worth stating exactly
+which gate caught it — the **lint** ratchet fired first, at 17 against its baseline of 16, because
+the a11y rules also live in the main config. So an a11y error is caught twice, and `gate:a11y`
+earns its place on the one case lint cannot see: an a11y error introduced alongside a lint fix,
+netting zero. That step was proven standalone instead, going from 0 to 1 and failing. The CI step,
+like the deploy jobs, cannot be proven locally and its real proof is the next run. Both ratchets are
 shrink-only: fix a listed contrast pair or the nested-interactive defect and its test **fails**,
 telling you to delete the row — the same "ground you cannot give back" rule as `.harness-baseline`.
 Adding a row to either list needs a `REVIEW-DEBT.md` entry in the same commit.
