@@ -21,13 +21,13 @@
 import { createRequire } from 'node:module';
 import { test as base, expect, type Locator, type Page } from '@playwright/test';
 import type { RunOptions } from 'axe-core';
+import type { AttendanceStatistics } from '../src/api/attendance';
 import type {
-  AttendanceStatistics,
-} from '../src/api/attendance';
-import type {
+  AttendanceRecord,
   AuthResponse,
   Class,
   PaginatedAttendanceSummaryResponse,
+  StudentAutocomplete,
   User,
 } from '../src/api/types';
 
@@ -156,6 +156,7 @@ export const ROUTES = {
   summary: /\/attendance\/summary(\?|$)/,
   statistics: /\/attendance\/statistics(\?|$)/,
   autocomplete: /\/students\/autocomplete(\?|$)/,
+  createAttendance: /\/attendance(\?|$)/,
 } as const;
 
 /**
@@ -243,6 +244,119 @@ export async function pending(page: Page, url: RegExp): Promise<void> {
  */
 export function toast(page: Page, text: string): Locator {
   return page.getByText(text, { exact: true });
+}
+
+/**
+ * The autocomplete rows, ordered by frequency the way the API orders them — `total_attendance`
+ * descending. `DESIGN.md` §2 makes that ordering part of the core loop, so the fixture has to
+ * carry it or the walk proves a list rather than the feature.
+ */
+export const SUGGESTIONS: StudentAutocomplete[] = [
+  { id: '33333333-3333-4333-8333-333333333333', name: 'Liisa Korhonen', total_attendance: 15 },
+  { id: '33333333-3333-4333-8333-333333333331', name: LONGEST_NAME, total_attendance: 13 },
+  { id: '33333333-3333-4333-8333-333333333334', name: 'Otto Nieminen', total_attendance: 1 },
+];
+
+/**
+ * What a logged attendance answers with. `quantity_created` is what the toast counts.
+ *
+ * The type is a `Pick` of the fields the server actually sends, which is doing two jobs. It keeps
+ * the coupling — rename any of them in `src/api/types.ts` and `typecheck:e2e` goes red — and it
+ * leaves out the two deprecated name halves that `AttendanceRecord` still declares as
+ * **required**. The API stopped sending those with the Student-entity migration, and a fixture
+ * carrying empty strings for them would teach the walk a contract the server no longer has.
+ *
+ * `Omit` was the first attempt and `scripts/drift-extra.sh` rejected it — correctly, since a text
+ * matcher cannot tell using a banned identifier from excluding one by name. `Pick` states the same
+ * thing by naming only what is sent, so the gate needs no exemption. That those fields are
+ * non-optional in `src/api/types.ts` at all is a type lie about live responses; it is in
+ * `REVIEW-DEBT.md`.
+ */
+type LoggedAttendance = Pick<
+  AttendanceRecord,
+  'id' | 'class_id' | 'timestamp' | 'created_at' | 'student' | 'student_name' | 'quantity_created'
+>;
+
+export function loggedAttendance(name: string, quantity: number): LoggedAttendance {
+  return {
+    id: '44444444-4444-4444-8444-444444444444',
+    class_id: KURSSI.id,
+    timestamp: '2026-09-07T09:00:00Z',
+    created_at: '2026-09-07T09:00:00Z',
+    student: { id: SUGGESTIONS[0]!.id, name, course_credit_received: false },
+    student_name: name,
+    quantity_created: quantity,
+  };
+}
+
+/**
+ * Answer the autocomplete and the attendance POST, and hand back the POST bodies.
+ *
+ * The bodies are the point. A toast saying "Läsnäolo kirjattu" proves the screen reacted; only the
+ * request proves the Kurssi was told the right name and the right quantity, which is what the core
+ * loop is for.
+ */
+export async function attendanceLogging(page: Page): Promise<{ posted: unknown[] }> {
+  const posted: unknown[] = [];
+
+  await mockJson(page, ROUTES.autocomplete, SUGGESTIONS);
+  await page.route(ROUTES.createAttendance, async (route) => {
+    const request = route.request();
+    if (request.method() !== 'POST') {
+      await route.fulfill({ status: 405, contentType: 'application/json', body: '{}' });
+      return;
+    }
+    const body = request.postDataJSON() as { student_name: string; quantity: number };
+    posted.push(body);
+    await route.fulfill({
+      status: 201,
+      contentType: 'application/json',
+      body: JSON.stringify(loggedAttendance(body.student_name, body.quantity)),
+    });
+  });
+
+  return { posted };
+}
+
+/**
+ * The forward tab order of the page, as a list of identifiers — an element's `id` when it has one,
+ * else its trimmed text.
+ *
+ * This is what makes `A11Y-2` (focus order follows reading order) a real assertion rather than a
+ * self-comparison: take the sequence once, then check the controls appear in it in the order they
+ * are read. Counting presses per control cannot do that job, because Tab wraps at the end of the
+ * document — a control in the wrong place is still "reached", just later, so a count proves
+ * reachability and says nothing about order.
+ */
+export async function tabSequence(page: Page, presses = 25): Promise<string[]> {
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+  const seen: string[] = [];
+  for (let i = 0; i < presses; i += 1) {
+    await page.keyboard.press('Tab');
+    seen.push(
+      await page.evaluate(() => {
+        const el = document.activeElement;
+        if (!el || el === document.body) return '(nothing)';
+        return el.id || (el.textContent ?? '').trim().slice(0, 40) || el.tagName.toLowerCase();
+      }),
+    );
+  }
+  return seen;
+}
+
+/**
+ * Press Tab until `locator` holds focus, and return how many presses it took.
+ *
+ * The count is what makes `A11Y-2` (focus order follows reading order) assertable: the controls of
+ * a form must be reachable in increasing numbers of presses, in the order they are read. Asserting
+ * an exact count instead would break on any layout change and prove nothing about the order.
+ */
+export async function tabTo(page: Page, locator: Locator, maxPresses = 30): Promise<number> {
+  for (let pressed = 1; pressed <= maxPresses; pressed += 1) {
+    await page.keyboard.press('Tab');
+    if (await locator.evaluate((el) => el === document.activeElement)) return pressed;
+  }
+  throw new Error(`not reachable by keyboard within ${maxPresses} Tab presses`);
 }
 
 /* --------------------------------------------------- what a browser can prove */
