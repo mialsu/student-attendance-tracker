@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -10,9 +10,17 @@ import StudentLogs from '@/components/StudentLogs';
 import ClassStatistics from '@/pages/ClassStatistics';
 import { TeacherLayout } from '@/components/layouts/TeacherLayout';
 import type { BreadcrumbItem } from '@/types/breadcrumb';
+// PROTOTYPE — throwaway, and reachable only on a dev build with ?variant= in the URL.
+// See src/components/prototype/lasnaolot/. Remove with the rest of the prototype once a
+// direction wins (/prototype, step 6).
+import { LasnaolotVariants } from '@/components/prototype/lasnaolot';
 
 const ClassView = () => {
   const { classId } = useParams<{ classId: string }>();
+  const [searchParams] = useSearchParams();
+  // `import.meta.env.PROD` is replaced statically by Vite, so this whole branch — and the import
+  // above with it — is dead code in a production build rather than a feature flag.
+  const showPrototype = !import.meta.env.PROD && Boolean(searchParams.get('variant'));
   const { user } = useAuth();
   const navigate = useNavigate();
   const { data: classData, isLoading: classLoading, error } = useClass(classId || '');
@@ -82,7 +90,9 @@ const ClassView = () => {
       </div>
 
       <Tabs
-        defaultValue="attendance"
+        // PROTOTYPE: land straight on Läsnäolot when a ?variant= is requested, since that is the
+        // tab the variants replace. Normal behaviour is unchanged.
+        defaultValue={showPrototype ? 'logs' : 'attendance'}
         onValueChange={(value) => setActiveTab(value)}
         className="space-y-8"
       >
@@ -97,7 +107,11 @@ const ClassView = () => {
           </TabsContent>
 
           <TabsContent value="logs">
-            <StudentLogs classId={classData.id} />
+            {showPrototype ? (
+              <LasnaolotVariants classId={classData.id} />
+            ) : (
+              <StudentLogs classId={classData.id} />
+            )}
           </TabsContent>
 
           <TabsContent value="statistics">
