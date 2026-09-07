@@ -18,8 +18,18 @@ cut (`/confess`), read first by any architecture or review session, dispositione
   **that the sideways-scrolling table is usable on a phone**. `A11Y-7` is `[live]` precisely
   because nothing here can distinguish a usable reflow from a compliant one, and DESIGN.md §6 now
   leads with this.
-- **Disposition:** open until the Owner walks it — the dev servers were left running for that. The
-  variants are on `proto/lasnaolot-variants` if the decision wants revisiting.
+- **Disposition:** open, and **shipped to production on 2026-09-07 without being closed**, which is
+  the point of writing it down. `e9dfcf9` deployed from CI; the released artifact was verified as
+  far as it can be without eyes — `app-attendance.kotoio.fi` returns 200, the served HTML asks for
+  Fira Sans, the served CSS carries `--primary: 175 84% 32%` and the old cyan `195 100% 45%` has
+  **zero** occurrences in it, and the deployed CSS hash `index-D_w52UqT.css` matches the local
+  build byte for byte. None of that is a person looking at the register. The teacher may well be
+  the first to see it.
+  What remains for the Owner: read the register on a real phone, which is the sideways-scrolling
+  decision and the one thing `A11Y-7` being `[live]` explicitly does not cover. The variants are
+  on `proto/lasnaolot-variants` if the decision wants revisiting.
+  (Note the deployed JS hash differs from the local one, `index-C8t_J5CC.js` vs `index-DuZqgb9a.js`,
+  while the CSS matches — the same split already confessed under the stale-`node_modules` entry.)
 
 ## 2026-09-07 — the drift gate read every CSS custom property as commented-out code
 - **What:** check 9 (a block of commented-out code) treated `--` as a comment token, which is right
