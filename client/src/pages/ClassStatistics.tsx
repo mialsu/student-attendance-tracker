@@ -163,7 +163,12 @@ const ClassStatistics = ({ classId }: ClassStatisticsProps) => {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <ChartContainer config={chartConfig} className="h-[400px]">
+          {/* max-w-full because ChartContainer carries `aspect-video`, and overriding only the
+              height leaves 16:9 driving the WIDTH: 400px tall became ~711px wide whatever the
+              viewport, so at 320px the page itself scrolled sideways — a WCAG 1.4.10 failure on
+              A11Y-7, found by the Playwright sweep on 2026-09-07. The cap changes nothing at
+              desktop widths, where 711px already fitted. */}
+          <ChartContainer config={chartConfig} className="h-[400px] max-w-full">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={dailyData}>
                 <CartesianGrid strokeDasharray="3 3" />
@@ -192,7 +197,7 @@ const ClassStatistics = ({ classId }: ClassStatisticsProps) => {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <ChartContainer config={chartConfig} className="h-[400px]">
+          <ChartContainer config={chartConfig} className="h-[400px] max-w-full">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={monthlyData}>
                 <CartesianGrid strokeDasharray="3 3" />

@@ -24,7 +24,11 @@ export function UserMenu() {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" className="gap-2">
-          <span className="hidden sm:inline text-sm">{user?.email}</span>
+          {/* Same defect as AppLogo, same fix: `hidden sm:inline` left this trigger as a bare
+              chevron below 640px, so it had no accessible name and a screen-reader user on a
+              phone could not tell what it opened. sr-only keeps the email as the button's name at
+              every width, which is also the visible label from 640px up (WCAG 2.5.3). */}
+          <span className="sr-only sm:not-sr-only sm:inline text-sm">{user?.email}</span>
           <ChevronDown className="w-4 h-4" />
         </Button>
       </DropdownMenuTrigger>

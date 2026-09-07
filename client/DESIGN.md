@@ -160,15 +160,21 @@ Installed 2026-09-07 (ADR-0004). Before that date this repo had **no** accessibi
 every row here would have read `[review-only]`. Each gate below was proven by breaking it on
 purpose and watching it go red.
 
+**Re-tagged the same day**, when the browser walk landed (ADR-0005). Four rows moved off
+`live:keyboard-walk` — a real enforcer that ran when someone remembered — and onto `e2e/`, which
+runs in `npm run check` and as a job `deploy` needs. One row moved the other way, from `[live]` to
+`[review-only]`, because pretending a human check is automated is worse than admitting it is not.
+
 | # | Must be true | Enforced by | Tag |
 |---|---|---|---|
-| A11Y-1 | Every interactive element is reachable *and* operable with the keyboard alone | `live:keyboard-walk` — the primary flow with the mouse unplugged, per `/verify-live` | `[live]` |
-| A11Y-2 | Focus is always visible, and focus order follows reading order | `live:keyboard-walk` | `[live]` |
-| A11Y-3 | Every control has an accessible name, and no `<img>` is unlabelled | `lint:gate:a11y` (jsx-a11y, ratchet at 0) + `test:surfaces.a11y.test.tsx` (axe, six states) | `[lint]` |
-| A11Y-4 | Text clears 4.5:1, and a boundary that identifies a control clears 3:1 | `test:tokens-contrast.test.ts` — computed from `src/index.css`, not from intent | `[test]` |
+| A11Y-1 | Every interactive element is reachable *and* operable with the keyboard alone | `test:e2e/core-loop.spec.ts` — the core loop with no mouse at both viewports: Tab reaches every control of the logging form, Escape dismisses the suggestions, Enter submits, and the POST body is asserted. Proven by `tabIndex={-1}` on the quantity field, watched red | `[test]` |
+| A11Y-2a | Focus **order** follows reading order | `test:e2e/core-loop.spec.ts` — the forward tab sequence taken once, then asserted: name after date, quantity after name, submit last. A press *count* cannot do this job, because Tab wraps at the end of the document | `[test]` |
+| A11Y-2b | Focus is always **visible** | nothing. ADR-0005 rejected a screenshot baseline for it — genuinely stronger, and it buys committed PNGs and their churn in front of every `git status`. Split from A11Y-2a on 2026-09-07 rather than left `[live]`, because one row cannot carry two enforcers | `[review-only]` |
+| A11Y-3 | Every control has an accessible name, and no `<img>` is unlabelled | `lint:gate:a11y` (jsx-a11y, ratchet at 0) + `test:surfaces.a11y.test.tsx` (axe, six states, jsdom) + `test:e2e/states.spec.ts` (axe, fourteen states, real browser). The third one is the only one that could catch what it caught: `AppLogo` and `UserMenu` both hid their only text with `hidden sm:inline`, so below 640px each was a nameless control on every signed-in surface. jsx-a11y reads the span in the JSX; jsdom applies no media query | `[lint]` |
+| A11Y-4 | Text clears 4.5:1, and a boundary that identifies a control clears 3:1 | `test:tokens-contrast.test.ts` — ten token pairs computed from `src/index.css`, not from intent — **and** `test:e2e/states.spec.ts`, axe with `color-contrast` enabled over fourteen rendered states. The second half is not a duplicate: the token test proves the palette and has no way to express a composite like `bg-primary/10`, which is where the two open failures live | `[test]` |
 | A11Y-5 | Nothing conveys meaning by colour alone | nothing — a human has to look. The *Suoritus* badge carries its word, which is why it passes today | `[review-only]` |
 | A11Y-6 | `prefers-reduced-motion` is respected | nothing. `animate-fade-in`, `transition-smooth` and `active:scale-[0.98]` all ignore it | `[review-only]` |
-| A11Y-7 | Content reflows at 320px with no two-directional scrolling (WCAG 1.4.10) | `live:` the keyboard walk re-run at a 320px viewport. axe's narrow-viewport state proves the *DOM* is sound there, never the layout | `[live]` |
+| A11Y-7 | Content reflows at 320px with no two-directional scrolling (WCAG 1.4.10) | `test:e2e/states.spec.ts` — `documentElement.scrollWidth <= clientWidth` in every one of the fourteen states at 320px, measured after `document.fonts.ready` so the widths are Fira Sans's and not system-ui's. It **passes on all fourteen**, and it caught one real failure on the way in: the *Tilastot* charts forced the page to 760px. An inner container that scrolls is deliberate and allowed; the document scrolling is not | `[test]` |
 | A11Y-8 | Text stays readable and nothing is cut off at 200% zoom (WCAG 1.4.4) | nothing | `[review-only]` |
 | A11Y-9 | No control announces itself in the wrong language | nothing automated — axe reads a name's presence, never its language | `[review-only]` |
 
@@ -200,13 +206,28 @@ check as shipped, so `--input` is darkened away from `--border` here.
 
 The honest list, because §5's tags make the rest of this document look more enforced than it is.
 
-- **Whether the one table is actually usable at 320px.** This is now the sharpest thing no gate
-  here catches, and it replaced the `nested-interactive` entry that led this list until 2026-09-07
-  — that defect is gone, deleted along with the accordion rather than patched. What replaced it is
-  a table that scrolls sideways below ~544px, and `A11Y-7` being `[live]` is exactly the admission
-  that nothing automated can tell a usable sideways scroll from a miserable one. axe passing at a
-  narrow viewport proves the DOM is sound there and says nothing about whether the register can be
-  read on a phone. **Walk it on a real phone before trusting this decision.**
+- **Whether the one table is actually usable at 320px.** Still the sharpest thing no gate here
+  catches, and **narrower than it was this morning**. `A11Y-7` moved to `[test]` when the browser
+  walk landed, so the layout claim is now measured rather than asserted: the page does not scroll
+  sideways in any of the fourteen states at 320px, with the register's own box scrolling inside
+  itself by design. What that does *not* touch is whether a sideways-scrolling register is
+  pleasant to read on a phone — a measured reflow and a usable one are different claims, and no
+  gate can tell them apart. **Walk it on a real phone before trusting this decision.** (The entry
+  it replaced, `nested-interactive`, is gone for good: deleted along with the accordion rather
+  than patched.)
+- **Whether the two open contrast failures matter to a real reader.** The rendered sweep found the
+  register's badge at **3.25:1** (`bg-primary/10 text-primary`, i.e. `#0d968b` on `#e7f5f3`) and
+  the 404's link at **3.34:1**. Both are listed in `e2e/states.spec.ts`'s `KNOWN_VIOLATIONS`,
+  shrink-only, and confessed in `REVIEW-DEBT.md`. Neither is a gate failing to catch something —
+  the gate caught them; they are open because the fix is a palette decision and, for the 404, a
+  translation. The token test cannot see either: its maths takes two solid tokens and neither of
+  these pairs is solid.
+- **Whether axe is measuring the screen or the animation.** It caught the walk out once, on the
+  first run: `/settings`' tab trigger reported 4.43:1 against 4.5, at 320px and not at 1280px,
+  because `animate-fade-in` was still running and axe composites what is painted. The walk now
+  waits for every finite animation. A CSS transition begun *after* an assertion would still be
+  missed, and `A11Y-6` having no enforcer is a second reason to give it one: an app that honoured
+  `prefers-reduced-motion` would have had no animation to wait for.
 - **Screen-reader quality, as opposed to the presence of names.** Seven `sr-only` strings in
   `src/components/ui/**` announce in English — "Close", "More pages" — in an otherwise Finnish app,
   and two of them are on components in daily use. App code contains **no** `sr-only` text at all.

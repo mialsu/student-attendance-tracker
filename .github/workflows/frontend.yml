@@ -91,6 +91,53 @@ jobs:
       - name: Production build
         run: npm run build
 
+  # The browser walk: axe over DESIGN.md §3's states at 320px and 1280px, plus the core loop with
+  # and without a mouse. `needs: [gates]` so a broken typecheck still fails in ~45s without paying
+  # for a browser download, and `deploy` needs this one too — which is what makes it a gate rather
+  # than a report (ADR-0005).
+  #
+  # No fetch-depth here: nothing in this job is a diff gate, so the default shallow clone is right.
+  walk:
+    name: Browser walk
+    needs: [gates]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: client
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      # Chromium only — playwright.config.ts declares two viewport projects, both Chromium. The
+      # runner is ephemeral so this downloads every run, which is most of the job's wall clock.
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      # `npm run e2e` builds with --mode e2e and serves it on 4174 through the config's webServer.
+      # The e2e build points the bundle at that origin, so a missed mock cannot reach the real API.
+      - name: Browser walk
+        run: npm run e2e
+
+      - name: Upload the report and traces on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: browser-walk-${{ github.run_id }}
+          path: |
+            client/playwright-report/
+            client/test-results/
+          retention-days: 7
+          if-no-files-found: ignore
+
   security:
     name: Security
     runs-on: ubuntu-latest
@@ -127,7 +174,7 @@ jobs:
 
   deploy:
     name: Deploy to Vercel (production)
-    needs: [gates, security]
+    needs: [gates, walk, security]
     # Every push to main that passes gates + security deploys. Vercel's own git integration must
     # stay DISCONNECTED (Settings -> Git -> Connected Git Repository), or both paths deploy and
     # race. Note that an empty "Deploy Hooks" list is NOT evidence that auto-deploy is off.

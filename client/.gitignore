@@ -26,3 +26,10 @@ dist-ssr
 # Test coverage reports
 coverage/
 .vercel
+
+# Playwright — the browser walk's output. Report and traces are evidence for one run, not
+# artifacts; /playwright/.cache is its own bookkeeping.
+/playwright-report/
+/test-results/
+/blob-report/
+/playwright/.cache/

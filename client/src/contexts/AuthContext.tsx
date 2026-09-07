@@ -50,12 +50,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const response = await authApi.login({ email, password });
     setUser(response.user);
     setInitialized(true);
+    // `loading` starts true and only checkAuth cleared it. `/auth` wraps neither Index nor
+    // ProtectedRoute, so a visitor who arrives there directly — a bookmark, or the API client's
+    // hard redirect on a 401 — never ran checkAuth, and the dashboard this navigates to rendered
+    // "Tarkistetaan istuntoa..." for ever. Found by the Playwright walk, 2026-09-07.
+    setLoading(false);
   };
 
   const signup = async (email: string, password: string, registrationCode: string): Promise<void> => {
     const response = await authApi.signup({ email, password, registration_code: registrationCode });
     setUser(response.user);
     setInitialized(true);
+    // Same reason as login, one line above.
+    setLoading(false);
   };
 
   const logout = async (): Promise<void> => {

@@ -6,6 +6,142 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 
 <!-- Newest first. -->
 
+## 2026-09-07 — the browser walk proves the screen, not the integration
+- **What:** `e2e/` mocks `/api/*` at the browser boundary, so nothing in the walk exercises the real
+  API, the database, or the two together from a browser. Forty green tests say the screens behave
+  correctly *given the responses the fixtures invent*.
+- **Where:** `client/e2e/fixtures.ts`, and ADR-0005's *Consequences*, which names this and points
+  here.
+- **What green tests do NOT prove here:** that the API answers the shapes the fixtures claim. The
+  fixtures are typed against `src/api/types.ts`, so a **client-side** contract change turns
+  `typecheck:e2e` red — but `src/api/types.ts` is hand-written and can itself be wrong about the
+  server, which the entry above about `AttendanceRecord` demonstrates. The backend's own 346 tests
+  own that tier; nothing joins the two.
+- **Disposition:** accepted, with the revival condition stated in ADR-0005: the full stack in the
+  CI job — a `postgres:17-alpine` service plus uvicorn plus the built client, which `backend.yml`
+  already runs for pytest — was the strongest rejected alternative, and it comes back the day the
+  walk needs to assert something only a real API can produce. It was rejected on coupling: the two
+  workflows are deliberately independent on separate path filters, and this would make a
+  frontend-only change need a Python toolchain, alembic and a seeded database to go green.
+
+## 2026-09-07 — the sweep covers three states per surface, because the fourth would lock in a bug
+- **What:** `DESIGN.md` §3 lists four states — empty, loading, refused, success. The walk sweeps
+  **three**. The error state is one mocked 500 away and is deliberately absent.
+- **Where:** `client/e2e/states.spec.ts`, and the hole itself at `StudentLogs.tsx:120`,
+  `TeacherDashboard.tsx:19`, `ClassStatistics.tsx:27` — all three destructure `data` and
+  `isLoading` and never consult `error`.
+- **What green tests do NOT prove here:** anything about what a teacher sees when a request fails.
+  All three read surfaces render a **failed** request as the **empty** state: the dashboard tells a
+  teacher who owns a Kurssi that she has none and invites her to create one; *Läsnäolot* says "no
+  Students yet" about a register that has thirty; *Tilastot* tells someone with two hundred records
+  to go and record some attendance. Each sentence is false and actionable in the wrong direction,
+  which is worse than an error message.
+- **Disposition:** open, and this entry is the *reason* the state is missing rather than an excuse
+  for it. Asserting the empty copy on an error would make the walk defend the defect. Fixing the
+  three components turns three states per surface into four, the sweep gains a row per read
+  surface, and the walk then holds the fix. `DESIGN.md` §3 has called it "one bug in three places"
+  since it was written.
+
+## 2026-09-07 — the e2e typecheck is stricter than the app it tests, which buys less than it looks
+- **What:** `tsconfig.e2e.json` runs `strict` and `noUncheckedIndexedAccess` over `e2e/` and
+  `playwright.config.ts`. The app's own project runs `strict: false` and `strictNullChecks: false`.
+- **Where:** `client/tsconfig.e2e.json` vs `client/tsconfig.app.json`, and ADR-0005's
+  *Consequences*, which records the same caveat.
+- **What green tests do NOT prove here:** that the walk's calls into app types are sound in the way
+  the same file would be in a strict repo. The strictness applies to the walk's own code, and it
+  earns its keep there — it caught `MonthlyStatistic.year_month` being written as `month`, and an
+  unguarded `split('?')[0]` in `src/api/client.ts`. But the types it checks against were declared
+  under `strict: false`, so a nullable field the app models as non-nullable is invisible to it.
+- **Disposition:** accepted. The app's four typecheck findings are ratcheted at baseline 4 and
+  raising its strictness is a separate piece of work with its own baseline; the e2e project is held
+  to the rules the app cannot meet yet rather than lowered to match it.
+
+## 2026-09-07 — AttendanceRecord requires two fields the server no longer sends
+- **What:** `src/api/types.ts` declares `student_first_name: string` and `student_last_name: string`
+  as **required** on `AttendanceRecord`, marked `DEPRECATED: Keep for backward compatibility during
+  migration`. The migration is done — the API sends a `student` object and a `student_name` — so
+  any code reading either field gets `undefined` while TypeScript promises a `string`.
+- **Where:** `src/api/types.ts`. Found while typing the browser walk's fixtures against the app's
+  own interfaces: a truthful mock cannot supply them, and `scripts/drift-extra.sh` bans the
+  identifiers outright, so `e2e/fixtures.ts` types its response as a `Pick` of the fields the
+  server actually sends.
+- **What green tests do NOT prove here:** nothing reads those fields today — `grep` finds them only
+  in the type declaration and in `BACKLOG.html`, which is exempt from the drift gate precisely
+  because its job is to name them. So this is a latent type lie, not a live break. It becomes one
+  the moment someone trusts the type.
+- **Disposition:** open. The fix is to delete both fields, which the drift gate will then keep
+  deleted. Not done here because it is a contract change in a shared type and this session's
+  subject was the walk.
+
+## 2026-09-07 — the browser walk's CI job has never run
+- **What:** `frontend.yml` gained a `Browser walk` job that `deploy` needs. The YAML parses, the
+  job graph resolves to gates → walk → deploy, and `npm run e2e` is exactly the command the job
+  runs and passes locally 40/40 — but the job itself has never executed on a runner.
+- **Where:** `.github/workflows/frontend.yml`
+- **What green tests do NOT prove here:** that Chromium installs on the runner, that
+  `--with-deps` has the packages it needs on `ubuntu-latest`, that a 320px viewport renders the
+  same there as here, or that the artifact upload paths exist when a walk fails. This is the same
+  class of unproven as the deploy jobs, which `CLAUDE.md` already flags: exercising it means
+  running it.
+- **Disposition:** open until the next push to `main` under `client/**`, or a deliberate
+  `workflow_dispatch`. Watch the first run.
+
+## 2026-09-07 — two rendered contrast failures the browser walk found, and the token test cannot see
+- **What:** the Playwright sweep runs axe with `color-contrast` **enabled** over real screens, and
+  two failures stand after the plumbing ones were fixed:
+  1. **The register's badge.** `Badge variant="default"` is `bg-primary/10 text-primary`, which
+     paints `#0d968b` on `#e7f5f3` = **3.25:1** where WCAG 1.4.3 wants 4.5:1. It appears at both
+     viewports, on the register — the surface the teacher reads most.
+  2. **The 404.** `text-blue-500` on `bg-gray-100` = **3.34:1**, at both viewports.
+- **Where:** `src/components/ui/badge.tsx` (the `default` and `destructive` variants),
+  `src/pages/NotFound.tsx`. Listed in `e2e/states.spec.ts`'s `KNOWN_VIOLATIONS`, which is
+  shrink-only in both directions: fixing either one turns the sweep red and names the row to delete.
+- **What green tests do NOT prove here:** `src/__tests__/tokens-contrast.test.ts` is green and
+  always was. Its `PAIRS` asserts `primary-foreground` on `primary` — white on solid teal, the
+  Button — and it has **no way to express a 10%-alpha composite over a Card**, because its maths
+  takes two solid HSL tokens. So the badge variant this app paints on every register row was never
+  covered, and `destructive` has the identical shape and will surface the day a destructive badge
+  renders in a swept state. The token test proves the palette; only a browser can prove the screen,
+  which is ADR-0005's whole argument, now with numbers.
+- **And a third row, which is two of this repo's gates disagreeing.** axe's
+  `scrollable-region-focusable` fires on the register's scroll container in the **empty** state at
+  **320px only** — the one state where the table still spans `min-w-[34rem]` and holds nothing
+  focusable, so a keyboard user has no way to scroll it. `tabIndex={0}` on
+  `src/components/ui/table.tsx` fixes it and immediately trips
+  `jsx-a11y/no-noninteractive-tabindex`, breaking the lint ratchet at 17 against a baseline of 16.
+  It was applied, watched break the other gate, and reverted. Satisfying both honestly means
+  giving `ui/table.tsx` and `ui/data-table.tsx` an `aria-label` API and adding `region` to that
+  lint rule's `roles` option — a design decision about two shared primitives, for a defect whose
+  only victim is a keyboard user sideways-scrolling an *empty* table. Listed in
+  `KNOWN_VIOLATIONS` under the `reflow-320` key alone, because at 1280px there is nothing to
+  scroll and therefore nothing to report.
+- **Disposition:** open, and deliberately **not** fixed here. Both are decisions the Owner owns:
+  the badge is a palette change (`DESIGN.md` delegates the look to `frontend-design`, and the
+  token values live in `src/index.css`), and the 404 needs tokenizing *and* translating — it is
+  the only untokenized, English surface in the app, which `DESIGN.md` §1 already records. The
+  three defects that were pure plumbing — two missing accessible names and one keyboard-unreachable
+  scroll region — were fixed in the same commit instead of listed.
+
+## 2026-09-07 — the sweep measured contrast mid-animation before it was told not to
+- **What:** the first run of the state sweep reported `color-contrast` on `/settings`'s inactive
+  tab trigger at **4.43:1** against a 4.5:1 requirement — at 320px and not at 1280px. A
+  width-dependent contrast ratio is impossible, which is what gave it away: axe composites what is
+  actually painted, `animate-fade-in` runs for 0.3s, and `#637081` is `--muted-foreground`
+  (`#48566a`) at **0.83 alpha** over `#e9f2f4` — the same alpha on all three channels. The pair
+  itself is asserted by `tokens-contrast.test.ts` and passes.
+- **Where:** fixed in `e2e/fixtures.ts` — `settleAnimations()` awaits every **finite** animation
+  before axe or the reflow measurement runs. Infinite ones are excluded on purpose: the loading
+  states hold `animate-spin`, and awaiting it would hang the walk.
+- **What green tests do NOT prove here:** that no other timing-dependent measurement remains. The
+  walk waits for `document.fonts.ready` and for finite animations, and nothing else — a CSS
+  transition started by a hover or focus the walk performs would be settled, but one started by an
+  effect after the assertion would not. `retries: 0` means such a thing shows up as a real red
+  rather than an intermittent pass, which is the point of forbidding retries.
+- **Disposition:** fixed. Recorded because it is the exact shape of a false positive a generated
+  test suite hides — a plausible-looking violation with a real number attached, in a gate nobody
+  would think to doubt. `A11Y-6` (`prefers-reduced-motion`) still has no enforcer, and this is a
+  second reason it should: an app that honoured it would have had no animation to wait for.
+
 ## 2026-09-07 — variant A landed without anyone looking at the result
 - **What:** the fold-in of variant A is a visible change to the surface the Owner uses weekly —
   new palette (education teal replacing the cyan), new typeface (Fira Sans replacing Inter), 36px
@@ -18,8 +154,18 @@ cut (`/confess`), read first by any architecture or review session, dispositione
   **that the sideways-scrolling table is usable on a phone**. `A11Y-7` is `[live]` precisely
   because nothing here can distinguish a usable reflow from a compliant one, and DESIGN.md §6 now
   leads with this.
-- **Disposition:** open until the Owner walks it — the dev servers were left running for that. The
-  variants are on `proto/lasnaolot-variants` if the decision wants revisiting.
+- **Disposition:** open, and **shipped to production on 2026-09-07 without being closed**, which is
+  the point of writing it down. `e9dfcf9` deployed from CI; the released artifact was verified as
+  far as it can be without eyes — `app-attendance.kotoio.fi` returns 200, the served HTML asks for
+  Fira Sans, the served CSS carries `--primary: 175 84% 32%` and the old cyan `195 100% 45%` has
+  **zero** occurrences in it, and the deployed CSS hash `index-D_w52UqT.css` matches the local
+  build byte for byte. None of that is a person looking at the register. The teacher may well be
+  the first to see it.
+  What remains for the Owner: read the register on a real phone, which is the sideways-scrolling
+  decision and the one thing `A11Y-7` being `[live]` explicitly does not cover. The variants are
+  on `proto/lasnaolot-variants` if the decision wants revisiting.
+  (Note the deployed JS hash differs from the local one, `index-C8t_J5CC.js` vs `index-DuZqgb9a.js`,
+  while the CSS matches — the same split already confessed under the stale-`node_modules` entry.)
 
 ## 2026-09-07 — the drift gate read every CSS custom property as commented-out code
 - **What:** check 9 (a block of commented-out code) treated `--` as a comment token, which is right
