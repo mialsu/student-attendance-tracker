@@ -260,7 +260,7 @@ footer p { margin: 0 0 .5rem; }
 <div class="wrap">
 
 <header class="masthead">
-  <p class="eyebrow">Student Attendance Tracker &middot; swept 2 September 2026, updated 4 September after INV-1 was consolidated and the summary&rsquo;s N+1 fixed</p>
+  <p class="eyebrow">Student Attendance Tracker &middot; swept 2 September 2026, updated 7 September &mdash; the last audit follow-up is done and nothing is owed &ldquo;right now&rdquo;</p>
   <h1>What to build next, and why in that order</h1>
   <p class="standfirst">
     Everything currently owed across the two repositories, gathered from both
@@ -285,13 +285,22 @@ footer p { margin: 0 0 .5rem; }
 </p>
 
 <div class="nownext">
-  <p class="why">Right now &middot; one small thing left over</p>
-  <ol>
-    <li><strong>Revoke <code>refresh_tokens</code> once.</strong> Teachers still hold the old
-      <code>.kotoio.fi</code> cookie next to the new host-only one, so the first refresh fails and
-      drops them on the login screen. Revoking retires the stale cookies instead of waiting out
-      their 30 days. Hygiene, not urgency.</li>
-  </ol>
+  <p class="why">Right now &middot; nothing left over</p>
+  <p><strong>Done 7 September: <code>refresh_tokens</code> revoked in production.</strong> Every
+  token held before that moment is dead, so a refresh token copied before the 2 September cookie
+  fix can never mint an access token again. Teachers got one failed refresh and a login screen.</p>
+  <p>
+    The wording this replaces said revoking &ldquo;retires the stale cookies&rdquo;. It does not,
+    and the difference is worth keeping: revoking kills the <em>token</em>, not the
+    <em>cookie</em>. The old <code>.kotoio.fi</code> cookie stays in each browser until it expires
+    (~30 days from issue, so early October), because <code>logout</code> calls
+    <code>delete_cookie(domain=settings.cookie_domain)</code> and <code>cookie_domain</code> is
+    empty now &mdash; the app only speaks for the host-only cookie and can no longer clear the
+    domain one. Harmless, and checked rather than assumed: browsers send the older cookie first
+    (RFC&nbsp;6265 sorts by path length, then oldest first) and Starlette&rsquo;s parser keeps the
+    <em>last</em> one, so after re-login the server reads the new host-only cookie. Verified
+    against the installed starlette, both orderings.
+  </p>
   <p><strong>Migrated 3 September.</strong> The four repositories are now one, at
   <code>github.com/mialsu/student-attendance-tracker</code>. The organisation, its repos, and
   the local and server copies are all deleted &mdash; the monorepo is the only copy that exists.

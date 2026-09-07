@@ -204,9 +204,23 @@ finding was real as a *mechanism* (a developer working tree does have a `.env`, 
 one bakes it in) and the step from there to "production may be affected" was never evidenced.
 `.dockerignore` stays as prevention.
 
-**On deploying #3:** teachers with a live session get one failed refresh and land on the login
-screen, because the browser still holds the old `.kotoio.fi` cookie next to the new host-only one.
-Revoking `refresh_tokens` once after it ships retires the stale cookies rather than waiting 30 days.
+**Finding #3's follow-up is DONE (2026-09-07): `refresh_tokens` was revoked in production.** Every
+token issued before that moment is dead, so a refresh token copied before the cookie fix cannot
+mint an access token again. Teachers got one failed refresh and a login screen, as expected.
+
+**What revoking does not do, and the earlier wording here got this wrong.** It said revoking
+"retires the stale cookies". It kills the *token*, not the *cookie*. The old `.kotoio.fi` cookie
+stays in each browser until it expires — up to 30 days from issue, so early October — because
+`app/api/auth.py:221` calls `delete_cookie(domain=settings.cookie_domain)` and `cookie_domain` is
+empty in production now. The app speaks only for the host-only cookie and has no standing to clear
+the domain one. Nothing in the repo can clear it either; the certain cure for one browser is
+clearing site data for `kotoio.fi`.
+
+That lingering cookie is harmless, and this was checked rather than reasoned about: browsers send
+the older cookie first (RFC 6265 §5.4 sorts by path length, then oldest first) and Starlette's
+parser keeps the **last** occurrence, so after a re-login the server reads the new host-only
+cookie. Both orderings were run against the installed starlette. If a duplicate-name cookie ever
+does cause a refresh loop, that parser precedence is the thing to re-check first.
 
 Out of scope throughout: the Hetzner VM, the Vercel account, DNS, GitHub Actions secrets, and any
 traffic to the deployed app. Static and local only; nothing left this machine.
