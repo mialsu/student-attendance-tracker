@@ -45,7 +45,11 @@ export default defineConfig({
   retries: 0,
   /** `.only` silences a suite. `scripts/drift-check.sh` check 2 catches it in a diff; this catches it here. */
   forbidOnly: true,
-  reporter: process.env.CI ? [['github'], ['list']] : [['list']],
+  // `html` in CI so a failure uploads something a person can read; `github` annotates the failing
+  // line in the PR view. Locally `list` alone, because a report nobody opens is just files.
+  reporter: process.env.CI
+    ? [['github'], ['list'], ['html', { open: 'never' }]]
+    : [['list']],
   use: {
     baseURL: BASE_URL,
     trace: 'retain-on-failure',

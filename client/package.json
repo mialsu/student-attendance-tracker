@@ -22,7 +22,7 @@
     "gate:a11y": "scripts/baseline-guard.sh a11y npx eslint src --config eslint.a11y.config.js",
     "lint:boundaries": "depcruise src --config .dependency-cruiser.cjs",
     "drift": "scripts/drift-check.sh",
-    "check": "npm run gate:typecheck && npm run typecheck:e2e && npm run gate:lint && npm run gate:a11y && npm run lint:boundaries && npm run gate:tests && npm run drift && npm run drift:extra && npm run build",
+    "check": "npm run gate:typecheck && npm run typecheck:e2e && npm run gate:lint && npm run gate:a11y && npm run lint:boundaries && npm run gate:tests && npm run drift && npm run drift:extra && npm run build && npm run e2e",
     "drift:extra": "scripts/drift-extra.sh",
     "e2e": "playwright test",
     "e2e:report": "playwright show-report"
