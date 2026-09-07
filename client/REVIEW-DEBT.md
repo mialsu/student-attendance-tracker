@@ -73,18 +73,25 @@ cut (`/confess`), read first by any architecture or review session, dispositione
   deleted. Not done here because it is a contract change in a shared type and this session's
   subject was the walk.
 
-## 2026-09-07 — the browser walk's CI job has never run
-- **What:** `frontend.yml` gained a `Browser walk` job that `deploy` needs. The YAML parses, the
-  job graph resolves to gates → walk → deploy, and `npm run e2e` is exactly the command the job
-  runs and passes locally 40/40 — but the job itself has never executed on a runner.
+## 2026-09-07 — the browser walk's CI job has never run — CLOSED the same day
+- **What:** `frontend.yml` gained a `Browser walk` job that `deploy` needs. When this was written
+  the YAML parsed and the job graph resolved to gates → walk → deploy, but the job had never
+  executed on a runner.
 - **Where:** `.github/workflows/frontend.yml`
-- **What green tests do NOT prove here:** that Chromium installs on the runner, that
-  `--with-deps` has the packages it needs on `ubuntu-latest`, that a 320px viewport renders the
-  same there as here, or that the artifact upload paths exist when a walk fails. This is the same
-  class of unproven as the deploy jobs, which `CLAUDE.md` already flags: exercising it means
-  running it.
-- **Disposition:** open until the next push to `main` under `client/**`, or a deliberate
-  `workflow_dispatch`. Watch the first run.
+- **CLOSED 2026-09-07 by PR #3's second run** (Frontend `34152907661`): Gates 39s, Browser walk
+  **71s**, Security 20s, pipeline **1m56s**, and `Deploy to Vercel` correctly **skipped** on a
+  `pull_request` event. Chromium installed with `--with-deps` on `ubuntu-latest` and 40/40 passed
+  there, which answers every question this entry asked.
+- **What the run still does not prove:** that the artifact upload paths exist when a walk *fails* —
+  the `if: failure()` step has never fired, since the walk has never been red in CI. And the first
+  run of this job was **red for an unrelated reason worth keeping**: the Gates job failed on the
+  drift size check, because locally the gate ran per commit (where `e2e/fixtures.ts` was an
+  existing file being modified) while CI diffs `origin/main...HEAD`, where it was a **new** file at
+  its final 550 lines. A gate whose verdict depends on how the range is sliced disagrees with
+  itself between a hook and a PR, and CI is the stricter of the two. That is now fixed by splitting
+  the file, but the range asymmetry is still there for the next oversized file.
+- **Disposition:** closed for the job's existence; the failure path and the range asymmetry stay
+  open above.
 
 ## 2026-09-07 — two rendered contrast failures the browser walk found, and the token test cannot see
 - **What:** the Playwright sweep runs axe with `color-contrast` **enabled** over real screens, and
