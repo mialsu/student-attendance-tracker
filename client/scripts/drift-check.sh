@@ -328,6 +328,15 @@ done < <(added_lines | awk -F'\t' '$1 ~ /(^|\/)DESIGN\.md$/ && $3 ~ /^[[:space:]
 # /** */, jsdoc continuations, #! and #[...]) are excluded, and the body must look like code, so
 # prose in a comment block does not fire. Exempt a deliberate block by putting drift-ok on any of
 # its lines: that splits the run in two, and both halves fall under the threshold.
+#
+# `--` counts as a comment token ONLY when followed by whitespace, which is how SQL and Lua write
+# one. Without that guard every CSS custom property is a false positive: `--foreground: 176 61% 19%;`
+# parses as a comment whose body ends in `;`, so four consecutive tokens read as an unfinished
+# deletion. It cost a clean run on 2026-09-07, when src/index.css's token block was rewritten for
+# variant A and check 9 reported all seven of its groups. Added lines are what this check reads, so
+# a file that was already committed never triggered it.
+# NOTE: the same bug is in api/scripts/drift-check.sh and in devkit's template — reported, not
+# fixed from here.
 while IFS=$'\t' read -r path start count first; do
   [ -n "${path:-}" ] || continue
   report "dead code — $count consecutive commented-out lines at $path:$start" \
@@ -344,7 +353,7 @@ done < <(printf '%s\n' "$LINES" | awk -F'\t' -v min="$MIN_COMMENTED_BLOCK" '
     s = txt; sub(/^[[:space:]]+/, "", s)
     if (s ~ /^(\/\/\/|\/\/!|\/\*|\*|#!|#\[)/) {
       code = 0                                        # doc comment or attribute, never a deletion
-    } else if (s ~ /^(\/\/|#|--)/) {                  # drift-ok: the comment tokens themselves
+    } else if (s ~ /^(\/\/|#)/ || s ~ /^--([[:space:]]|$)/) {   # drift-ok: the comment tokens themselves
       b = s
       sub(/^(\/\/|#|--)[[:space:]]*/, "", b)          # drift-ok: same
       sub(/[[:space:]]+$/, "", b)

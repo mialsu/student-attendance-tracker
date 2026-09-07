@@ -142,6 +142,20 @@ function getAlignmentClass(align?: 'left' | 'center' | 'right'): string {
 }
 
 /**
+ * The density folded in from the /prototype run (variant A, "Tilikirja", 2026-09-07): 36px rows,
+ * 13px text and tight padding, so the whole register reads in one glance instead of a screenful of
+ * padding. `min-w-[34rem]` is the other half of the decision — this is now the ONLY implementation
+ * of the surface, at every width, so below about 544px the table scrolls sideways inside the
+ * overflow container shadcn's Table already provides. The page body never scrolls sideways.
+ *
+ * Deliberately NOT sticky-headered, even though variant A's style guidance calls for it: sticky
+ * needs a scroll container with a bounded height, and this container has none, so the class would
+ * have looked like a feature and done nothing. With ~14 rows there is nothing to stick.
+ */
+const DENSITY =
+  'min-w-[34rem] text-[13px] [&_th]:h-9 [&_th]:px-3 [&_th]:py-0 [&_td]:h-9 [&_td]:px-3 [&_td]:py-1.5';
+
+/**
  * General reusable DataTable component with TypeScript generics
  */
 export function DataTable<TData>({
@@ -184,7 +198,7 @@ export function DataTable<TData>({
     return (
       <div className="space-y-4">
         <div className="rounded-md border">
-          <Table className={className}>
+          <Table className={cn(DENSITY, className)}>
             {caption && <TableCaption>{caption}</TableCaption>}
             <TableHeader>
               <TableRow>
@@ -241,7 +255,7 @@ export function DataTable<TData>({
   if (data.length === 0) {
     return (
       <div className="rounded-md border">
-        <Table className={className}>
+        <Table className={cn(DENSITY, className)}>
           {caption && <TableCaption>{caption}</TableCaption>}
           <TableHeader>
             <TableRow>
@@ -283,7 +297,7 @@ export function DataTable<TData>({
   return (
     <div className="space-y-4">
       <div className="rounded-md border">
-        <Table className={className}>
+        <Table className={cn(DENSITY, className)}>
           {caption && <TableCaption>{caption}</TableCaption>}
           <TableHeader>
             <TableRow>

@@ -6,6 +6,50 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 
 <!-- Newest first. -->
 
+## 2026-09-07 — variant A landed without anyone looking at the result
+- **What:** the fold-in of variant A is a visible change to the surface the Owner uses weekly —
+  new palette (education teal replacing the cyan), new typeface (Fira Sans replacing Inter), 36px
+  rows at 13px text, and the mobile accordion deleted in favour of one sideways-scrolling table.
+  Every gate is green and 105 tests pass. **Nobody has seen it rendered.**
+- **Where:** `src/index.css`, `tailwind.config.ts`, `index.html`, `src/components/ui/data-table.tsx`,
+  `src/components/StudentLogs.tsx`
+- **What green tests do NOT prove here:** that the teal reads well on a real screen, that Fira Sans
+  is an improvement over Inter, that 36px rows are comfortable rather than cramped, and above all
+  **that the sideways-scrolling table is usable on a phone**. `A11Y-7` is `[live]` precisely
+  because nothing here can distinguish a usable reflow from a compliant one, and DESIGN.md §6 now
+  leads with this.
+- **Disposition:** open until the Owner walks it — the dev servers were left running for that. The
+  variants are on `proto/lasnaolot-variants` if the decision wants revisiting.
+
+## 2026-09-07 — the drift gate read every CSS custom property as commented-out code
+- **What:** check 9 (a block of commented-out code) treated `--` as a comment token, which is right
+  for SQL and Lua and wrong for CSS: `--foreground: 176 61% 19%;` parses as a comment whose body
+  ends in `;`, so four consecutive custom properties read as an unfinished deletion. Rewriting
+  `index.css` for variant A produced seven false violations and blocked a clean run.
+- **Where:** fixed in `scripts/drift-check.sh` — `--` now counts as a comment only when followed by
+  whitespace. Proven both ways: the false positives went away, and probe files with `// const x =`
+  and `-- DROP TABLE students;` runs still fire.
+- **What green tests do NOT prove here:** **the same bug is still in `api/scripts/drift-check.sh`
+  and in devkit's own template**, and neither was touched from here. It will not fire in the API
+  repo until someone adds a run of four `--`-prefixed lines to a non-`.md` file there, which is
+  unlikely in Python but certain in any `.sql` or `.css` file that arrives. devkit's copy will hand
+  the bug to the next project bootstrapped from it.
+- **Disposition:** open for those two copies — fix in devkit first, then re-sync the API's.
+
+## 2026-09-07 — `api/scripts/seed_data.py` is broken against its own schema
+- **What:** the documented way to seed test data fails. It inserts `student_first_name` /
+  `student_last_name` into `attendance_records` and leaves `student_id` NULL — the dead vocabulary
+  the Student-entity migration replaced with a single `name`, and the exact words
+  `drift-extra.sh` bans in `app/`. It creates the users and classes, then dies with a
+  `NotNullViolationError` on the attendance insert.
+- **Where:** `api/scripts/seed_data.py`; `CLAUDE.md` still lists `./scripts/seed-db.sh` as the way
+  to populate a database for manual testing
+- **What green tests do NOT prove here:** the 346-test suite builds its own fixtures in
+  `conftest.py` and never runs the seed script, so the whole suite passes with this broken. Anyone
+  following `CLAUDE.md` to set up a local environment hits it immediately.
+- **Disposition:** open. Found while standing up a local database to view the UI prototype; worked
+  around by inserting rows with SQL, which is not a fix. Belongs to the API repo's ledger too.
+
 ## 2026-09-07 — three surfaces render a failed request as an empty state
 - **What:** none of the read surfaces consults its query's `error`. A failed fetch falls through to
   the empty branch, so the screen states something false and actionable in the wrong direction: the
@@ -31,9 +75,13 @@ cut (`/confess`), read first by any architecture or review session, dispositione
   `src/components/__tests__/surfaces.a11y.test.tsx` carries it as a shrink-only `KNOWN_VIOLATIONS`
   row, so a new violation fails and fixing this one also fails, telling you to delete the row. The
   gate proves the defect has not spread; it does not make the menu reachable.
-- **Disposition:** open — **first item for the mobile pass.** Not fixed in the session that found
-  it because the fix moves the menu out of the trigger and reorders the row (the chevron lands
-  between the count and the menu), a visible layout change, and that session's scope held layouts.
+- **Disposition:** **CLOSED 2026-09-07, by deletion rather than repair.** Variant A won the
+  `/prototype` run and `StudentLogs` now renders one table at every width, so the accordion — and
+  with it the trigger there was no way to legally nest a button inside — is gone. The
+  `KNOWN_VIOLATIONS` row was removed because the test demanded it: a listed violation that stops
+  appearing fails the assertion and names the row. Worth noting what this means for the fix I
+  *did* apply on 2026-09-07: the English `aria-label="Student actions"` I corrected to
+  "Opiskelijan toiminnot" was on that same menu button, so that correction is now moot code.
 
 ## 2026-09-07 — seven colour-token pairs fail WCAG AA, one of them on every button
 - **What:** measured, not intended. `primary-foreground` on `primary` is **2.61:1** in light mode —
@@ -48,9 +96,14 @@ cut (`/confess`), read first by any architecture or review session, dispositione
   `src/__tests__/tokens-contrast.test.ts` holds each as a shrink-only `KNOWN_FAILING` row. It also
   proves only that the *palette* can clear AA, never that a rendered screen does: nothing there
   covers a disabled control at 50% opacity or text over the primary-tinted count pill.
-- **Disposition:** open, and owned by `frontend-design` — devkit does not pick the palette
-  (METHOD.md's reuse table). The accent must move for AA, which makes it a constraint on the
-  re-skin rather than a taste question.
+- **Disposition:** **CLOSED 2026-09-07.** Variant A's education-teal palette landed in
+  `src/index.css` and all seven pairs clear — `primary-foreground`/`primary` went 2.61:1 → 5.18:1,
+  the focus ring 2.61:1 → 3.51:1, `input` 1.25:1 → 3.66:1. `KNOWN_FAILING` in the contrast test is
+  now empty, and the test is what forced the rows out: a listed pair that starts passing fails the
+  assertion and names the row to delete. The palette came from `ui-ux-pro-max`'s corpus, whose own
+  border value failed the 3:1 control-boundary check, so `--input` was darkened away from
+  `--border` deliberately. A dark set was written to match and is asserted by the same test,
+  though nothing can select it yet (see the dark-mode entry in DESIGN.md §6).
 
 ## 2026-09-07 — one a11y suppression, and three rules scoped off for the shadcn primitives
 - **What:** `jsx-a11y/no-autofocus` is disabled at one site, the inline name editor, where the user

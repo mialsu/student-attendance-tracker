@@ -1,8 +1,13 @@
 # DESIGN.md — Student Attendance Tracker (client)
 
 The project-once design contract: what the surface is made of, and which of its rules are actually
-enforced. Written by `/design-brief` on 2026-09-07, before the first re-skin slice, and re-read
-before every one after.
+enforced. Written by `/design-brief` on 2026-09-07, and re-read before every slice.
+
+**First slice landed 2026-09-07: variant A, "Tilikirja".** Three directions were built on the real
+route and flipped between (`/prototype`, sub-shape A); the Owner chose A's layout, its education-teal
+palette, and one table at every width. What that changed is recorded in each section below rather
+than appended here. The full variant set is kept on the `proto/lasnaolot-variants` branch — it is
+the primary source for the decision, and its code was never promoted.
 
 **The scope source is not a brief.** This project predates Stage 0 and has no `PRODUCT-BRIEF.md`,
 so §1 reconciles against `CONTEXT.md` plus the feature set actually in production, and §3's
@@ -14,7 +19,7 @@ re-deciding it. That difference from the template is deliberate and was the Owne
 
 | Not in this file | Where it lives | Why not here |
 |---|---|---|
-| Palette values, type scale, spacing steps | `src/index.css` (HSL custom properties) and `tailwind.config.ts` (type scale, spacing, shadows, `Inter`) | a token table here *plus* tokens in code is two implementations of one thing. §5's contrast table is measured **from** those files by a test, not transcribed |
+| Palette values, type scale, spacing steps | `src/index.css` (HSL custom properties — education teal since 2026-09-07) and `tailwind.config.ts` (type scale, spacing, shadows, `Fira Sans`) | a token table here *plus* tokens in code is two implementations of one thing. §5's contrast table is measured **from** those files by a test, not transcribed |
 | Aesthetic direction, wireframes, UI copy | the `frontend-design` skill, applied when the re-skin is built | that skill owns the format and the judgement. devkit adds one constraint: the values stay in code |
 | Which layout wins | a `/prototype` UI run — N variants on the real route with real data | the mobile row's structure (§6) is the open one, and prose will not settle it |
 
@@ -136,11 +141,16 @@ here, and each of these is a change the current code does not yet make:
 - **`PublicNav`** — the signed-out header — used by: `/auth`
 - **`AttendanceTracking` / `StudentLogs` / `ClassStatistics`** — the three tabs of `/class/:id`
 
-`StudentLogs` is **1100 lines** and renders two complete implementations of one surface — a
-`DataTable` above the breakpoint and an `Accordion` below it, each with its own row actions, its own
-edit affordance and its own dialogs. That is where the re-skin's cost lives, and where §6's open
-question sits. Whether it should stay two implementations is a `/prototype` question, not a prose
-one; the deletion test is the thing to apply, and "kept duplicated, deliberately" is a valid answer.
+`StudentLogs` was **1100 lines** and rendered two complete implementations of one surface — a
+`DataTable` above the breakpoint and an `Accordion` below it, each with its own row actions, edit
+affordance and dialogs. **Resolved 2026-09-07: there is one.** Variant A won on the real route, so
+the accordion branch, the mobile-only pagination and the mobile-only edit dialog are deleted; the
+file is **853 lines** and the table scrolls sideways inside its own container below ~544px.
+
+Two things fell out of that deletion rather than being fixed on their own terms: the
+`nested-interactive` defect (§6 used to lead with it — there is no accordion trigger left to nest a
+button inside), and the question of which implementation a change belongs in. This is the one place
+prose could not have settled it: both implementations looked fine read separately.
 
 ---
 
@@ -162,23 +172,27 @@ purpose and watching it go red.
 | A11Y-8 | Text stays readable and nothing is cut off at 200% zoom (WCAG 1.4.4) | nothing | `[review-only]` |
 | A11Y-9 | No control announces itself in the wrong language | nothing automated — axe reads a name's presence, never its language | `[review-only]` |
 
-Contrast, measured from the real tokens by `src/__tests__/tokens-contrast.test.ts`. Seven failures,
-each a shrink-only row in that test's `KNOWN_FAILING` and an entry in `REVIEW-DEBT.md`:
+Contrast, measured from the real tokens by `src/__tests__/tokens-contrast.test.ts` — ten pairs in
+each theme, and **every one clears** since variant A's palette landed. That test's `KNOWN_FAILING`
+list is empty for the first time.
 
-| Foreground on background | Ratio | Verdict |
+| Foreground on background | Light | Dark |
 |---|---|---|
-| `foreground` on `background` / `card` | 17.94:1 | AA |
-| `muted-foreground` on `background` / `card` | 4.76:1 | AA |
-| `secondary-foreground` on `secondary` | 16.42:1 | AA |
-| `primary-foreground` on `primary` (light) | **2.61:1** | **fails — below even the 3:1 large-text floor, on every default button in production** |
-| `ring` on `background` (light) | **2.61:1** | **fails 1.4.11's 3:1 — the focus ring shares that cyan, across 23 components** |
-| `input` on `background` | **1.25:1** light, **1.42:1** dark | **fails — a form field has no perceivable boundary** |
-| `destructive-foreground` on `destructive` (light) | **3.78:1** | **fails AA; large text only** |
-| `muted-foreground` on `muted` (light) | **4.36:1** | **fails by 0.14** |
-| `primary-foreground` on `primary` (dark) | **2.12:1** | **fails** |
+| `foreground` on `background` / `card` | 9.12:1 / 9.47:1 | 16.14:1 / 14.80:1 |
+| `muted-foreground` on `background` / `card` | 7.14:1 / 7.42:1 | 9.01:1 / 8.26:1 |
+| `muted-foreground` on `muted` | 6.42:1 | 6.97:1 |
+| `primary-foreground` on `primary` | 5.18:1 | 9.29:1 |
+| `secondary-foreground` on `secondary` | 9.57:1 | 12.49:1 |
+| `destructive-foreground` on `destructive` | 4.80:1 | 4.70:1 |
+| `ring` on `background` (needs 3:1) | 3.51:1 | 9.29:1 |
+| `input` on `background` (needs 3:1) | 3.66:1 | 5.95:1 |
 
-The accent has to move for AA, which makes it a constraint on the re-skin rather than a taste
-question. `frontend-design` picks the replacement; this file does not.
+What that replaced, kept here because the number is the argument for measuring rather than
+intending: the previous cyan accent measured **2.61:1** for white text — below AA and below even the
+3:1 large-text floor — on every default button in production, with the focus ring sharing the same
+token across 23 components and a form field's border at 1.25:1. Seven pairs failed. The palette that
+fixed them came from `ui-ux-pro-max`'s corpus, and its border value failed the 3:1 control-boundary
+check as shipped, so `--input` is darkened away from `--border` here.
 
 ---
 
@@ -186,14 +200,13 @@ question. `frontend-design` picks the replacement; this file does not.
 
 The honest list, because §5's tags make the rest of this document look more enforced than it is.
 
-- **The mobile menu is unreachable by assistive technology, today.** The per-Student menu button is
-  a `<button>` inside Radix's `AccordionTrigger` `<button>` — `nested-interactive`, invalid HTML,
-  and on a phone that menu is the *only* route to rename, credit or delete. It is gated as a
-  shrink-only known violation in `surfaces.a11y.test.tsx` and confessed, not fixed: the fix moves
-  the menu out of the trigger and reorders the row, which is a layout change the re-skin should make
-  deliberately. **First item for the mobile pass.**
-- **Whether a layout that technically reflows is usable.** `A11Y-7` is `[live]` precisely because
-  nothing here can tell a table degraded into forty stacked rows from a design.
+- **Whether the one table is actually usable at 320px.** This is now the sharpest thing no gate
+  here catches, and it replaced the `nested-interactive` entry that led this list until 2026-09-07
+  — that defect is gone, deleted along with the accordion rather than patched. What replaced it is
+  a table that scrolls sideways below ~544px, and `A11Y-7` being `[live]` is exactly the admission
+  that nothing automated can tell a usable sideways scroll from a miserable one. axe passing at a
+  narrow viewport proves the DOM is sound there and says nothing about whether the register can be
+  read on a phone. **Walk it on a real phone before trusting this decision.**
 - **Screen-reader quality, as opposed to the presence of names.** Seven `sr-only` strings in
   `src/components/ui/**` announce in English — "Close", "More pages" — in an otherwise Finnish app,
   and two of them are on components in daily use. App code contains **no** `sr-only` text at all.
@@ -201,8 +214,10 @@ The honest list, because §5's tags make the rest of this document look more enf
 - **A name that exists but is useless.** axe accepts a `title`-only name, so the search-clear button
   (`title="Tyhjennä haku"`) passes while giving a touch user nothing.
 - **Contrast as rendered.** The token test proves the palette can clear AA, never that a screen
-  achieves it: it says nothing about a disabled control at 50% opacity, text over the primary-tinted
-  count pill, or any pair the app starts painting tomorrow.
+  achieves it: it says nothing about a disabled control at 50% opacity, text over a primary-tinted
+  surface, or any pair the app starts painting tomorrow. It also cannot see that `--border` at
+  1.42:1 is deliberately below 3:1 — legitimate for a divider under WCAG 1.4.11, wrong the moment a
+  control is identified by that border alone, and nothing checks which one a given border is doing.
 - **Whether the flow makes sense, or an empty state invites action.** Both `[review-only]` in their
   entirety — and §3 has one empty state that actively misleads.
 - **Whether the design survives real content.** A 60-character Finnish name, a Student with zero

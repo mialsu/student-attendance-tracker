@@ -36,24 +36,20 @@ const AXE_OPTIONS: RunOptions = {
 };
 
 /**
- * Shrink-only, exactly like KNOWN_FAILING in src/__tests__/tokens-contrast.test.ts: a state listed
- * here must still produce precisely these rule ids, so a NEW violation fails the gate and a FIXED
- * one also fails it — telling you to delete the row rather than letting the ground be given back.
- * Adding a row is only legitimate alongside a REVIEW-DEBT.md entry.
+ * Empty, and it was not empty for long.
+ *
+ * It held one row on 2026-09-07: `nested-interactive` on the mobile accordion, where the
+ * per-student menu was a `<button>` inside Radix's trigger `<button>`, leaving an
+ * assistive-technology user on a phone with no route to rename, credit or delete. That row closed
+ * the same day, not by patching the nesting but by deleting the accordion: variant A won the
+ * /prototype run and StudentLogs now renders ONE table at every width, so there is no trigger left
+ * to nest a button inside.
+ *
+ * Shrink-only in both directions — a new rule id fails, and a listed one that stops appearing also
+ * fails and names the row to delete. That is what made me remove this one rather than leave a
+ * stale exemption behind. Adding a row needs a REVIEW-DEBT.md entry in the same commit.
  */
-const KNOWN_VIOLATIONS: Record<string, string[]> = {
-  // The per-student menu button sits INSIDE AccordionTrigger, which Radix renders as a <button>,
-  // so it is a button nested in a button: invalid HTML, and unreachable by keyboard or screen
-  // reader. On a phone that menu is the ONLY route to edit a name, toggle the credit or delete —
-  // so for an assistive-technology user the mobile surface has no actions at all.
-  //
-  // Not fixed here on purpose. The fix moves the menu out of the trigger, which reorders the row
-  // (the chevron would land between the count and the menu) — a visible layout change, and this
-  // session's scope holds layouts while the re-skin is pending. Confessed in REVIEW-DEBT.md and
-  // named as the first thing the mobile pass must fix.
-  'Läsnäolot — populated, narrow viewport (the accordion, not the table)': ['nested-interactive'],
-};
-
+const KNOWN_VIOLATIONS: Record<string, string[]> = {};
 async function expectNoViolations(container: HTMLElement, state?: string) {
   const { violations } = await axe.run(container, AXE_OPTIONS);
   const found = violations.map(
@@ -152,9 +148,12 @@ describe('the surfaces pass axe in every state', () => {
     await expectNoViolations(container);
   });
 
-  // Below the breakpoint StudentLogs renders an accordion instead of the table — a different DOM,
-  // so passing above it proves nothing here. DESIGN.md holds every state to 320px.
-  const NARROW = 'Läsnäolot — populated, narrow viewport (the accordion, not the table)';
+  // This used to be a genuinely different DOM: below the breakpoint StudentLogs rendered an
+  // Accordion instead of the table, and that branch was where `nested-interactive` lived. Since
+  // variant A landed there is ONE implementation, so this now asserts the same markup as the case
+  // above — deliberately. If a second, width-specific implementation is ever reintroduced, this is
+  // the test where the two would diverge, and DESIGN.md §4 is the argument against it.
+  const NARROW = 'Läsnäolot — populated, with the breakpoint reporting narrow';
   it(NARROW, async () => {
     vi.mocked(useMediaQueryHooks.useMediaQuery).mockReturnValue(false);
     vi.mocked(useAttendanceHooks.useAttendanceSummary).mockReturnValue(asSummary(summary(3)));

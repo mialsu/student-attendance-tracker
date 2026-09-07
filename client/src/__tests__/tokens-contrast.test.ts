@@ -79,20 +79,17 @@ const PAIRS: Pair[] = [
 ];
 
 /**
- * Measured 2026-09-07 by `/design-brief`. Each row is a real AA failure in production, confessed
- * in REVIEW-DEBT.md and owed a token change from `frontend-design` — devkit does not pick the
- * palette (METHOD.md's reuse table), so this file records the debt instead of inventing a colour.
+ * Empty, and that is the point.
+ *
+ * It opened on 2026-09-07 with seven rows — `primary-foreground` on `primary` at 2.61:1 chief
+ * among them, white on a cyan accent, below even the 3:1 large-text floor, on every button in
+ * production. All seven were closed the same day when variant A's education-teal palette landed
+ * (see src/index.css). The test made me delete them: a listed pair that starts passing FAILS the
+ * assertion below and names the row to remove, so the ground cannot be given back.
+ *
+ * Adding a row here is legitimate only alongside a REVIEW-DEBT.md entry saying why.
  */
-const KNOWN_FAILING: Record<string, string> = {
-  'light:primary-foreground/primary': '2.61:1 — white on the cyan accent, below even the 3:1 large-text floor',
-  'light:destructive-foreground/destructive': '3.78:1 — white on red, passes large text only',
-  'light:ring/background': '2.61:1 — the focus ring shares the failing cyan',
-  'light:input/background': '1.25:1 — form fields have no perceivable boundary',
-  'light:muted-foreground/muted': '4.36:1 — 0.14 short of AA',
-  'dark:primary-foreground/primary': '2.12:1 — white on the brighter dark-mode cyan',
-  'dark:input/background': '1.42:1 — form fields have no perceivable boundary',
-};
-
+const KNOWN_FAILING: Record<string, string> = {};
 describe('colour tokens clear WCAG AA', () => {
   for (const [theme, selector] of [
     ['light', ':root'],

@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -15,26 +14,11 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 import { DataTable, ColumnDef, ExpandableConfig, RowAction } from '@/components/ui/data-table';
 import { useAttendanceSummary, useDeleteAttendance } from '@/hooks/useAttendance';
 import { useUpdateStudent, useDeleteStudent, useMergeStudent } from '@/hooks/useStudents';
 import { studentsApi } from '@/api/students';
-import { useMediaQuery } from '@/hooks/useMediaQuery';
-import { ChevronLeft, ChevronRight, Trash2, Loader2, Search, X, MoreVertical, Check, Pencil } from 'lucide-react';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+import { Trash2, Loader2, Search, X, Check, Pencil } from 'lucide-react';
 import { format } from 'date-fns';
 import { fi } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
@@ -49,7 +33,6 @@ const ITEMS_PER_PAGE = 20;
 
 const StudentLogs = ({ classId }: StudentLogsProps) => {
   const { toast } = useToast();
-  const isDesktop = useMediaQuery('(min-width: 768px)');
   const [currentPage, setCurrentPage] = useState(1);
   const [searchInput, setSearchInput] = useState('');
   const [showLegacy, setShowLegacy] = useState(false);
@@ -408,7 +391,6 @@ const StudentLogs = ({ classId }: StudentLogsProps) => {
   // Students the five-year cutoff is holding back under the current search. 0 while they
   // are revealed, so the banner below switches on showLegacy for the way back.
   const legacyHidden = paginatedResponse?.legacy_hidden || 0;
-  const totalPages = Math.ceil(total / ITEMS_PER_PAGE);
 
   // Column definitions for desktop DataTable
   const studentColumns: ColumnDef<AttendanceSummary>[] = [
@@ -663,187 +645,29 @@ const StudentLogs = ({ classId }: StudentLogsProps) => {
           )}
         </div>
 
-        {/* Responsive: DataTable on Desktop, Accordion on Mobile */}
-        {isDesktop ? (
-          <DataTable
-            columns={studentColumns}
-            data={students}
-            isLoading={isLoading}
-            expandable={expandableConfig}
-            rowActions={studentActions}
-            pagination={{
-              currentPage,
-              totalItems: total,
-              pageSize: ITEMS_PER_PAGE,
-              onPageChange: setCurrentPage,
-            }}
-            emptyMessage={
-              debouncedSearch
-                ? `Ei hakutuloksia haulla "${debouncedSearch}"`
-                : 'Ei opiskelijoita vielä'
-            }
-          />
-        ) : (
-          <>
-            {/* Mobile: Existing Accordion UI */}
-            {students.length === 0 ? (
-              <p className="text-center text-muted-foreground py-8">
-                {searchInput
-                  ? 'Ei opiskelijoita löytynyt haulla'
-                  : 'Ei läsnäoloja kirjattu vielä tälle kurssille'}
-              </p>
-            ) : (
-              <Accordion type="single" collapsible className="space-y-3">
-                {students.map((student) => (
-                  <AccordionItem
-                    key={student.student_id}
-                    value={student.student_id}
-                    className="border rounded-lg bg-secondary"
-                  >
-                    <AccordionTrigger className="px-3 hover:no-underline hover:bg-secondary/80">
-                      <div className="flex justify-between items-center w-full pr-2">
-                        {/* Left side: Name and badge */}
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium">{student.student_name}</span>
-                          {student.course_credit_received && (
-                            <Badge variant="default" className="text-xs">
-                              Suoritus
-                            </Badge>
-                          )}
-                        </div>
+        {/* One table at every width. It scrolls sideways inside its own container rather
+            than forking into a second implementation — see DESIGN.md §4. */}
+        <DataTable
+          columns={studentColumns}
+          data={students}
+          isLoading={isLoading}
+          expandable={expandableConfig}
+          rowActions={studentActions}
+          pagination={{
+            currentPage,
+            totalItems: total,
+            pageSize: ITEMS_PER_PAGE,
+            onPageChange: setCurrentPage,
+          }}
+          emptyMessage={
+            debouncedSearch
+              ? `Ei hakutuloksia haulla "${debouncedSearch}"`
+              : 'Ei opiskelijoita vielä'
+          }
+        />
 
-                        {/* Right side: Count and menu */}
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm bg-primary text-primary-foreground px-3 py-1 rounded-full font-semibold">
-                            {student.total_attendance}
-                          </span>
-
-                          {/* Context Menu */}
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8"
-                                aria-label="Opiskelijan toiminnot"
-                              >
-                                <MoreVertical className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              {/* Edit Name */}
-                              <DropdownMenuItem
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleStartEdit(student);
-                                }}
-                              >
-                                <Pencil className="h-4 w-4 mr-2" />
-                                Muokkaa nimeä
-                              </DropdownMenuItem>
-
-                              {/* Toggle Course Credit */}
-                              <DropdownMenuItem
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleToggleCourseCredit(
-                                    student.student_id,
-                                    student.course_credit_received
-                                  );
-                                }}
-                                disabled={updateStudentMutation.isPending}
-                              >
-                                <div className="flex items-center gap-2">
-                                  {student.course_credit_received && (
-                                    <Check className="h-4 w-4" />
-                                  )}
-                                  <span>
-                                    {student.course_credit_received
-                                      ? 'Poista suoritusmerkintä'
-                                      : 'Merkitse suoritetuksi'}
-                                  </span>
-                                </div>
-                              </DropdownMenuItem>
-
-                              {/* Delete Student */}
-                              <DropdownMenuItem
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setDeleteStudentDialogState({
-                                    open: true,
-                                    studentId: student.student_id,
-                                    studentName: student.student_name,
-                                    attendanceCount: student.total_attendance,
-                                  });
-                                }}
-                                className="text-destructive focus:text-destructive"
-                              >
-                                <Trash2 className="h-4 w-4 mr-2" />
-                                Poista opiskelija
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </div>
-                      </div>
-                    </AccordionTrigger>
-                    <AccordionContent className="px-6 pb-6 pt-0">
-                      <div className="space-y-2">
-                        {student.records.map((record) => (
-                          <div
-                            key={record.id}
-                            className="flex justify-between items-center p-2 rounded bg-muted/50 text-sm"
-                          >
-                            <span>
-                              {format(new Date(record.timestamp), 'PPP p', { locale: fi })}
-                            </span>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleDeleteRecord(record.id, classId)}
-                              className="text-destructive hover:text-destructive"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          </div>
-                        ))}
-                      </div>
-                    </AccordionContent>
-                  </AccordionItem>
-                ))}
-              </Accordion>
-            )}
-          </>
-        )}
-
-        {/* Pagination Controls (Mobile Only - Desktop uses DataTable pagination) */}
-        {!isDesktop && totalPages > 1 && (
-          <div className="flex items-center justify-between pt-2 border-t">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setCurrentPage((p) => p - 1)}
-              disabled={currentPage === 1}
-            >
-              <ChevronLeft className="w-4 h-4 mr-1" />
-              Edellinen
-            </Button>
-            <span className="text-sm text-muted-foreground">
-              Sivu {currentPage} / {totalPages}
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setCurrentPage((p) => p + 1)}
-              disabled={currentPage === totalPages}
-            >
-              Seuraava
-              <ChevronRight className="w-4 h-4 ml-1" />
-            </Button>
-          </div>
-        )}
-
-        {/* Results Summary (Mobile Only) */}
-        {!isDesktop && total > 0 && (
+        {/* Results Summary */}
+        {total > 0 && (
           <p className="text-sm text-muted-foreground text-center pt-2">
             {searchInput ? (
               <>
@@ -1021,65 +845,6 @@ const StudentLogs = ({ classId }: StudentLogsProps) => {
           </AlertDialogContent>
         </AlertDialog>
 
-        {/* Mobile Edit Name Dialog */}
-        <Dialog
-          open={!isDesktop && editingStudent !== null}
-          onOpenChange={(open) => {
-            if (!open) handleCancelEdit();
-          }}
-        >
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Muokkaa opiskelijan nimeä</DialogTitle>
-              <DialogDescription>
-                Muuta opiskelijan nimeä. Jos nimi on jo olemassa, voit yhdistää opiskelijat.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="py-4">
-              <Input
-                value={editingStudent?.editedName || ''}
-                onChange={(e) =>
-                  setEditingStudent(
-                    editingStudent
-                      ? {
-                          ...editingStudent,
-                          editedName: e.target.value,
-                        }
-                      : null
-                  )
-                }
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') handleSaveEdit();
-                  if (e.key === 'Escape') handleCancelEdit();
-                }}
-                placeholder="Opiskelijan nimi"
-                disabled={editingStudent?.isSubmitting}
-              />
-            </div>
-            <DialogFooter className="flex-col sm:flex-row gap-2">
-              <Button
-                variant="outline"
-                onClick={handleCancelEdit}
-                disabled={editingStudent?.isSubmitting}
-                className="w-full sm:w-auto"
-              >
-                Peruuta
-              </Button>
-              <Button
-                onClick={handleSaveEdit}
-                disabled={
-                  editingStudent?.isSubmitting || !editingStudent?.editedName.trim()
-                }
-                className="w-full sm:w-auto"
-              >
-                {editingStudent?.isSubmitting && (
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                )}
-                Tallenna
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
       </CardContent>
     </Card>
   );
