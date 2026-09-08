@@ -315,8 +315,13 @@ jobs:
             # ---- 6. Swap ONLY the app and the proxy. The database is never taken down: the old
             #         `compose down` stopped postgres too, which turned every deploy into a
             #         database outage for no reason. --------------------------------------------
-            echo "::group::Recreate backend + nginx"
-            $COMPOSE up -d --no-deps backend nginx
+            # jaeger is listed explicitly. This step recreates ONLY the services it names, so a
+            # service added to docker-compose.yml and left off this line never starts on the VM at
+            # all -- the compose file would say it exists while the backend exported spans into a
+            # refused connection. That is the same shape as the deployment repo that could not
+            # deploy itself and the nginx.conf bind mount that never reloaded.
+            echo "::group::Recreate backend + nginx + jaeger"
+            $COMPOSE up -d --no-deps backend nginx jaeger
             echo "::endgroup::"
 
 

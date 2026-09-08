@@ -67,11 +67,25 @@ services:
       # them outside development, so a repeat cannot go unnoticed.
       DOCS_USERNAME: ${DOCS_USERNAME}
       DOCS_PASSWORD: ${DOCS_PASSWORD}
+      # Tracing -> the jaeger service below, over the internal network only.
+      # Removing OTEL_EXPORTER_OTLP_ENDPOINT is the off switch: app/core/telemetry.py returns
+      # early rather than half-configuring itself, so the API runs untraced and unaffected.
+      OTEL_SERVICE_NAME: attendance-api
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
+      OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
+      OTEL_RESOURCE_ATTRIBUTES: deployment.environment=production
     depends_on:
       db:
         condition: service_healthy
     networks:
       - attendance-network
+    # Docker's json-file driver has no size limit by default, and nothing here set one, so
+    # container logs grew without bound on a CX21's disk until someone noticed.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     # Not exposed outside container network
 
   # Nginx Reverse Proxy (API Gateway)
@@ -91,6 +105,49 @@ services:
       - "443:443"
     depends_on:
       - backend
+    networks:
+      - attendance-network
+    # Docker's json-file driver has no size limit by default, and nothing here set one, so
+    # container logs grew without bound on a CX21's disk until someone noticed.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Jaeger — the trace store. deployment/jaeger.yaml (shared with local, so the two cannot drift)
+  # says what it runs and what was stripped out of the stock config.
+  #
+  # NO AUTHENTICATION of its own, and the spans carry student UUIDs plus whatever a teacher typed
+  # into a search box, so the UI is published on the LOOPBACK INTERFACE ONLY and reached with
+  # `ssh -L 16686:localhost:16686`. Do not change this to "16686:16686": Docker writes its own
+  # iptables rules and a published port BYPASSES UFW, which would put an unauthenticated trace UI
+  # holding student data straight on the public internet with the firewall still looking correct.
+  #
+  # The OTLP port is not published at all — the backend reaches it as http://jaeger:4318 across
+  # attendance-prod-network.
+  #
+  # Deliberately absent from the backend's depends_on: a trace store that is down must never hold
+  # up the API. The exporter retries on a background thread and then drops the batch.
+  jaeger:
+    image: jaegertracing/jaeger:2.20.0
+    container_name: attendance-jaeger-prod
+    restart: always
+    command: ["--config=file:/jaeger.yaml"]
+    volumes:
+      - ../jaeger.yaml:/jaeger.yaml:ro
+    ports:
+      - "127.0.0.1:16686:16686"
+    # Second backstop under jaeger.yaml's max_traces. This box has 4 GB and PostgreSQL is on it;
+    # an unbounded trace store is the thing that would OOM the database at 2am.
+    mem_limit: 512m
+    # Docker's json-file driver has no size limit by default, and nothing here set one, so
+    # container logs grew without bound on a CX21's disk until someone noticed.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     networks:
       - attendance-network
 

@@ -6,6 +6,91 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 
 <!-- Newest first. -->
 
+## 2026-09-08 — three N+1 loops are measured, ratcheted and NOT fixed
+- **What:** tracing was added to find these, and it did. On a 25-student class with 50 attendance
+  records: `GET /classes/{id}/students?limit=100` issues **29** statements, the autocomplete route
+  **28**, `GET /classes/{id}/attendance?limit=100` **79**. The already-fixed
+  `attendance/summary` does the same 25 students in **6**. The Owner's decision was to measure,
+  gate and confess this round, and fix the loops as a separate slice.
+- **Where:** `app/services/student_service.py:197` (one `COUNT` per student),
+  `app/services/student_service.py:430` (one `COUNT` per match, and the `SELECT` above it has no
+  `LIMIT` — it loads every match, counts each, sorts in Python, then slices to 10, and it fires on
+  every debounced keystroke from `client/src/components/AttendanceTracking.tsx:35-39`), and
+  `app/services/attendance_service.py:106` (one `db.refresh` per record).
+- **What green tests/gates do NOT prove here:** that any of this is efficient. All 437 tests, the
+  boundary gate, the mypy ratchet and the drift gate pass over every one of these. They are now
+  pinned by `tests/test_query_budget.py`, which is a **ratchet, not a fix**: the ceilings are
+  today's bad numbers, they may go down and may never go up. The gate was proven by reintroducing
+  the loop that was fixed on 2026-09-04 and watching summary go from 6 to 31.
+- **Disposition:** **open** — deliberately deferred by the Owner, 2026-09-08. Lower the ceiling in
+  `tests/test_query_budget.py` in the same commit as each fix.
+
+## 2026-09-08 — a span's `http.url` carries the student name a teacher typed
+- **What:** the ASGI instrumentation records the full, unredacted query string on every server
+  span. The SDK's `redact_url` strips only credentials and a fixed list of signature parameters,
+  so `?query=` and `?search=` values are stored verbatim. A real trace taken during verification
+  reads `.../students/autocomplete?query=in`; on the deployed app that is a partial student name.
+  Bound SQL parameters are NOT captured — `db.statement` holds `... WHERE student_id = $1::UUID` —
+  so this is the only path by which student data reaches a span.
+- **Where:** `app/core/telemetry.py`, and the Jaeger service in both compose files.
+- **What green tests/gates do NOT prove here:** nothing checks what a span attribute contains. The
+  containment is entirely the deployment shape: the trace store is published on `127.0.0.1` and
+  reached over an SSH tunnel, so the data stays on the box that already holds the real database.
+  Note that Docker writes its own iptables rules and a published port **bypasses UFW** — changing
+  that binding to `"16686:16686"` would expose an unauthenticated trace UI holding student names
+  while the firewall still looked correct.
+- **Disposition:** **accepted with reason**, 2026-09-08. If the UI is ever exposed beyond the
+  tunnel, the mitigation is a `server_request_hook` that overwrites `http.url` before the span is
+  recorded. ADR-0006 carries the reasoning.
+
+## 2026-09-08 — traces are ephemeral, and there is still no logger
+- **What:** two gaps left deliberately open. (1) Jaeger stores traces in memory, capped at 20000,
+  so a restart or a deploy loses all of them — fine for "why is this slow right now", useless for
+  "what happened last Tuesday". (2) The service layer still has **no logging at all**;
+  `grep -rn "getLogger\|logger" app/` returns nothing. Tracing does not close that: an unhandled
+  500 still produces a bare traceback on stdout, and only a sampled span records the route.
+- **Where:** `deployment/jaeger.yaml`; the absence is across all of `app/`.
+- **What green tests/gates do NOT prove here:** no gate looks for a logger, and none can tell that
+  history is being discarded on restart.
+- **Disposition:** **open.** Structured logging is the obvious next slice and was scoped out of
+  the tracing work on purpose.
+
+## 2026-09-08 — `scripts/seed_data.py` has been dead since the Student-entity migration
+- **What:** running it fails with `NotNullViolationError: null value in column "student_id"`. It
+  builds `AttendanceRecord` rows with `student_first_name` / `student_last_name` and never sets
+  `student_id` — the exact shape the Student entity replaced, and the exact identifiers
+  `scripts/drift-extra.sh` check 1 now bans. Separately, `just seed` runs
+  `python scripts/seed_db.py`, and that file does not exist; the real one is `scripts/seed_data.py`.
+  Found while seeding a database for the tracing verification; a throwaway script was used instead.
+- **Where:** `scripts/seed_data.py`, and the `seed` recipe in `justfile`.
+- **What green tests/gates do NOT prove here:** nothing runs the seed script. `drift-extra.sh`
+  check 1 only inspects **added** lines, so banned vocabulary already sitting in the file is
+  invisible to it, and a justfile recipe pointing at a missing filename is checked by nothing.
+- **Disposition:** **open.** Two small fixes, neither urgent, both cheap.
+
+## 2026-09-08 — `AttendanceRecord` still carries the deprecated name columns, and an index on them
+- **What:** `student_first_name` and `student_last_name` are still mapped on the model and still
+  present on the table, behind the comment "DEPRECATED: Keep for backward compatibility (nullable,
+  will be dropped in Phase 5)". Phase 5 never happened. There is also a live index over them,
+  `ix_attendance_student_name`, being maintained on every insert for columns nothing reads.
+- **Where:** `app/models/attendance.py`, and `__table_args__` in the same file.
+- **What green tests/gates do NOT prove here:** the columns are nullable and unread, so every test
+  passes with them present. The banned-identifier gate cannot see them for the reason above: they
+  are existing lines, not added ones.
+- **Disposition:** **open.** Dropping them is a migration plus a model edit; the index is the part
+  that costs something today.
+
+## 2026-09-08 — the documented test count was 91 tests out of date
+- **What:** root `CLAUDE.md` and this repo's docs say **346 tests** (measured 2026-09-04). The
+  suite actually runs **437**, measured 2026-09-08 on a full green run in 253s — 433 before the 4
+  added with tracing. The same document already warns that its coverage percentage is stale; the
+  count had drifted too, in the same direction and for the same reason.
+- **Where:** root `CLAUDE.md`, `api/README.md` and anywhere else quoting 346.
+- **What green tests/gates do NOT prove here:** nothing counts the tests and compares the number
+  to the docs. This is the third time a measured figure in that file has been found stale.
+- **Disposition:** **open** — the number is recorded here, dated; updating every doc that quotes
+  it is a separate sweep.
+
 ## 2026-09-07 — the drift gate's size check now differs from devkit's template, in a third way
 - **What:** `scripts/drift-check.sh` here grew a second cap, `MAX_NEW_TEST_FILE_LINES` at 1000, for
   paths under `tests/`. The 400 cap is unchanged everywhere else and both were watched fire (1100

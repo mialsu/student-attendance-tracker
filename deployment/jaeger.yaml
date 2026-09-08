@@ -1,0 +1,62 @@
+# Jaeger v2 configuration — shared by deployment/local and deployment/production.
+#
+# One file, mounted by both compose files, so the two environments cannot drift apart.
+#
+# This is a deliberately reduced version of Jaeger's built-in default config. The default starts
+# eight listeners (OTLP gRPC + HTTP, Jaeger Thrift over UDP/HTTP/gRPC, Zipkin, remote sampling on
+# two ports, pprof, and a Prometheus metrics endpoint). This app speaks exactly one protocol —
+# OTLP over HTTP, from `app/core/telemetry.py` — so everything else is removed rather than left
+# listening on the container network.
+#
+# Dropped from the default and why:
+#   otlp/grpc, jaeger, zipkin receivers  the API sends OTLP/HTTP and nothing else
+#   adaptive_sampling + remote_sampling  the SDK samples at 100% locally; nothing asks Jaeger
+#   pprof, telemetry metrics reader      a debug surface nobody here reads
+#   another_store (the archive backend)  there is no archive tier; traces are ephemeral
+#
+# max_traces is the memory cap that matters: this runs on a 4 GB CX21 beside PostgreSQL, and an
+# unbounded in-memory trace store is the thing that would OOM the database. The compose file adds
+# `mem_limit` as a second, harder backstop.
+
+service:
+  extensions: [jaeger_storage, jaeger_query, healthcheckv2]
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [jaeger_storage_exporter]
+  telemetry:
+    resource:
+      service.name: jaeger
+    metrics:
+      level: none
+    logs:
+      level: info
+
+extensions:
+  healthcheckv2:
+    use_v2: true
+    http:
+
+  jaeger_query:
+    storage:
+      traces: main_store
+
+  jaeger_storage:
+    backends:
+      main_store:
+        memory:
+          max_traces: 20000
+
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch:
+
+exporters:
+  jaeger_storage_exporter:
+    trace_storage: main_store

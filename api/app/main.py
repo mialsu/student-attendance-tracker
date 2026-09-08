@@ -9,6 +9,8 @@ from fastapi.openapi.utils import get_openapi
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 
 from app.config import settings
+from app.core.telemetry import setup_telemetry
+from app.database import engine
 
 # Create FastAPI app with docs disabled (we'll add them back with auth)
 app = FastAPI(
@@ -129,3 +131,17 @@ app.include_router(auth.router, prefix="/api/auth", tags=["authentication"])
 app.include_router(classes.router, prefix="/api/classes", tags=["classes"])
 app.include_router(attendance.router, prefix="/api", tags=["attendance"])
 app.include_router(students.router, prefix="/api", tags=["students"])
+
+# Tracing. `instrument_app` does NOT call add_middleware -- it replaces
+# `app.build_middleware_stack` and injects itself when Starlette assembles the stack, landing
+# just inside ServerErrorMiddleware and OUTSIDE every user middleware, CORS included. It also
+# wraps the stack in an exception recorder, so a raised exception is attached to the span before
+# the span ends. Position in this module therefore has nothing to do with middleware order; the
+# call sits here only because `app` and its routers are fully defined by this point, and it must
+# run before the first request builds the stack.
+#
+# This is a no-op unless OTEL_EXPORTER_OTLP_ENDPOINT is set, which is what keeps the test suite
+# and a bare `just run` untouched. It also has to live in THIS module and no lower: the deploy
+# job runs `alembic upgrade head` in a one-off container, and alembic/env.py imports
+# app.database, app.models and app.config but never app.main -- so migrations stay untraced.
+setup_telemetry(app, engine)

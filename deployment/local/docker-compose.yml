@@ -67,11 +67,38 @@ services:
       CORS_ORIGINS: http://localhost:5173,http://localhost:3000,http://localhost:8080
       ENVIRONMENT: development
       DEBUG: "true"
+      # Tracing. Remove OTEL_EXPORTER_OTLP_ENDPOINT and the app runs with no telemetry at
+      # all -- app/core/telemetry.py returns early rather than half-configuring itself.
+      OTEL_SERVICE_NAME: attendance-api
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
+      OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
+      OTEL_RESOURCE_ATTRIBUTES: deployment.environment=local
     ports:
       - "8000:8000"
     depends_on:
       db:
         condition: service_healthy
+    networks:
+      - attendance-network
+
+  # Jaeger — the trace store. deployment/jaeger.yaml says what it runs and what was stripped out
+  # of the stock config; the same file is mounted in production, so the two cannot drift.
+  #
+  # Deliberately NOT in the backend's depends_on: a trace store that is down must never be able
+  # to hold up the API. The exporter retries with backoff on its own background thread and then
+  # drops the batch, so the worst case is log noise.
+  jaeger:
+    image: jaegertracing/jaeger:2.20.0
+    container_name: attendance-jaeger-local
+    restart: unless-stopped
+    command: ["--config=file:/jaeger.yaml"]
+    volumes:
+      - ../jaeger.yaml:/jaeger.yaml:ro
+    ports:
+      # The UI, on the loopback interface only. The OTLP port is NOT published: the backend
+      # reaches it as http://jaeger:4318 across the compose network.
+      - "127.0.0.1:16686:16686"
+    mem_limit: 512m
     networks:
       - attendance-network
 

@@ -115,6 +115,35 @@ documentation placeholders, allowlisted **by value** in `.gitleaks.toml` so a re
 file still fails. No real credential was found in any of the four repos. Dependency CVE audits
 (`pip-audit`, `npm audit`) are report-only in the job summary by choice.
 
+### Tracing, added 2026-09-08 (ADR-0006)
+
+The API emits OpenTelemetry traces to a **self-hosted Jaeger on the same VM**. There is a third
+production container now: `attendance-jaeger-prod`.
+
+- **Off unless configured.** `app/core/telemetry.py` returns early and touches nothing when
+  `OTEL_EXPORTER_OTLP_ENDPOINT` is unset, so the test suite and a bare `just run` are unaffected.
+  `tests/test_telemetry.py` is the enforcer. Removing that one env var is the off switch.
+- **The UI has no login and is bound to `127.0.0.1:16686`.** Reach it with
+  `ssh -L 16686:localhost:16686 <user>@<host>`. Do **not** change that to `"16686:16686"`: Docker
+  writes its own iptables rules and a published port **bypasses UFW**, which would put an
+  unauthenticated trace UI holding student names on the internet with the firewall still looking
+  correct. Span `http.url` carries the query string, so autocomplete traces contain partial
+  student names — bound SQL parameters are *not* captured.
+- **Config:** `deployment/jaeger.yaml`, one file mounted by both compose files so they cannot
+  drift. Capped at `max_traces: 20000` plus `mem_limit: 512m`; measured 12 MiB idle.
+- **The deploy job names it explicitly:** `$COMPOSE up -d --no-deps backend nginx jaeger`. That
+  step recreates only the services it lists, so a service added to the compose file and left off
+  that line never starts on the VM.
+- **Tracing cannot take the API down.** Export runs on a background thread and the exporter logs
+  and drops after retrying; a dead Jaeger costs log noise.
+
+**What it found immediately, and what is NOT fixed:** three N+1 loops
+(`student_service.py:197`, `student_service.py:430`, `attendance_service.py:106`). On a
+25-student class they issue 29, 28 and 79 SQL statements; the already-fixed
+`attendance/summary` does the same 25 students in 6. They are pinned at today's numbers by
+`tests/test_query_budget.py` — a **ratchet, not a fix**: the ceilings may go down and never up.
+All of it is in `api/REVIEW-DEBT.md`.
+
 ### Measured status, 2026-09-01 — supersedes the claims below
 
 The figures further down this document were not accurate when measured. Corrections:
@@ -124,6 +153,7 @@ The figures further down this document were not accurate when measured. Correcti
 | frontend "94.14% coverage" | was **25 of 96 FAILING** with one real network call; **fixed 2026-09-03** — 73 pass, 0 fail. **78 pass as of 2026-09-04** |
 | backend "241 tests, 82% coverage" | was **262 pass, 77% coverage** (`student_service.py` at **29%**); **346 pass at 80% coverage, measured 2026-09-07** |
 | backend "63 tests passing, 69% coverage" | a third, also-stale figure in the same document |
+| backend "346 tests" (everywhere below) | **437 pass**, measured 2026-09-08 on a full green run in 253s — 433 of them before tracing added 4. The count has now been wrong in this file four times; trust `REVIEW-DEBT.md` and re-measure |
 
 And the finding that mattered most, on 2026-09-01: removing the teacher-ownership filter from
 `app/services/class_service.py:54` left **all 262 backend tests passing with byte-identical
