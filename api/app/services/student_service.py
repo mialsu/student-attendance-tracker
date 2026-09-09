@@ -414,39 +414,39 @@ async def get_autocomplete_suggestions(
     # Search for students (case-insensitive)
     search_pattern = f"%{query.lower()}%"
 
-    # Get students with attendance counts
-    students_result = await db.execute(
-        select(Student).where(
+    # One grouped query: count, order and slice in the database. Until 2026-09-09 this loaded
+    # every matching student, issued a COUNT per one of them, sorted in Python and only then
+    # took `limit` -- 28 statements for a 25-student class, on a route that fires on every
+    # debounced keystroke (client/src/components/AttendanceTracking.tsx). Two separate faults:
+    # the per-match COUNT, and a SELECT with no LIMIT above it.
+    #
+    # The LIMIT can only move into the database once the count is part of the same query,
+    # because the ordering depends on it -- slicing before counting would return the wrong ten
+    # students. This is the shape already used by get_attendance_summary's attendance_desc sort
+    # (app/services/attendance_service.py). The outer join is what keeps a student with no
+    # attendance records in the results, at count 0.
+    suggestions_result = await db.execute(
+        select(Student.id, Student.name, func.count(AttendanceRecord.id).label("total"))
+        .outerjoin(AttendanceRecord, AttendanceRecord.student_id == Student.id)
+        .where(
             and_(
                 Student.class_id == class_id,
                 func.lower(Student.name).like(search_pattern),
             )
         )
+        .group_by(Student.id, Student.name)
+        .order_by(func.count(AttendanceRecord.id).desc(), Student.name.asc())
+        .limit(limit)
     )
-    students = list(students_result.scalars().all())
 
-    # Build suggestions with attendance counts
-    suggestions = []
-    for student in students:
-        count_result = await db.execute(
-            select(func.count(AttendanceRecord.id)).where(
-                AttendanceRecord.student_id == student.id
-            )
-        )
-        total_count = count_result.scalar() or 0
-
-        suggestions.append(
-            {
-                "id": student.id,
-                "name": student.name,
-                "total_attendance": total_count,
-            }
-        )
-
-    # Sort by attendance count (descending), then by name
-    suggestions.sort(key=lambda x: (-x["total_attendance"], x["name"]))
-
-    return suggestions[:limit]
+    return [
+        {
+            "id": row.id,
+            "name": row.name,
+            "total_attendance": row.total,
+        }
+        for row in suggestions_result
+    ]
 
 
 async def merge_students(
