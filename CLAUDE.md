@@ -152,11 +152,12 @@ never up, so a failure there means a loop has come back. Details in `api/REVIEW-
 ### Why this file quotes no test counts, coverage percentages or baselines
 
 **It used to, and they were wrong every time.** Between 2026-09-01 and 2026-09-09 this document
-carried nine measured figures that had drifted from the code: five different backend test counts
-(241, 63, 346, 437 — one of them written as a *correction* to the previous stale one), three
-coverage percentages, and two gate baselines. Each was true when typed and rotted the moment the
-suite grew. There is no gate that compares a number in prose to a number in the code, so nothing
-ever caught one; they were found by hand, repeatedly, and fixing them was pure waste.
+carried backend test counts, coverage percentages and gate baselines that had drifted from the
+code — among them five different test counts (241, 63, 346, 437 and 441), one written as a
+*correction* to the previous stale one. `4f742e9` replaced twenty-one figures and is the record
+of the exact set. Each was true when typed and rotted the moment the suite grew. There is no
+gate that compares a number in prose to a number in the code, so nothing ever caught one; they
+were found by hand, repeatedly, and fixing them was pure waste.
 
 So on 2026-09-09 the numbers were **deleted rather than corrected again**, and the rule for anyone
 editing this file is:
@@ -1053,7 +1054,8 @@ Closes #123
 
 **Last Completed:**
 - ✅ Backend API fully implemented with all CRUD endpoints
-- 441 backend tests passing (2026-09-09), 78 frontend (2026-09-04)
+- Both suites green, and gated in CI on every push that touches them — *Why this file quotes no
+  test counts* above names the commands that report the counts
 - ✅ Frontend API integration complete
 - ✅ Database migrations ready
 - ✅ API documentation complete
@@ -1070,8 +1072,8 @@ Closes #123
   - ✅ Bulk attendance logging (1-50 records)
   - ✅ Student name autocomplete with frequency ordering
 
-**Current Status:** Deployed and operational. **Not** "all green": see the Measured status
-table above and each repo's `REVIEW-DEBT.md` for what the gates do not prove.
+**Current Status:** Deployed and operational. **Not** "all green": each repo's
+`REVIEW-DEBT.md` is the record of what the gates do not prove.
 
 **Production URLs:**
 - Frontend: https://app-attendance.kotoio.fi
