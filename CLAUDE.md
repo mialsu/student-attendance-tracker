@@ -14,9 +14,9 @@ before trusting anything in this one.
 **client** (`cd client`)
 ```bash
 npm run check              # everything, in order
-npm run gate:typecheck     # tsc ratchet   — baseline 4 errors   (.harness-baseline)
-npm run gate:lint          # eslint ratchet — baseline 16 errors
-npm run gate:tests         # vitest ratchet — baseline 0; any failure breaks it
+npm run gate:typecheck     # tsc ratchet    — baseline in client/.harness-baseline
+npm run gate:lint          # eslint ratchet — same file; never hand-edited
+npm run gate:tests         # vitest ratchet — any failure breaks it
 npm run lint:boundaries    # dependency-cruiser: layering, cycles, orphans, test-in-prod
 npm run drift              # devkit drift gate
 npm run drift:extra        # compound-vocabulary bans the segment matcher cannot express
@@ -26,28 +26,29 @@ Pre-commit hook: `.husky/pre-commit` (runs the same set, drift staged-only).
 **api** (`cd api`)
 ```bash
 just check-fast            # boundaries + drift + lint + typecheck (~10s, no db) — what the hook runs
-just check                 # fast set + the 330-test suite (~7 min, needs TEST_DATABASE_URL)
+just check                 # fast set + the full suite (~7 min, needs TEST_DATABASE_URL)
 just boundaries            # import-linter: app.api > app.services > app.models + leaf contracts
-just lint                  # ruff ratchet — baseline 91 findings
+just lint                  # ruff ratchet — baseline in api/.harness-baseline
 just lint-verbose          # ruff, showing every finding
-just typecheck             # mypy ratchet — baseline 14 findings (ADR-0004)
+just typecheck             # mypy ratchet — same file (ADR-0004)
 just typecheck-verbose     # mypy, showing every finding
 just drift                 # devkit drift gate + drift-extra.sh (vocabulary, alembic edits)
 just install-hooks         # one-off per clone: core.hooksPath -> .githooks
 ```
-The API **has a type gate** since 2026-09-02: `just typecheck` runs mypy over `app/` as a ratchet
-at baseline **14** (ADR-0004). It is in `check-fast`, so the pre-commit hook and CI both run it. This
+The API **has a type gate** since 2026-09-02: `just typecheck` runs mypy over `app/` as a
+ratchet against `api/.harness-baseline` (ADR-0004). It is in `check-fast`, so the pre-commit hook and CI both run it. This
 line previously said there was no type gate, which was true — mypy was never installed despite the
 old justfile claiming it, and ADR-0001 deferred it on the grounds that the opening baseline "would
-be large and unmeasured". Measured, it opened at 16 across 9 files; the N+1 fixes of 2026-09-09
-ratcheted it to 14 without anyone aiming at it. The remaining 14 are confessed, not fixed.
+be large and unmeasured". Measured, it opened at 16 across 9 files, and has only ratcheted down
+since — the N+1 fixes of 2026-09-09 took some without anyone aiming at them. The remainder are
+confessed, not fixed. `cat api/.harness-baseline` for where it stands.
 
 Tests DROP tables, so `TEST_DATABASE_URL` is mandatory with no default. **Use the helper** — it
 starts a disposable database on port 5439 and prints the export line:
 ```bash
 cd api
 eval "$(just test-db-up)"     # or: eval "$(./scripts/test-db.sh up)"
-just check                     # 286 tests, ~3.5 min
+just check                     # the whole suite, ~4 min; it prints the count
 just test-db-down              # destroys it; there is nothing worth keeping
 ```
 
@@ -141,39 +142,58 @@ production container now: `attendance-jaeger-prod`.
 **What it found immediately, and what is now fixed:** three N+1 loops — autocomplete
 (`student_service.py:430`), the students list (`student_service.py:197`) and the attendance list
 (`attendance_service.py:106`). On a 25-student class they issued **28, 29 and 79** SQL statements
-against 6 for the already-fixed `attendance/summary`. **All three were fixed on 2026-09-09** and
-`tests/test_query_budget.py` pins them at **3 / 4 / 4** — flat in the row count rather than
-scaling with it. Measured two independent ways (SQLAlchemy's `before_cursor_execute` and the
-PostgreSQL statement log, which agreed), exercised at 12 and 100 students, and confirmed in
-production traces. The file stays a **ratchet**: a ceiling may go down and never up, so a number
-creeping back up means a loop has returned. Details in `api/REVIEW-DEBT.md`.
+against 6 for the already-fixed `attendance/summary`. **All three were fixed on 2026-09-09**, each
+one dropping to a handful of statements that stays **flat in the row count** rather than scaling
+with it. Measured two independent ways that agreed — SQLAlchemy's `before_cursor_execute` and the
+PostgreSQL statement log — exercised at two data sizes, and confirmed in production traces.
+`tests/test_query_budget.py` holds the live ceilings and stays a **ratchet**: one may go down and
+never up, so a failure there means a loop has come back. Details in `api/REVIEW-DEBT.md`.
 
-### Measured status, 2026-09-01 — supersedes the claims below
+### Why this file quotes no test counts, coverage percentages or baselines
 
-The figures further down this document were not accurate when measured. Corrections:
+**It used to, and they were wrong every time.** Between 2026-09-01 and 2026-09-09 this document
+carried nine measured figures that had drifted from the code: five different backend test counts
+(241, 63, 346, 437 — one of them written as a *correction* to the previous stale one), three
+coverage percentages, and two gate baselines. Each was true when typed and rotted the moment the
+suite grew. There is no gate that compares a number in prose to a number in the code, so nothing
+ever caught one; they were found by hand, repeatedly, and fixing them was pure waste.
 
-| Claim in this file | Measured |
+So on 2026-09-09 the numbers were **deleted rather than corrected again**, and the rule for anyone
+editing this file is:
+
+> Do not write a count, a percentage or a baseline into this document. Name the command or the
+> file that answers the question instead.
+
+| Question | What answers it |
 |---|---|
-| frontend "94.14% coverage" | was **25 of 96 FAILING** with one real network call; **fixed 2026-09-03** — 73 pass, 0 fail. **78 pass as of 2026-09-04** |
-| backend "241 tests, 82% coverage" | was **262 pass, 77% coverage** (`student_service.py` at **29%**); **346 pass at 80% coverage, measured 2026-09-07** |
-| backend "63 tests passing, 69% coverage" | a third, also-stale figure in the same document |
-| backend "346 tests" (corrected in place below, 2026-09-09) | **441 pass**, measured 2026-09-09 three ways that agree: a local full run in 225s, CI in 296s, and collection. The **437** this row asserted on 2026-09-08 was itself wrong — it counted tracing's 4 telemetry tests and missed the 4 query-budget tests added in the same commit. That is five wrong counts in this file, which is why the body figures below are now corrected in place instead of being left for this row to override |
+| How many backend tests? | `cd api && eval "$(just test-db-up)" && just check` |
+| Coverage? | the same run — pytest prints `TOTAL` (and CI's Tests job log has it) |
+| Gate baselines? | `cat api/.harness-baseline`, `cat client/.harness-baseline` |
+| How many endpoints? | `GET /openapi.json`, or the routers in `api/app/api/` |
+| Dependency pinning? | `api/requirements.txt` |
+| What are the known gaps? | `api/REVIEW-DEBT.md` — counts belong there, dated, where a sweep can find them |
 
-And the finding that mattered most, on 2026-09-01: removing the teacher-ownership filter from
-`app/services/class_service.py:54` left **all 262 backend tests passing with byte-identical
-coverage**. The suite did not test authorization from the denied side.
+An undated number in prose is a claim, not a fact (PRINCIPLES #6). `api/REVIEW-DEBT.md` is where
+measurements live, because an entry there carries the date it was taken.
 
-**That is fixed and stays fixed.** `tests/test_authorization.py` covers all 18 class-reaching
-denials plus 8 positive controls, and since spec 0003 (2026-09-04) INV-1 has **one** enforcement
-site: neutering it turns 17 of the 18 denials red, and dropping the list filter's `WHERE` turns
-the 18th red on its own. `scripts/drift-extra.sh` check 4 now fails any diff that adds a
-`teacher_id` comparison in `app/` outside `class_service.py`.
+### The finding that mattered most, 2026-09-01
+
+Removing the teacher-ownership filter from `app/services/class_service.py:54` left the **entire**
+backend suite passing, with byte-identical coverage. The suite did not test authorization from the
+denied side at all.
+
+**That is fixed and stays fixed.** `tests/test_authorization.py` covers every class-reaching route
+from the denied side, plus positive controls, and since spec 0003 (2026-09-04) INV-1 has **one**
+enforcement site: neutering it turns the denial tests red, and dropping the list filter's `WHERE`
+is caught on its own by `test_class_list_does_not_leak_another_teachers_class`.
+`scripts/drift-extra.sh` check 4 fails any diff that adds a `teacher_id` comparison in `app/`
+outside `class_service.py`.
 
 ### Domain model, crunched 2026-09-01
 
 `/crunch-domain` ran with the Owner. Both `CONTEXT.md` files are no longer gate seeds, and
-**`api/INVARIANTS.md` now exists** with eight `INV-n` rows (INV-8 added 2026-09-02), each naming a
-real enforcer. Read it before changing anything in the service layer.
+**`api/INVARIANTS.md` now exists**, every `INV-n` row naming a real enforcer. Read it before
+changing anything in the service layer.
 
 - **Domain dial: on**, 4 of 4 triggers. **Contexts: one** — the only `mapped` trigger either repo
   claimed was `User` meaning teacher-vs-superadmin, and that collision is **gone**: ADR-0003
@@ -181,13 +201,13 @@ real enforcer. Read it before changing anything in the service layer.
 - `client-app` deliberately has **no `INVARIANTS.md`**: every enforcer is server-side, so a second
   file would be two formats for one artifact. The drift gate's invariant check is therefore inert in
   that repo *by design* — "no INVARIANTS.md" does not mean "no rules".
-- **INV-1** (only a teacher associated with a Class may read or change it) is now enforced by
-  `tests/test_authorization.py` — 17 denial tests as a second real teacher, plus 7 positive
-  controls. Each of the **seven** ownership sites was neutered individually and the suite watched go
-  red. The probe that used to pass silently now fails loudly.
-- Worth knowing: those 24 tests moved coverage **not at all** — still 77%, still exactly 272 lines
-  missed. They exercise already-covered lines from the denied side, which is precisely why coverage
-  was never the safety metric here.
+- **INV-1** (only a teacher associated with a Class may read or change it) is enforced by
+  `tests/test_authorization.py` — denial tests run as a second real teacher, plus positive
+  controls. Every ownership site was neutered individually and the suite watched go red. The probe
+  that used to pass silently now fails loudly. Spec 0003 then consolidated those sites to one.
+- Worth knowing: those tests moved coverage **not at all** — same percentage, same lines missed.
+  They exercise already-covered lines from the denied side, which is precisely why coverage was
+  never the safety metric here.
 - Two rules the Owner **declined** to create are recorded in `INVARIANTS.md` under *Deliberately not
   invariants*, so no later session re-invents them: there is no attendance threshold for course
   credit (the teacher decides; 14–15 is her rule of thumb), and deleting a Student may destroy their
@@ -220,11 +240,11 @@ Refresh tokens are hashed at rest. The access token lives only in memory (`clien
 `.env`, key or certificate was ever committed in any of the four repositories.
 
 **Not fixed, and recorded in the API repo's `REVIEW-DEBT.md`:**
-- **Dependencies are unpinned** — 23 `>=` ranges and no lockfile, against 4 exact pins that are
-  all OpenTelemetry (measured 2026-09-09; this line said 21 ranges and predates the pins). The
-  specific version drift recorded below is a snapshot from the audit and has already moved: a
-  local venv now resolves FastAPI to 0.141.1. The point survives the numbers — the image installs
-  FastAPI
+- **Dependencies are unpinned** — almost every line of `api/requirements.txt` is a `>=` range
+  and there is no lockfile, so every install resolves to whatever was newest at that moment. (The
+  OpenTelemetry packages are the exception; tracing pinned those exactly.) Read the file for the
+  current shape. The example below is a snapshot from the audit and the versions have already
+  moved, but the point survives them — the image installs FastAPI
   **0.141.1** while the tests run against **0.121.3**. Both serve correctly, so this is not a live
   break; it means the gates prove nothing about the artifact that deploys.
 - **Two leads nothing in a repo can settle:** the real production `CORS_ORIGINS`; and `gitleaks`,
@@ -294,20 +314,21 @@ commit ships the whole deployable unit.
 - shadcn/ui + Tailwind CSS
 - TanStack Query (React Query)
 - React Router v6
-- Vitest + React Testing Library — **73 tests, all passing** since 2026-09-03; a test that reaches
-  the network now fails by construction (`src/test/setup.ts`). See `client/REVIEW-DEBT.md`
+- Vitest + React Testing Library — green since 2026-09-03 (`npm run test:run` for the count;
+  plain `npm run test` is watch mode and will not exit); a test that reaches the network now fails
+  by construction (`src/test/setup.ts`). See `client/REVIEW-DEBT.md`
 - API integration complete with JWT authentication
 - Deployed to Vercel (free tier)
 
-**Backend (441 tests passing, measured 2026-09-09 — type gate: mypy ratchet at 14, ADR-0004):**
+**Backend** (type gate: mypy ratchet against `.harness-baseline`, ADR-0004):
 - Python 3.12
 - FastAPI 0.104+
 - SQLAlchemy 2.0 (async)
 - Alembic (migrations)
 - PostgreSQL 17 (dev + test databases)
-- pytest + httpx — **441 tests** (measured 2026-09-09, and again by CI on the same commit).
-  Coverage was last measured at 80% on 2026-09-07 and has not been taken since; the count has moved
-  five times, so re-measure either rather than quoting it from here
+- pytest + httpx, against a real PostgreSQL. `just check` prints the count and the coverage
+  total; CI's Tests job log has both for every commit. Neither number is written down here, and
+  the section above says why
 - Paginated API responses with total counts
 - Server-side filtering and search
 - Student entity with course credit tracking
@@ -343,10 +364,10 @@ commit ships the whole deployable unit.
    - Course credit tracking per student
    - Pydantic schemas for all entities
    - Service layer with business logic implemented
-   - All CRUD API endpoints: Auth (7), Classes (5), Students (7), Attendance (5)
-     — counted from `app.routes`, not from memory
-   - 441 tests passing (2026-09-09). Authorization **is** now tested from the denied side —
-     18 denial tests, and INV-1 has one enforcement site since spec 0003
+   - All CRUD API endpoints for auth, classes, students and attendance — `GET /openapi.json`
+     is the list, `api/docs/API_REFERENCE.md` the prose
+   - Authorization **is** tested from the denied side (`tests/test_authorization.py`), and INV-1
+     has one enforcement site since spec 0003
    - Name normalization with case-insensitive uniqueness
    - Bulk attendance logging (1-50 records at once)
    - Student name autocomplete (ordered by frequency)
@@ -579,10 +600,10 @@ student-attendance-tracker-api/
 │   │
 │   ├── api/                       # Route handlers ✅
 │   │   ├── __init__.py
-│   │   ├── auth.py                # Auth routes (7 endpoints) ✅
-│   │   ├── classes.py             # Classes routes (5 endpoints) ✅
-│   │   ├── students.py            # Students routes (6 endpoints) ✅
-│   │   └── attendance.py          # Attendance routes (4 endpoints) ✅
+│   │   ├── auth.py                # Auth routes ✅
+│   │   ├── classes.py             # Classes routes ✅
+│   │   ├── students.py            # Students routes ✅
+│   │   └── attendance.py          # Attendance routes ✅
 │   │
 │   ├── services/                  # Business logic ✅
 │   │   ├── __init__.py
@@ -606,15 +627,15 @@ student-attendance-tracker-api/
 │   ├── env.py                     # Alembic env config ✅
 │   └── script.py.mako             # Migration template ✅
 │
-├── tests/                         # Test suite (241 passing) ✅
+├── tests/                         # Test suite ✅
 │   ├── __init__.py
 │   ├── conftest.py                # Pytest fixtures (DB, auth, test data) ✅
 │   ├── test_main.py               # Basic endpoint tests ✅
-│   ├── test_auth.py               # Auth API tests (21 tests) ✅
-│   ├── test_classes.py            # Classes API tests (16 tests) ✅
-│   ├── test_students.py           # Students API tests (26 tests) ✅
-│   ├── test_attendance.py         # Attendance API tests (21 tests) ✅
-│   └── test_bulk_attendance.py    # Bulk logging tests (8 tests) ✅
+│   ├── test_auth.py               # Auth API tests ✅
+│   ├── test_classes.py            # Classes API tests ✅
+│   ├── test_students.py           # Students API tests ✅
+│   ├── test_attendance.py         # Attendance API tests ✅
+│   └── test_bulk_attendance.py    # Bulk logging tests ✅
 │
 ├── docs/                          # Documentation ✅
 │   ├── TESTING_GUIDE.md           # Comprehensive test guide ✅
@@ -747,22 +768,28 @@ docker-compose down
 ## Testing Guidelines
 
 ### Backend Testing (✅ Complete)
-- **441 tests passing** covering all API endpoints (measured 2026-09-09)
-- **77% code coverage** — but `student_service.py` is at 29%, and removing an ownership
-  check leaves every test green. Coverage is not a safety metric here.
+- Every API endpoint is covered. `just check` prints the count and the coverage total; no figure
+  is repeated here, for the reason given under *Why this file quotes no test counts*.
+- **Coverage is not a safety metric in this repo, and that is not an opinion.** Removing a
+  teacher-ownership check once left the entire suite green with byte-identical coverage. A high
+  percentage did not notice a missing authorization filter, so read `REVIEW-DEBT.md` for what the
+  suite does not prove rather than reading the percentage.
 - **Integration Tests**: All API endpoints tested against a real PostgreSQL 17 database
   (`TEST_DATABASE_URL`, mandatory — the fixtures DROP tables)
 - **Test-Driven Development**: Tests written alongside implementation
 
-### Test Suite Breakdown
-- **Auth API**: 21 tests (signup, login, token refresh, user management)
-- **Classes API**: 26 tests (CRUD operations), and still **not** where ownership is proven —
-  `class_service.py:54` is the list filter, and dropping it leaves all 26 green. What catches it is
+### What each test file is for
+Counts deliberately omitted — `pytest --collect-only -q` per file if you need them.
+- `test_auth.py` — signup, login, token refresh, user management
+- `test_classes.py` — class CRUD, and **not** where ownership is proven. `class_service.py:54` is
+  the list filter; dropping it leaves this file entirely green. What catches it is
   `tests/test_authorization.py::test_class_list_does_not_leak_another_teachers_class`, alone.
-- **Authorization**: 26 tests — 18 denials as a second real teacher, 8 positive controls. This is
-  the file that proves INV-1, and the only one that does.
-- **Attendance API**: 21 tests (tracking, filtering, summaries) + 13 for the legacy cutoff
-- **Core API**: 5 tests (health check, root endpoint)
+- `test_authorization.py` — every class-reaching route from the denied side as a second real
+  teacher, plus positive controls. **This is the file that proves INV-1, and the only one.**
+- `test_attendance.py` — tracking, filtering, summaries, and the legacy cutoff
+- `test_query_budget.py` — the statement-count ceilings; a ratchet, and the only thing that fails
+  when an N+1 loop comes back
+- `test_main.py` — health check and root endpoint
 
 ### Test Database
 - **PostgreSQL 17, never SQLite.** This section claimed "SQLite in-memory" until 2026-09-04 while
