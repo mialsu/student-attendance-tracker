@@ -5,6 +5,7 @@ from uuid import UUID
 
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import contains_eager
 
 from app.core.exceptions import BadRequestException, NotFoundError
 from app.models.attendance import AttendanceRecord
@@ -70,9 +71,11 @@ async def list_attendance_for_class(
     # This endpoint lists records and applies no age cutoff. The five-year rule lives in
     # get_attendance_summary, which backs the only student list the app renders
     # (specs/0002-legacy-student-cutoff.md).
+    # Joined along the relationship rather than on an explicit ON clause, so the paginated query
+    # below can read the student off this join instead of fetching it again.
     base_query = (
         select(AttendanceRecord)
-        .join(Student, Student.id == AttendanceRecord.student_id)
+        .join(AttendanceRecord.student)
         .where(AttendanceRecord.class_id == class_id)
     )
 
@@ -92,19 +95,26 @@ async def list_attendance_for_class(
     count_result = await db.execute(count_query)
     total = count_result.scalar() or 0
 
-    # Apply pagination
+    # Apply pagination, and populate each record's student from the join that is already in the
+    # query. Until 2026-09-09 this called db.refresh(record, ["student"]) in a loop -- 79
+    # statements for 50 records: four for the request itself, one re-SELECT per record, and one
+    # lazy load per distinct student. The route reads record.student.name for every row
+    # (app/api/attendance.py), so the relationship has to be loaded; it does not have to be
+    # loaded one row at a time.
+    #
+    # contains_eager, not selectinload: the INNER JOIN to students exists already to support the
+    # student_name filter, so its columns are being fetched and thrown away. This reads them.
+    # The option goes on the paginated query alone, leaving the count query above counting
+    # matching rows without dragging student columns through its subquery.
     paginated_query = (
-        base_query.order_by(AttendanceRecord.timestamp.desc())
+        base_query.options(contains_eager(AttendanceRecord.student))
+        .order_by(AttendanceRecord.timestamp.desc())
         .offset(skip)
         .limit(limit)
     )
 
     result = await db.execute(paginated_query)
     records = list(result.scalars().all())
-
-    # Eager load students
-    for record in records:
-        await db.refresh(record, ["student"])
 
     return records, total
 

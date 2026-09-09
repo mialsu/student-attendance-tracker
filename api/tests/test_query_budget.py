@@ -3,13 +3,15 @@
 This exists because of a comment in `app/services/attendance_service.py`: an N+1 loop lived in
 `get_attendance_summary` until 2026-09-04, grew quietly, and was found "by measuring rather than
 by a gate". Every fixture in this suite uses a handful of students, which is exactly the size at
-which an N+1 is invisible -- 346 green tests, the boundary gate, the mypy ratchet and the drift
-gate all passed over it, and over the three siblings that are still here.
+which an N+1 is invisible -- 441 green tests, the boundary gate, the mypy ratchet and the drift
+gate all passed over it, and over the three siblings it turned out to have. This file is the only
+thing that fails when one of them comes back.
 
 These are RATCHETS, in the spirit of `.harness-baseline`: the numbers below are what the code
-does TODAY, not what it should do. Three of the four are bad, deliberately recorded as bad, and
-each is confessed in REVIEW-DEBT.md. The rule is that a number may go DOWN and may never go up.
-Lowering one when you fix the loop behind it is the point of the file.
+does TODAY, not what it should do. The rule is that a number may go DOWN and may never go up.
+Lowering one when you fix the loop behind it is the point of the file, and on 2026-09-09 all
+three loops that opened this file at 29, 28 and 79 were fixed and their ceilings lowered to 4,
+3 and 4 -- each watched failing against the new ceiling before the fix went in.
 
 Deliberately no OpenTelemetry here. SQLAlchemy already emits `before_cursor_execute`, so counting
 statements needs nothing installed, and the gate keeps working whatever happens to the tracing
@@ -32,12 +34,11 @@ STUDENT_COUNT = 25
 RECORDS_PER_STUDENT = 2
 
 # Measured ceilings, for a 25-student class holding 50 attendance records. Lower one when you fix
-# the loop behind it; never raise one. `summary` is the control: the same 25 students through the
-# loop that was already fixed on 2026-09-04, and it stays flat while the others scale with the row
-# count.
+# the loop behind it; never raise one. Every one of these is now flat in the row count rather than
+# scaling with it, so a number creeping up means a loop has come back.
 BUDGET_STUDENTS_LIST = 4  # fixed 2026-09-09: counts folded into the paginated query
 BUDGET_AUTOCOMPLETE = 3  # fixed 2026-09-09: one grouped query, flat in the match count
-BUDGET_ATTENDANCE_LIST = 79  # one refresh per record -- attendance_service.py:106
+BUDGET_ATTENDANCE_LIST = 4  # fixed 2026-09-09: the student rides the join already paid for
 BUDGET_SUMMARY = 6  # what the shape looks like when it is right
 
 
