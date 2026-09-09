@@ -185,23 +185,28 @@ async def list_students_for_class(
     count_result = await db.execute(count_query)
     total = count_result.scalar() or 0
 
-    # Apply pagination and ordering
+    # Apply pagination and ordering, and count attendance in the same query. Until 2026-09-09
+    # this issued a COUNT per student in the page -- 29 statements for a 25-student class, and
+    # the number grew with the page size rather than staying flat.
+    #
+    # Grouping by the primary key is enough for Postgres to allow every other Student column
+    # here (functional dependency), which is the same shape get_attendance_summary uses for its
+    # attendance_desc sort. The outer join keeps a student with no attendance records in the
+    # page, at count 0.
     paginated_query = (
-        base_query.order_by(Student.name.asc()).offset(skip).limit(limit)
+        base_query.add_columns(func.count(AttendanceRecord.id).label("total_attendance"))
+        .outerjoin(AttendanceRecord, AttendanceRecord.student_id == Student.id)
+        .group_by(Student.id)
+        .order_by(Student.name.asc())
+        .offset(skip)
+        .limit(limit)
     )
 
     result = await db.execute(paginated_query)
-    students = list(result.scalars().all())
-
-    # Add total attendance count to each student
-    for student in students:
-        count_result = await db.execute(
-            select(func.count(AttendanceRecord.id)).where(
-                AttendanceRecord.student_id == student.id
-            )
-        )
-        total_count = count_result.scalar() or 0
-        setattr(student, "total_attendance", total_count)
+    students = []
+    for student, total_attendance in result:
+        setattr(student, "total_attendance", total_attendance)
+        students.append(student)
 
     return students, total
 

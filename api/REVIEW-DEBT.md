@@ -6,14 +6,16 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 
 <!-- Newest first. -->
 
-## 2026-09-08 — three N+1 loops are measured and ratcheted (autocomplete fixed 2026-09-09)
+## 2026-09-08 — three N+1 loops are measured and ratcheted (two fixed 2026-09-09)
 - **What:** tracing was added to find these, and it did. On a 25-student class with 50 attendance
   records: `GET /classes/{id}/students?limit=100` issues **29** statements, the autocomplete route
   **28**, `GET /classes/{id}/attendance?limit=100` **79**. The already-fixed
   `attendance/summary` does the same 25 students in **6**. The Owner's decision was to measure,
   gate and confess this round, and fix the loops as a separate slice.
-- **Where:** `app/services/student_service.py:197` (one `COUNT` per student) and
-  `app/services/attendance_service.py:106` (one `db.refresh` per record) are still open. The
+- **Where:** `app/services/attendance_service.py:106` (one `db.refresh` per record) is still
+  open. The students-list loop at `app/services/student_service.py:197` — one `COUNT` per student
+  in the page — **is fixed as of 2026-09-09**: the count is folded into the paginated query,
+  **29 statements → 4**, flat in the page size. The
   autocomplete loop at `app/services/student_service.py:430` — one `COUNT` per match, above a
   `SELECT` with no `LIMIT`, on the route that fires on every debounced keystroke from
   `client/src/components/AttendanceTracking.tsx` — **is fixed as of 2026-09-09**: one grouped
@@ -25,8 +27,8 @@ cut (`/confess`), read first by any architecture or review session, dispositione
   pinned by `tests/test_query_budget.py`, which is a **ratchet, not a fix**: the ceilings are
   today's bad numbers, they may go down and may never go up. The gate was proven by reintroducing
   the loop that was fixed on 2026-09-04 and watching summary go from 6 to 31.
-- **Disposition:** **partially closed**, 2026-09-09 — autocomplete is fixed and its ceiling is
-  down to 3; the other two remain open at 29 and 79. Lower the ceiling in
+- **Disposition:** **partially closed**, 2026-09-09 — autocomplete is down to 3 and the students
+  list to 4; the attendance list remains open at 79. Lower the ceiling in
   `tests/test_query_budget.py` in the same commit as each fix.
 
 ## 2026-09-08 — a span's `http.url` carries the student name a teacher typed

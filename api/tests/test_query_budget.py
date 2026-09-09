@@ -35,7 +35,7 @@ RECORDS_PER_STUDENT = 2
 # the loop behind it; never raise one. `summary` is the control: the same 25 students through the
 # loop that was already fixed on 2026-09-04, and it stays flat while the others scale with the row
 # count.
-BUDGET_STUDENTS_LIST = 29  # one COUNT per student -- student_service.py:197
+BUDGET_STUDENTS_LIST = 4  # fixed 2026-09-09: counts folded into the paginated query
 BUDGET_AUTOCOMPLETE = 3  # fixed 2026-09-09: one grouped query, flat in the match count
 BUDGET_ATTENDANCE_LIST = 79  # one refresh per record -- attendance_service.py:106
 BUDGET_SUMMARY = 6  # what the shape looks like when it is right
