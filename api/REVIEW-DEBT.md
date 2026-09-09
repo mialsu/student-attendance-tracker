@@ -274,7 +274,8 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 
 ## 2026-09-04 — and the dependency check is STILL blind to every dependency this repo actually adds
 - **What:** with the path bug fixed, `drift-check.sh` check 3 fires for `httpx-sse==0.4.0` and stays
-  silent for `httpx-sse>=0.4.0`. **This repo pins nothing** — all 21 requirements use `>=` — so the
+  silent for `httpx-sse>=0.4.0`. **This repo pins almost nothing** — 23 of 26 requirement lines use
+  `>=`, and the 4 exact pins are all OpenTelemetry (2026-09-09 measurement) — so the
   revived check still catches none of them. Found immediately after fixing the paths, by probing
   with the repo's own dependency style rather than a textbook one.
 - **Where:** `scripts/drift-check.sh:225-227`, the `dep_names` parser.
@@ -558,7 +559,11 @@ cut (`/confess`), read first by any architecture or review session, dispositione
   deliberately. Found by `/audit`, which hit the error message by running a test with no database.
 
 ## 2026-09-02 — dependencies are unpinned, so the tested code and the shipped code differ
-- **What:** `requirements.txt` has **21 `>=` ranges and zero exact pins**, and there is no lockfile.
+- **What:** `requirements.txt` has **23 `>=` ranges** (one of them bounded, `bcrypt>=4.0.0,<5.0.0`)
+  and **4 exact pins**, and there is no lockfile. Re-measured 2026-09-09: this entry said "21 `>=`
+  ranges and zero exact pins", and both halves had moved — the four pins are the OpenTelemetry
+  packages, pinned when tracing landed (ADR-0006), so this repo's first exact pins arrived after
+  this entry was written.
   Every `docker compose build backend` re-resolves the whole graph against PyPI as it stands that
   minute. Measured on 2026-09-02: the image built from this repo installed **FastAPI 0.141.1**
   while the venv the 317 tests run against has **0.121.3** — twenty minor versions apart, from one

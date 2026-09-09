@@ -156,18 +156,31 @@ jobs:
         # term-missing. For a browsable report, run pytest --cov-report=html locally.
         run: pytest -v --cov=app --cov-report=term-missing
 
-      # Standing reminder, printed where it will actually be read. Removing the teacher-ownership
-      # filter from app/services/class_service.py:54 leaves all 262 of these tests passing with
-      # byte-identical coverage. Green here does not mean authorization holds.
+      # Standing reminder, printed where it will actually be read. Two rules for editing it, both
+      # learned the hard way: point it at a gap that is TRUE TODAY, and keep countable specifics
+      # OUT of it. The previous version asserted that authorization was untested from the denied
+      # side and cited a test count -- that had been false since 2026-09-04
+      # (tests/test_authorization.py covers the denials, and the filter this warning named is the
+      # one test_class_list_does_not_leak_another_teachers_class exists to catch), so CI printed a
+      # falsehood on every run until 2026-09-09. A number here rots the same way five of them
+      # rotted in CLAUDE.md. Anything countable belongs in REVIEW-DEBT.md, dated, where a sweep
+      # can find it.
       - name: Note what these tests do not prove
         if: always()
         run: |
           {
             echo "## What the green suite does not prove"
             echo
-            echo "Authorization is **not** tested from the denied side. Removing the teacher-ownership"
-            echo "filter from \`app/services/class_service.py:54\` leaves every test passing."
-            echo "See \`REVIEW-DEBT.md\`."
+            echo "**These tests did not run against the artifact that deploys.** Almost every"
+            echo "dependency is an unpinned \`>=\` range and there is no lockfile, so each install"
+            echo "resolves to whatever was newest at that moment -- this run and the production"
+            echo "image can legitimately differ. Green here says nothing about the versions"
+            echo "serving production."
+            echo
+            echo "Authorization **is** covered from the denied side (\`tests/test_authorization.py\`),"
+            echo "and coverage percentage has never been the safety metric in this repo."
+            echo "\`api/REVIEW-DEBT.md\` holds the current gap list and the counts this summary"
+            echo "deliberately leaves out."
           } >> "$GITHUB_STEP_SUMMARY"
 
   security:

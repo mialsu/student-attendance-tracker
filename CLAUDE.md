@@ -220,7 +220,11 @@ Refresh tokens are hashed at rest. The access token lives only in memory (`clien
 `.env`, key or certificate was ever committed in any of the four repositories.
 
 **Not fixed, and recorded in the API repo's `REVIEW-DEBT.md`:**
-- **Dependencies are unpinned** — 21 `>=` ranges, no lockfile. The image installs FastAPI
+- **Dependencies are unpinned** — 23 `>=` ranges and no lockfile, against 4 exact pins that are
+  all OpenTelemetry (measured 2026-09-09; this line said 21 ranges and predates the pins). The
+  specific version drift recorded below is a snapshot from the audit and has already moved: a
+  local venv now resolves FastAPI to 0.141.1. The point survives the numbers — the image installs
+  FastAPI
   **0.141.1** while the tests run against **0.121.3**. Both serve correctly, so this is not a live
   break; it means the gates prove nothing about the artifact that deploys.
 - **Two leads nothing in a repo can settle:** the real production `CORS_ORIGINS`; and `gitleaks`,
