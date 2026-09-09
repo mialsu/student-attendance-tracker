@@ -6,6 +6,32 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 
 <!-- Newest first. -->
 
+## 2026-09-09 — the no-numbers rule was breached by the commit that installed it
+- **What:** `4f742e9` deleted every count, percentage and baseline from the root `CLAUDE.md` and
+  wrote the rule into the file: *name the command or the file that answers the question, never the
+  answer.* One figure survived the sweep — "441 backend tests passing (2026-09-09), 78 frontend
+  (2026-09-04)" under *Current Task Context* — and it was already wrong when it survived. The
+  frontend suite runs **115** tests, measured 2026-09-09; the 78 was five days old. The same
+  commit also broke a cross-reference to the *Measured status* section it had just deleted, and
+  miscounted its own evidence three ways in the paragraph that states the rule.
+- **Where:** all three fixed in `2445122`. The surviving count is now a pointer to the file's own
+  command table; the dangling reference keeps only the half that resolves (`REVIEW-DEBT.md`); the
+  census is replaced by the shape plus `4f742e9` as the record of the exact set.
+- **What green tests/gates did NOT prove:** nothing in either repo looks at prose. The root
+  pre-commit dispatcher runs no gates at all for a change under neither `api/`, `deployment/` nor
+  `client/`, by design — so a root-`CLAUDE.md`-only commit is unverified by construction, and the
+  secret scan is the only thing CI fires on it. All three defects were found by reading the file
+  during `/resume`, four hours after the commit landed, which is exactly the by-hand waste the
+  rule was written to end.
+- **Disposition:** **open, and deliberately so.** Deleting the numbers removed most of the
+  surface; it did not add an enforcer, and this entry is the evidence of what that costs — the
+  rule was violated within the same commit and nothing caught it. The gate argued against on
+  2026-09-09 (a five-minute suite before every commit to keep a markdown number accurate) is
+  still not worth it, but the cheaper half now has a case: a grep-shaped check for a bare count,
+  percentage or baseline in root `CLAUDE.md` needs no database and no suite. Not built, not
+  proposed to the Owner as a slice, and named here so the next session inherits the argument
+  rather than the surprise.
+
 ## 2026-09-08 — three N+1 loops, measured and ratcheted; all three fixed 2026-09-09
 - **What:** tracing was added to find these, and it did. On a 25-student class with 50 attendance
   records, as measured 2026-09-08: `GET /classes/{id}/students?limit=100` issued **29**
