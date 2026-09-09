@@ -110,6 +110,15 @@ source_modules = ["app.core"]
 forbidden_modules = ["app.api", "app.services", "app.models", "app.schemas"]
 
 [[tool.importlinter.contracts]]
+# Added by spec 0005 slice 1 (AC-15). app.middleware was an empty stub and therefore named in NO
+# contract, so the first real code to land there would have been the one ungoverned package in
+# the tree. Request-context plumbing reads app.core and nothing above it.
+name = "Middleware is transport plumbing (it may reach app.core and nothing above it)"
+type = "forbidden"
+source_modules = ["app.middleware"]
+forbidden_modules = ["app.api", "app.services", "app.models", "app.schemas"]
+
+[[tool.importlinter.contracts]]
 name = "Models never reach into transport or business logic"
 type = "forbidden"
 source_modules = ["app.models"]

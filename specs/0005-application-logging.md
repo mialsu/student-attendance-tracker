@@ -309,9 +309,29 @@ purpose: everything provable without a deploy is proven first.
 
 ## Open Questions
 
-1. **Does the exception handler's context survive an exception raised inside a dependency**, before
-   the middleware has resolved the Teacher UUID? The line would carry a request id and no teacher.
-   Acceptable, but it should be asserted rather than assumed — resolve in slice 1.
+1. ~~**Does the exception handler's context survive an exception raised inside a dependency**,
+   before the middleware has resolved the Teacher UUID?~~ **RESOLVED in slice 1, 2026-09-09, and
+   the premise was slightly wrong.**
+
+   Two answers, both measured rather than reasoned about:
+
+   - **The context survives, and the direction that was doubted is the one that is proven.**
+     `teacher_id` is set inside `get_current_user` — a **dependency** — and read by the exception
+     handler after the service layer raised. `test_inv1_denial_emits_one_warning_with_teacher_...`
+     asserts it, and deleting the `teacher_id_var.set` call turns that test red with
+     `KeyError: 'teacher_id'` and nothing else. This is also why the middleware is **pure ASGI**
+     rather than `BaseHTTPMiddleware`: the latter runs dispatch and the wrapped app in different
+     anyio tasks, so a value set downstream would not cross back.
+   - **The "request id and no teacher" line cannot occur for any denial this spec logs.** Every
+     logged denial is raised in the **service layer**, after authentication: `INV-1` from
+     `verify_class_ownership`, the inactive-Class refusal, the registration-code rules, and
+     `authenticate_user`'s branches. Ownership is never wired as a FastAPI dependency anywhere in
+     `app/api/` — checked, not assumed. The only exception a dependency raises is the 401 from
+     `get_current_user`, and that is not in this spec's event set at all.
+
+   The `KeyError` is itself the second half of the answer: an unset context variable is **omitted**
+   from the line, not rendered as an empty string, so the shape the question worried about is
+   well-defined if it ever does arise.
 2. **What does a `429` look like from the app's side?** nginx returns it without proxying, so the
    app never sees it and cannot log it. AC-12's join is the only way to see those, and whether that
    is sufficient is a question for `/verify-live` rather than for the build.
@@ -320,5 +340,28 @@ purpose: everything provable without a deploy is proven first.
 
 ## Spec Deltas
 
-_None yet. Anything the build teaches that contradicts the above is dated and recorded here, per
-ANTI-PATTERNS: spec drift, silently._
+**2026-09-09, slice 1.** Four things the build settled differently or more precisely than the text
+above. None reverses a decision; each is here because a reader would otherwise look for the code in
+the wrong place.
+
+1. **The Teacher UUID is set by the dependency, not by the middleware.** *Request context* above
+   says the middleware sets it "once authentication has resolved", which reads as though the
+   middleware does it. It cannot: the middleware runs before any token is decoded.
+   `get_current_user` sets it, and the middleware **claims and resets** it along with the other
+   three so that one place owns the reset of every variable. Without that reset a teacher id would
+   survive into the next request that never authenticated — confessed in `REVIEW-DEBT.md`, since
+   no slice-1 test can observe it.
+2. **The middleware is pure ASGI, not `BaseHTTPMiddleware`.** Not specified above; it is forced by
+   point 1 and by open question 1's answer.
+3. **The client IP comes from `X-Real-IP`, never `X-Forwarded-For`.** Production nginx *sets*
+   `X-Real-IP` from `$remote_addr` but builds `X-Forwarded-For` with
+   `$proxy_add_x_forwarded_for`, which **appends to whatever the client sent** — so its left-hand
+   entries are chosen by the party being recorded. A forgeable IP on a denial line defeats the
+   record's purpose. Falls back to the ASGI `client` when the header is absent.
+4. **An incoming `X-Request-ID` is honoured verbatim but length-bounded** at 200 characters. AC-9's
+   "verbatim" holds for any real id; the bound exists because the header is client-supplied and
+   nothing else stops an 8 KB header becoming an 8 KB log line on every request.
+
+**AC-13 is PARTIAL after slice 1**, not met: its forged-line half is asserted at the formatter
+because slice 1 logs no attacker-supplied free text. It becomes a real-route assertion in slice 2.
+See `api/REVIEW-DEBT.md`, 2026-09-09.

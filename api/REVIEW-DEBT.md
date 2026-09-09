@@ -6,6 +6,78 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 
 <!-- Newest first. -->
 
+## 2026-09-09 — the log sink has no time-based erasure, and now there is something in it
+- **What:** spec 0005 slice 1 landed the first logger in `app/`, so denial lines now exist. Their
+  sink is Docker's `json-file` driver at `max-size: 10m`, `max-file: 3`, which rotates by **size
+  only** — the driver has no time-based option. "Erase after 90 days" is therefore not expressible
+  here at all, and at this app's volume (a handful of lines a week) a line written today
+  effectively never ages out. ADR-0007 accepted this rather than faking it; this entry is the
+  other half of that acceptance.
+- **Where:** `deployment/local/docker-compose.yml` and `deployment/production/docker-compose.yml`
+  carry the `logging` blocks; `app/core/logging.py` writes to stdout and owns nothing about
+  retention. The two ways out both cost more than they are worth today: move the sink (Loki, a
+  hosted backend — rejected in ADR-0006 on RAM and on keeping student-adjacent telemetry off
+  external services) or add host-side `logrotate`, whose configuration would live outside the
+  repo where no gate could prove it was in place.
+- **What green tests/gates did NOT prove:** nothing asserts a retention policy, because there is
+  no policy to assert. What *is* enforced is the thing that makes the absence tolerable — lines
+  carry ids, never Student names (ADR-0007). That rule becomes `INV-9` with two enforcers in
+  slice 5, and until then it holds by review only: the one call site slice 1 wired logs a rule id
+  and a status, and `route` comes from the context variable holding `scope["path"]`, which cannot
+  contain a query string. **The slice-5 enforcers are what turn this from a promise into a gate.**
+- **Disposition:** **accepted, with the mitigation named.** Revisit only if the event set grows
+  past denials, errors and irreversible acts — the fourth family (routine successful writes) was
+  declined during shaping precisely because volume is what would make size-based rotation start
+  discarding evidence.
+
+## 2026-09-09 — in development, SQLAlchemy's echo puts bound parameters on the same stdout
+- **What:** found by slice 1's live exercise, not by a test. `app/database.py` passes
+  `echo=settings.debug`, and `debug` defaults to **True**, so a locally-run API prints every
+  statement *and its bound parameters* to stdout — the same stream the new JSON lines go to. Those
+  parameters include Student names on the autocomplete, create and update paths.
+- **Where:** `app/database.py:14`. **Production is not affected and this was checked, not
+  assumed:** `deployment/production/docker-compose.yml:63` sets `DEBUG: "false"`, so `echo` is off
+  on the VM. `deployment/local/docker-compose.yml:69` sets `DEBUG: "true"`, deliberately.
+- **What green tests/gates did NOT prove:** anything about this. It is a different logger
+  (`sqlalchemy.engine.Engine`) from the one ADR-0007 governs, so INV-9's runtime enforcer in
+  slice 5 will capture the `app` logger and will not see it — correctly, but the reason needs to
+  be written down where slice 5 will look, or the enforcer reads as weaker than it is.
+- **Disposition:** **accepted for development, no action.** A developer running the API already
+  has the database. Named because "no Student name reaches stdout" is true of the app's own logger
+  and **not** of a dev process as a whole, and that distinction is exactly the kind a later
+  session would state too broadly.
+
+## 2026-09-09 — AC-13's forged-line half is proven at the formatter, not yet at a route
+- **What:** spec 0005's AC-13 reads: "a login attempt with an embedded newline in the email cannot
+  produce a second line". Slice 1 proves the mechanism (`json.dumps` escapes the newline, so one
+  record is one line) but asserts it on a `LogRecord` built in the test rather than on a real
+  login, because **slice 1 logs no attacker-supplied free text**: the only wired call site is the
+  `INV-1` handler, whose fields are a rule id and a status. An HTTP header cannot transport a raw
+  newline, so `X-Request-ID` — the one client-supplied value slice 1 does log — is not a route to
+  it either.
+- **Where:** `tests/test_logging.py::test_a_newline_in_a_logged_value_cannot_forge_a_second_line`.
+  The real-route half arrives in **slice 2**, when `authenticate_user` gains its call and the
+  attempted email reaches a line.
+- **What green tests/gates did NOT prove:** that the *production path* from a hostile email to a
+  log line is safe. The formatter is the only thing between them and it is proven; the path is not
+  yet built.
+- **Disposition:** **open until slice 2.** AC-13 is PARTIAL, not met. Recorded so the AC table is
+  not read as fully green when `/verify-live` reaches it.
+
+## 2026-09-09 — the teacher-id context reset has no enforcer until slice 2
+- **What:** `RequestContextMiddleware` deliberately claims and resets `teacher_id_var` even though
+  `get_current_user` is what fills it. Without that reset, a teacher id set during one request
+  would still be set during the next request that never authenticated, and an anonymous denial
+  line would name whoever was refused before it. The reset is correct and was written on purpose.
+- **Where:** `app/middleware/context.py`, the `tokens` tuple and its `finally`.
+- **What green tests/gates did NOT prove:** **this one.** No test in slice 1 can observe the leak,
+  because the only event slice 1 logs is an `INV-1` denial, which by construction always has an
+  authenticated teacher. Removing the reset leaves all 454 tests green. The detector arrives in
+  slice 2 with the first logged denial that has **no** session (an auth branch): that line must
+  carry no `teacher_id`, and it would carry a stale one.
+- **Disposition:** **open until slice 2**, where the assertion lands with the event that makes it
+  observable. Named here rather than left as a comment nobody greps.
+
 ## 2026-09-09 — the no-numbers rule was breached by the commit that installed it
 - **What:** `4f742e9` deleted every count, percentage and baseline from the root `CLAUDE.md` and
   wrote the rule into the file: *name the command or the file that answers the question, never the
