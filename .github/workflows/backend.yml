@@ -84,7 +84,8 @@ jobs:
       - name: Lint (ruff ratchet)
         run: ./scripts/baseline-guard.sh ruff ruff check app tests
 
-      # Baseline 16, ADR-0004. BASELINE_FROZEN=1 is set at workflow level, so a drop in the count
+      # Baseline 14, ADR-0004 (opened at 16; the N+1 fixes of 2026-09-09 ratcheted it down).
+      # BASELINE_FROZEN=1 is set at workflow level, so a drop in the count
       # is REPORTED here and ratcheted locally -- CI never rewrites .harness-baseline, because the
       # write would be discarded on an ephemeral runner and would make CI look like it ratcheted.
       - name: Typecheck (mypy ratchet)
@@ -146,15 +147,14 @@ jobs:
           # and CI has to name a value like production does rather than inherit a fallback.
           DOCS_USERNAME: ci
           DOCS_PASSWORD: ci-not-a-real-password
-        run: pytest -v --cov=app --cov-report=term-missing --cov-report=html
-
-      - name: Upload coverage
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: coverage-report
-          path: htmlcov/
-          retention-days: 7
+        # No --cov-report=html: the artifact upload that collected it was removed on
+        # 2026-09-09. It had pointed at htmlcov/ while pytest, running with
+        # defaults.run.working-directory: api, wrote api/htmlcov/ -- upload-artifact is not a
+        # `run` step, so it never inherited that default and found nothing on every run since
+        # the job was written. Nobody had ever downloaded a report, coverage is not this
+        # project's safety metric, and the percentage still lands in this job's log via
+        # term-missing. For a browsable report, run pytest --cov-report=html locally.
+        run: pytest -v --cov=app --cov-report=term-missing
 
       # Standing reminder, printed where it will actually be read. Removing the teacher-ownership
       # filter from app/services/class_service.py:54 leaves all 262 of these tests passing with
