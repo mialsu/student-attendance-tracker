@@ -6,24 +6,36 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 
 <!-- Newest first. -->
 
-## 2026-09-08 — three N+1 loops are measured, ratcheted and NOT fixed
+## 2026-09-08 — three N+1 loops, measured and ratcheted; all three fixed 2026-09-09
 - **What:** tracing was added to find these, and it did. On a 25-student class with 50 attendance
-  records: `GET /classes/{id}/students?limit=100` issues **29** statements, the autocomplete route
-  **28**, `GET /classes/{id}/attendance?limit=100` **79**. The already-fixed
-  `attendance/summary` does the same 25 students in **6**. The Owner's decision was to measure,
-  gate and confess this round, and fix the loops as a separate slice.
-- **Where:** `app/services/student_service.py:197` (one `COUNT` per student),
-  `app/services/student_service.py:430` (one `COUNT` per match, and the `SELECT` above it has no
-  `LIMIT` — it loads every match, counts each, sorts in Python, then slices to 10, and it fires on
-  every debounced keystroke from `client/src/components/AttendanceTracking.tsx:35-39`), and
-  `app/services/attendance_service.py:106` (one `db.refresh` per record).
-- **What green tests/gates do NOT prove here:** that any of this is efficient. All 437 tests, the
-  boundary gate, the mypy ratchet and the drift gate pass over every one of these. They are now
-  pinned by `tests/test_query_budget.py`, which is a **ratchet, not a fix**: the ceilings are
-  today's bad numbers, they may go down and may never go up. The gate was proven by reintroducing
-  the loop that was fixed on 2026-09-04 and watching summary go from 6 to 31.
-- **Disposition:** **open** — deliberately deferred by the Owner, 2026-09-08. Lower the ceiling in
-  `tests/test_query_budget.py` in the same commit as each fix.
+  records, as measured 2026-09-08: `GET /classes/{id}/students?limit=100` issued **29**
+  statements, the autocomplete route **28**, `GET /classes/{id}/attendance?limit=100` **79**,
+  against **6** for the `attendance/summary` loop already fixed on 2026-09-04. The Owner's
+  decision that round was to measure, gate and confess rather than fix; the fixes landed the
+  following day as three commits.
+- **Where:** all three are fixed as of 2026-09-09, each in its own commit, each with its ceiling
+  watched failing before the fix went in. `app/services/attendance_service.py:106` called
+  `db.refresh(record, ["student"])` per record and now reads the student off the `INNER JOIN` the
+  query was already paying for (`contains_eager`) — **79 statements → 4**. The students-list loop
+  at `app/services/student_service.py:197` — one `COUNT` per student in the page — has the count
+  folded into the paginated query, **29 → 4**, flat in the page size. The
+  autocomplete loop at `app/services/student_service.py:430` — one `COUNT` per match, above a
+  `SELECT` with no `LIMIT`, on the route that fires on every debounced keystroke from
+  `client/src/components/AttendanceTracking.tsx` — **is fixed as of 2026-09-09**: one grouped
+  query, **28 statements → 3**, and flat in the match count rather than scaling with it. The
+  `LIMIT` could only move into the database once the count was part of the same query, because
+  the ordering depends on it.
+- **What green tests/gates did NOT prove, and this is the lesson worth keeping:** none of them
+  proved anything about efficiency. All 441 tests, the boundary gate, the mypy ratchet and the
+  drift gate passed over all three loops, every day they existed, because every fixture in the
+  suite uses a handful of students — the size at which an N+1 is invisible. Only a measurement
+  found them. `tests/test_query_budget.py` is now the standing enforcer, and it was proven by
+  reintroducing the loop fixed on 2026-09-04 and watching summary go from 6 to 31.
+- **Disposition:** **closed**, 2026-09-09. Ceilings now 4 / 3 / 4 against the 29 / 28 / 79 they
+  were opened at, and every list endpoint in the API is flat in the row count. What this does
+  **not** claim: no production measurement was taken after the fix, so the numbers above are the
+  test suite's, on a 25-student class. The traces that found these loops are the way to confirm
+  the fan is gone in production (ADR-0006).
 
 ## 2026-09-08 — a span's `http.url` carries the student name a teacher typed
 - **What:** the ASGI instrumentation records the full, unredacted query string on every server
