@@ -853,9 +853,13 @@ pytest tests/test_auth.py -v
 ```bash
 # Backend
 cd api
-pytest -v                                      # Run all tests
-pytest --cov=app --cov-report=html             # Run with coverage report
-./scripts/run-tests.sh                         # Run tests (via helper script)
+eval "$(just test-db-up)"                      # REQUIRED FIRST: conftest.py refuses to run
+                                               # without TEST_DATABASE_URL, and bare `pytest`
+                                               # therefore fails. See Test Database below.
+just check                                     # the whole suite; prints count and coverage
+pytest -v                                      # same, once the export above is in your shell
+pytest --cov=app --cov-report=html             # + a browsable report in api/htmlcov/
+just test-db-down                              # destroy the throwaway database
 ./scripts/generate-migration.sh "message"      # Create migration
 ./scripts/apply-migrations.sh                  # Apply migrations
 alembic current                                # Check current migration
@@ -864,7 +868,8 @@ uvicorn app.main:app --reload                  # Dev server (port 8000)
 # Frontend
 cd client
 npm run dev                                    # Dev server (port 5173)
-npm run test                                   # Run tests
+npm run test:run                               # Run tests once
+npm run test                                   # WATCH mode — does not exit
 npm run test:coverage                          # Coverage report
 npm run build                                  # Production build
 npm run lint                                   # Lint check
