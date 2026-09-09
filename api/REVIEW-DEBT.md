@@ -32,10 +32,12 @@ cut (`/confess`), read first by any architecture or review session, dispositione
   found them. `tests/test_query_budget.py` is now the standing enforcer, and it was proven by
   reintroducing the loop fixed on 2026-09-04 and watching summary go from 6 to 31.
 - **Disposition:** **closed**, 2026-09-09. Ceilings now 4 / 3 / 4 against the 29 / 28 / 79 they
-  were opened at, and every list endpoint in the API is flat in the row count. What this does
-  **not** claim: no production measurement was taken after the fix, so the numbers above are the
-  test suite's, on a 25-student class. The traces that found these loops are the way to confirm
-  the fan is gone in production (ADR-0006).
+  were opened at, and every list endpoint in the API is flat in the row count — proved at 12 and
+  100 students, counted both by SQLAlchemy's `before_cursor_execute` and independently from the
+  PostgreSQL statement log, which agreed exactly. Deployed in `a4c5acf` (PR #6) and **the Owner
+  confirmed the reduced span fan in production Jaeger**, which is what closes the loop the
+  measurement opened (ADR-0006). Coverage was not re-measured, and no production *timing* was
+  taken — the claim is statement count, not latency.
 
 ## 2026-09-08 — a span's `http.url` carries the student name a teacher typed
 - **What:** the ASGI instrumentation records the full, unredacted query string on every server
@@ -92,16 +94,26 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 - **Disposition:** **open.** Dropping them is a migration plus a model edit; the index is the part
   that costs something today.
 
-## 2026-09-08 — the documented test count was 91 tests out of date
-- **What:** root `CLAUDE.md` and this repo's docs say **346 tests** (measured 2026-09-04). The
-  suite actually runs **437**, measured 2026-09-08 on a full green run in 253s — 433 before the 4
-  added with tracing. The same document already warns that its coverage percentage is stale; the
-  count had drifted too, in the same direction and for the same reason.
-- **Where:** root `CLAUDE.md`, `api/README.md` and anywhere else quoting 346.
-- **What green tests/gates do NOT prove here:** nothing counts the tests and compares the number
-  to the docs. This is the third time a measured figure in that file has been found stale.
-- **Disposition:** **open** — the number is recorded here, dated; updating every doc that quotes
-  it is a separate sweep.
+## 2026-09-08 — the documented test count was out of date, twice (closed 2026-09-09)
+- **What:** root `CLAUDE.md` and this repo's docs said **346 tests** (measured 2026-09-04) while
+  the suite ran more. The correction filed here on 2026-09-08 said **437**, and that was wrong too:
+  it counted the 4 telemetry tests tracing added and missed the 4 query-budget tests from the same
+  commit. The measured figure is **441** — a local full run in 225s, a CI run in 296s, and
+  collection, all agreeing, on 2026-09-09. The same document already warned its coverage percentage
+  was stale; the count had drifted the same way, and then its own correction drifted.
+- **Where:** root `CLAUDE.md` — the corrections table plus five body figures, all now carrying
+  441 and a 2026-09-09 date. The same sweep found two stale gate baselines in that file (ruff
+  stated 93, actually 91; mypy stated 16, actually 14) and one paragraph that this session's own
+  commits had made false, still describing the three N+1 loops as unfixed.
+- **What green tests/gates do NOT prove here, and it is the reason this recurred:** nothing
+  counts the tests and compares the number to the docs, so every figure in that file is a manual
+  transcription with no enforcer behind it. Five have now been found stale, including one written
+  as a correction to the previous stale one. Any number quoted there is a claim (PRINCIPLES #6);
+  re-measure before acting on it.
+- **Disposition:** **closed**, 2026-09-09 — the sweep ran and every figure named above is
+  corrected in place. What is **not** fixed is the underlying cause: there is still no gate that
+  compares a documented count to a measured one, so this will drift again the next time the suite
+  grows. `api/README.md` was checked and quotes no test count.
 
 ## 2026-09-07 — the drift gate's size check now differs from devkit's template, in a third way
 - **What:** `scripts/drift-check.sh` here grew a second cap, `MAX_NEW_TEST_FILE_LINES` at 1000, for

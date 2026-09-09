@@ -28,18 +28,19 @@ Pre-commit hook: `.husky/pre-commit` (runs the same set, drift staged-only).
 just check-fast            # boundaries + drift + lint + typecheck (~10s, no db) — what the hook runs
 just check                 # fast set + the 330-test suite (~7 min, needs TEST_DATABASE_URL)
 just boundaries            # import-linter: app.api > app.services > app.models + leaf contracts
-just lint                  # ruff ratchet — baseline 93 findings
+just lint                  # ruff ratchet — baseline 91 findings
 just lint-verbose          # ruff, showing every finding
-just typecheck             # mypy ratchet — baseline 16 findings (ADR-0004)
+just typecheck             # mypy ratchet — baseline 14 findings (ADR-0004)
 just typecheck-verbose     # mypy, showing every finding
 just drift                 # devkit drift gate + drift-extra.sh (vocabulary, alembic edits)
 just install-hooks         # one-off per clone: core.hooksPath -> .githooks
 ```
 The API **has a type gate** since 2026-09-02: `just typecheck` runs mypy over `app/` as a ratchet
-at baseline 16 (ADR-0004). It is in `check-fast`, so the pre-commit hook and CI both run it. This
+at baseline **14** (ADR-0004). It is in `check-fast`, so the pre-commit hook and CI both run it. This
 line previously said there was no type gate, which was true — mypy was never installed despite the
 old justfile claiming it, and ADR-0001 deferred it on the grounds that the opening baseline "would
-be large and unmeasured". Measured, it was 16 across 9 files. The 16 are confessed, not fixed.
+be large and unmeasured". Measured, it opened at 16 across 9 files; the N+1 fixes of 2026-09-09
+ratcheted it to 14 without anyone aiming at it. The remaining 14 are confessed, not fixed.
 
 Tests DROP tables, so `TEST_DATABASE_URL` is mandatory with no default. **Use the helper** — it
 starts a disposable database on port 5439 and prints the export line:
@@ -137,12 +138,15 @@ production container now: `attendance-jaeger-prod`.
 - **Tracing cannot take the API down.** Export runs on a background thread and the exporter logs
   and drops after retrying; a dead Jaeger costs log noise.
 
-**What it found immediately, and what is NOT fixed:** three N+1 loops
-(`student_service.py:197`, `student_service.py:430`, `attendance_service.py:106`). On a
-25-student class they issue 29, 28 and 79 SQL statements; the already-fixed
-`attendance/summary` does the same 25 students in 6. They are pinned at today's numbers by
-`tests/test_query_budget.py` — a **ratchet, not a fix**: the ceilings may go down and never up.
-All of it is in `api/REVIEW-DEBT.md`.
+**What it found immediately, and what is now fixed:** three N+1 loops — autocomplete
+(`student_service.py:430`), the students list (`student_service.py:197`) and the attendance list
+(`attendance_service.py:106`). On a 25-student class they issued **28, 29 and 79** SQL statements
+against 6 for the already-fixed `attendance/summary`. **All three were fixed on 2026-09-09** and
+`tests/test_query_budget.py` pins them at **3 / 4 / 4** — flat in the row count rather than
+scaling with it. Measured two independent ways (SQLAlchemy's `before_cursor_execute` and the
+PostgreSQL statement log, which agreed), exercised at 12 and 100 students, and confirmed in
+production traces. The file stays a **ratchet**: a ceiling may go down and never up, so a number
+creeping back up means a loop has returned. Details in `api/REVIEW-DEBT.md`.
 
 ### Measured status, 2026-09-01 — supersedes the claims below
 
@@ -153,7 +157,7 @@ The figures further down this document were not accurate when measured. Correcti
 | frontend "94.14% coverage" | was **25 of 96 FAILING** with one real network call; **fixed 2026-09-03** — 73 pass, 0 fail. **78 pass as of 2026-09-04** |
 | backend "241 tests, 82% coverage" | was **262 pass, 77% coverage** (`student_service.py` at **29%**); **346 pass at 80% coverage, measured 2026-09-07** |
 | backend "63 tests passing, 69% coverage" | a third, also-stale figure in the same document |
-| backend "346 tests" (everywhere below) | **437 pass**, measured 2026-09-08 on a full green run in 253s — 433 of them before tracing added 4. The count has now been wrong in this file four times; trust `REVIEW-DEBT.md` and re-measure |
+| backend "346 tests" (corrected in place below, 2026-09-09) | **441 pass**, measured 2026-09-09 three ways that agree: a local full run in 225s, CI in 296s, and collection. The **437** this row asserted on 2026-09-08 was itself wrong — it counted tracing's 4 telemetry tests and missed the 4 query-budget tests added in the same commit. That is five wrong counts in this file, which is why the body figures below are now corrected in place instead of being left for this row to override |
 
 And the finding that mattered most, on 2026-09-01: removing the teacher-ownership filter from
 `app/services/class_service.py:54` left **all 262 backend tests passing with byte-identical
@@ -291,14 +295,15 @@ commit ships the whole deployable unit.
 - API integration complete with JWT authentication
 - Deployed to Vercel (free tier)
 
-**Backend (346 tests passing, measured 2026-09-04 — type gate: mypy ratchet at 15, ADR-0004):**
+**Backend (441 tests passing, measured 2026-09-09 — type gate: mypy ratchet at 14, ADR-0004):**
 - Python 3.12
 - FastAPI 0.104+
 - SQLAlchemy 2.0 (async)
 - Alembic (migrations)
 - PostgreSQL 17 (dev + test databases)
-- pytest + httpx — **346 tests** (measured 2026-09-04). Coverage was 77% on 2026-09-01 and has
-  not been re-measured since; the count has, three times, so trust the count and not the percentage
+- pytest + httpx — **441 tests** (measured 2026-09-09, and again by CI on the same commit).
+  Coverage was last measured at 80% on 2026-09-07 and has not been taken since; the count has moved
+  five times, so re-measure either rather than quoting it from here
 - Paginated API responses with total counts
 - Server-side filtering and search
 - Student entity with course credit tracking
@@ -336,7 +341,7 @@ commit ships the whole deployable unit.
    - Service layer with business logic implemented
    - All CRUD API endpoints: Auth (7), Classes (5), Students (7), Attendance (5)
      — counted from `app.routes`, not from memory
-   - 346 tests passing (2026-09-04). Authorization **is** now tested from the denied side —
+   - 441 tests passing (2026-09-09). Authorization **is** now tested from the denied side —
      18 denial tests, and INV-1 has one enforcement site since spec 0003
    - Name normalization with case-insensitive uniqueness
    - Bulk attendance logging (1-50 records at once)
@@ -738,7 +743,7 @@ docker-compose down
 ## Testing Guidelines
 
 ### Backend Testing (✅ Complete)
-- **346 tests passing** covering all API endpoints (measured 2026-09-04)
+- **441 tests passing** covering all API endpoints (measured 2026-09-09)
 - **77% code coverage** — but `student_service.py` is at 29%, and removing an ownership
   check leaves every test green. Coverage is not a safety metric here.
 - **Integration Tests**: All API endpoints tested against a real PostgreSQL 17 database
@@ -1012,7 +1017,7 @@ Closes #123
 
 **Last Completed:**
 - ✅ Backend API fully implemented with all CRUD endpoints
-- 346 backend tests passing, 78 frontend (both measured 2026-09-04)
+- 441 backend tests passing (2026-09-09), 78 frontend (2026-09-04)
 - ✅ Frontend API integration complete
 - ✅ Database migrations ready
 - ✅ API documentation complete
