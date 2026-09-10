@@ -490,13 +490,13 @@ table.data tbody tr:last-child td { border-bottom: none; }
           <span class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg></span>
           Läsnä
         </div>
-        <h2>Läsnäolot hallussa, ilman kynää ja paperia.</h2>
-        <p>Kirjaa oppilaiden läsnäolot sekunneissa, seuraa suoritusmerkintöjä ja näe tilastot yhdellä silmäyksellä.</p>
+        <h2>Läsnäolojen kirjaus kursseille.</h2>
+        <p>Kaikki kurssisi samassa näkymässä: läsnäolot, suoritusmerkinnät ja tilastot.</p>
       </div>
       <div class="a-feats">
-        <div class="a-feat"><span class="fic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg></span><div><b>Nopea kirjaus</b><span>Nimiehdotukset ja pikamäärä 1–50</span></div></div>
-        <div class="a-feat"><span class="fic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/></svg></span><div><b>Suoritusmerkinnät</b><span>Merkitse kurssin suoritus per oppilas</span></div></div>
-        <div class="a-feat"><span class="fic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18 17V9M13 17V5M8 17v-3"/></svg></span><div><b>Tilastot</b><span>Päivä- ja kuukausikohtaiset trendit</span></div></div>
+        <div class="a-feat"><span class="fic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg></span><div><b>Läsnäolon kirjaus</b><span>Nimellä, 1–50 kerralla</span></div></div>
+        <div class="a-feat"><span class="fic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/></svg></span><div><b>Suoritusmerkinnät</b><span>Kurssisuoritus oppilaskohtaisesti</span></div></div>
+        <div class="a-feat"><span class="fic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18 17V9M13 17V5M8 17v-3"/></svg></span><div><b>Tilastot</b><span>Päivä- ja kuukausitasolla</span></div></div>
       </div>
     </aside>
     <main class="auth-main">
@@ -938,7 +938,7 @@ function toggleAuthMode(){
   document.getElementById('codeField').hidden=!signupMode;
   document.getElementById('confirmField').hidden=!signupMode;
   document.getElementById('authTitle').textContent = signupMode?'Luo uusi tili':'Tervetuloa takaisin';
-  document.getElementById('authSub').textContent = signupMode?'Rekisteröidy koodilla ja aloita seuranta.':'Kirjaudu sisään jatkaaksesi kursseillesi.';
+  document.getElementById('authSub').textContent = signupMode?'Rekisteröidy koulusi rekisteröintikoodilla.':'Kirjaudu sisään jatkaaksesi kursseillesi.';
   document.getElementById('authSubmit').textContent = signupMode?'Rekisteröidy':'Kirjaudu sisään';
   document.getElementById('authToggle').innerHTML = signupMode
     ? 'Onko sinulla jo tili? <button type="button" onclick="toggleAuthMode()">Kirjaudu sisään</button>'
