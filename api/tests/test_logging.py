@@ -1,8 +1,9 @@
 """What a reader of the log can conclude, asserted at a real route.
 
-Slice 1 of `specs/0005-application-logging.md`: the formatter, the request context, the generated
-request id, and the exception handler wired to `INV-1` only. Serves AC-1, AC-9, AC-10, AC-13 and
-AC-14.
+Slices 1 to 3 of `specs/0005-application-logging.md`, each under its own AC heading below:
+the formatter, the request context and the generated request id (slice 1); every denial the app
+decides (slice 2); and the `ERROR` line that gives an unhandled exception an owner (slice 3).
+Serves AC-1, AC-2, AC-3, AC-4, AC-8, AC-9, AC-10, AC-13 and AC-14.
 
 The stance is `tests/test_query_budget.py`'s: attach a handler, exercise the real route, assert on
 what came out, detach. Nothing here asserts that a formatter method was called or reaches into the
@@ -17,10 +18,15 @@ deliberately leaves alone.
 
 import json
 import logging
+import traceback
+from collections.abc import AsyncGenerator, Awaitable, Callable
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
+from typing import NoReturn
 
 import pytest
+import pytest_asyncio
+from httpx import ASGITransport, AsyncClient
 
 from app.core.logging import (
     DEFAULT_LEVEL,
@@ -29,6 +35,8 @@ from app.core.logging import (
     JsonLineFormatter,
     resolve_level,
 )
+from app.main import app
+from app.services import attendance_service
 
 
 @contextmanager
@@ -695,3 +703,175 @@ async def test_an_unauthenticated_denial_carries_no_teacher_id_from_an_earlier_r
     line = objects(lines, 1)[0]
     assert "teacher_id" not in line, "a teacher id survived into an unauthenticated request"
     assert str(test_user.id) not in json.dumps(line)
+
+
+# --- AC-8: an unhandled exception gets an owner, and uvicorn's traceback is left alone --------
+#
+# Slice 3. The premise this serves is spec 0005's Problem Statement 2: a traceback names a line,
+# never which Teacher, which Class or which request, and production runs `uvicorn --workers 4`
+# so four processes interleave their output. The traceback itself is already durable and is
+# deliberately untouched (US-14) -- what these lines add is attribution.
+#
+# The seam is the one *Testing Decisions* names: `monkeypatch` a service function to raise. No
+# production hook is added to make a 500 reachable, so nothing here can be triggered by a
+# request in production.
+
+
+def _raising(exc: Exception) -> Callable[..., Awaitable[NoReturn]]:
+    """A stand-in for a service function that fails, raising the exception given."""
+
+    async def explode(*args: object, **kwargs: object) -> NoReturn:
+        raise exc
+
+    return explode
+
+
+@pytest.fixture
+def summary_route(test_class) -> str:
+    """The route the AC-8 tests drive.
+
+    An authenticated route whose service call is a plain function to `monkeypatch`, and one that
+    is NOT an invariant enforcer -- ownership is verified for real before it is reached, so the
+    500 under test is the "authentication and authorization both succeeded, then something
+    broke" case US-4 describes.
+    """
+    return f"/api/classes/{test_class.id}/attendance/summary"
+
+
+@pytest_asyncio.fixture
+async def non_reraising_client(client) -> AsyncGenerator[AsyncClient, None]:
+    """The same app, driven so a 500 comes back as a response instead of an exception.
+
+    A SECOND seam, and the spec's *Testing Decisions* names only one -- so it is declared there
+    too, as spec delta 8, rather than left as an undeclared extra. It exists because AC-8's two
+    halves cannot be observed through one flag: `raise_app_exceptions=True` (the `client`
+    fixture, httpx's default) surfaces the exception uvicorn would receive, which is what makes
+    the traceback assertion possible and is also what hides the response. This one shows what a
+    real caller gets.
+
+    Depends on `client` rather than replacing it, so `app.dependency_overrides[get_db]` is
+    already installed and torn down by the fixture that owns it.
+    """
+    transport = ASGITransport(app=app, raise_app_exceptions=False)
+    async with AsyncClient(transport=transport, base_url="http://test") as caller:
+        yield caller
+
+
+@pytest.mark.asyncio
+async def test_an_unhandled_exception_emits_one_error_line_with_teacher_route_and_request_id(
+    client, auth_headers, summary_route, test_user, monkeypatch
+):
+    """AC-8, first half. The 500 that used to be anonymous now names who hit it.
+
+    `pytest.raises` rather than a status assertion because the suite's `client` fixture uses
+    httpx's default `raise_app_exceptions=True`: the exception reaches the caller exactly as it
+    reaches uvicorn. The response a real client sees is asserted separately below.
+    """
+    monkeypatch.setattr(
+        attendance_service, "get_attendance_summary", _raising(ValueError("the query failed"))
+    )
+
+    with capture_logs() as lines:
+        with pytest.raises(ValueError):
+            await client.get(summary_route, headers=auth_headers)
+
+    line = one_object(lines)
+
+    assert line["level"] == "ERROR"
+    assert line["event"] == "error"
+    assert line["exception"] == "ValueError"
+    assert line["teacher_id"] == str(test_user.id)
+    assert line["route"] == summary_route
+    assert line["request_id"]
+
+
+@pytest.mark.asyncio
+async def test_the_error_line_names_the_exception_type_and_never_its_message(
+    client, auth_headers, summary_route, test_student, monkeypatch
+):
+    """ADR-0007 at the error path, and slice 3's load-bearing test.
+
+    An exception message is free text assembled from whatever the failing code had in hand, and
+    what a service function has in hand is very often a Student's name. `exc.detail` is already
+    banned from a denial line for exactly this reason (slice 2); `str(exc)` is the same hazard
+    wearing a different name, and a class name is the one part of an exception that cannot carry
+    data. The traceback carries the message, durably, where it belongs.
+    """
+    monkeypatch.setattr(
+        attendance_service,
+        "get_attendance_summary",
+        _raising(ValueError(f"could not summarise {test_student.name}")),
+    )
+
+    with capture_logs() as lines:
+        with pytest.raises(ValueError):
+            await client.get(summary_route, headers=auth_headers)
+
+    line = one_object(lines)
+    rendered = json.dumps(line)
+
+    assert line["exception"] == "ValueError"
+    assert test_student.name not in rendered
+    assert test_student.name.split()[0] not in rendered
+    assert "could not summarise" not in rendered
+
+
+@pytest.mark.asyncio
+async def test_the_exception_reaches_the_server_with_its_traceback_unchanged(
+    client, auth_headers, summary_route, monkeypatch
+):
+    """AC-8, second half, and US-14. Logging must not cost a frame.
+
+    Measured before it was built: a bare `raise` inside an `except` block re-raises the same
+    object and leaves the frame attributed to the `await self.app(...)` line, so the rendered
+    traceback is byte-identical to the one a try/finally alone produces. `raise exc` is what
+    breaks it -- it appends a SECOND frame for the same function, pointing at the re-raise -- and
+    wrapping in a new exception breaks it further. Both are what this test exists to catch.
+    """
+    planted = ValueError("boom")
+    monkeypatch.setattr(attendance_service, "get_attendance_summary", _raising(planted))
+
+    with capture_logs():
+        with pytest.raises(ValueError) as caught:
+            await client.get(summary_route, headers=auth_headers)
+
+    assert caught.value is planted, "the middleware replaced the exception object"
+    assert caught.value.__cause__ is None, "the exception was re-raised from another"
+
+    rendered = traceback.format_exception(
+        type(caught.value), caught.value, caught.value.__traceback__
+    )
+    lines = "".join(rendered).splitlines()
+    middleware_frames = [
+        index for index, line in enumerate(lines) if "app/middleware/context.py" in line
+    ]
+
+    assert len(middleware_frames) == 1, (
+        "the context middleware appears in the traceback more than once, which is what "
+        f"`raise exc` does and a bare `raise` does not:\n{"\n".join(lines)}"
+    )
+    source_line = lines[middleware_frames[0] + 1].strip()
+    assert source_line == "await self.app(scope, receive, send)", (
+        f"the middleware's frame no longer points at the call it wraps: {source_line}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_the_client_still_receives_starlettes_own_500(
+    non_reraising_client, auth_headers, summary_route, monkeypatch
+):
+    """US-14's other half: the response bytes a real caller sees are untouched.
+
+    Starlette's own 500, unmodified -- the middleware logs and re-raises rather than rendering
+    anything, so `ServerErrorMiddleware` still produces the body it produced before slice 3.
+    """
+    monkeypatch.setattr(
+        attendance_service, "get_attendance_summary", _raising(ValueError("boom"))
+    )
+
+    with capture_logs() as lines:
+        response = await non_reraising_client.get(summary_route, headers=auth_headers)
+
+    assert response.status_code == 500
+    assert response.text == "Internal Server Error"
+    assert one_object(lines)["event"] == "error"

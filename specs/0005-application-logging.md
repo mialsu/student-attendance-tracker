@@ -420,6 +420,51 @@ See `api/REVIEW-DEBT.md`, 2026-09-09.
    or that logged `detail` — would break ADR-0007 with every other test still green. Asserted:
    `test_a_refusal_whose_message_contains_a_student_name_emits_nothing`.
 
+**2026-09-10, slice 3.** Three, and the first is a placement *Where the calls live* does not
+predict.
+
+8. **The error line is emitted from the middleware, which is a fourth place.** *Where the calls
+   live* says "Mostly **one** place: an exception handler for `HTTPException`" plus three explicit
+   sites where the handler cannot see the information. The `ERROR` line is none of those: it comes
+   from `RequestContextMiddleware.__call__`'s `except` clause.
+
+   It has to. An app-level `Exception` handler — where a reader looks first, and the obvious
+   reading of that section — runs inside `ServerErrorMiddleware`, which Starlette builds
+   **outside** every user middleware, so it is reached only after the context middleware's
+   `finally` has reset all four variables. Measured both ways rather than argued: planted as an
+   app-level handler, the line still appears and carries `event`, `level` and `exception` and
+   **nothing else** — no request id, no teacher, no route. An error line with no owner is the
+   thing Problem Statement 2 exists to fix, so
+   `test_an_unhandled_exception_emits_one_error_line_with_teacher_route_and_request_id` fails on
+   that arrangement.
+
+   The consequence for a reader hunting every source of a line: `app/api/handlers.py`,
+   `auth_service.authenticate_user`, and now `app/middleware/context.py`.
+
+9. **A second test seam, declared rather than smuggled.** *Testing Decisions* says "**One seam:**
+   the existing `client` HTTP fixture". AC-8 has two halves that one seam cannot show, because
+   they are opposite settings of the same flag: httpx's `raise_app_exceptions=True` (the `client`
+   fixture's default) surfaces the exception uvicorn would receive, which is what makes the
+   traceback assertion possible and is exactly what hides the response. `non_reraising_client`
+   in `tests/test_logging.py` is the other setting, and it depends on `client` rather than
+   replacing it so the `get_db` override stays owned by one fixture.
+
+10. **AC-8's "byte-identical" needed a definition, and now has a measurement.** Taken literally it
+    is unachievable by any edit to `context.py`, since adding a comment moves every line number
+    below it. Exercised against **real uvicorn** — authenticate, rename the table the route needs,
+    hit it, capture stdout, and diff against the same run with slice 3 reverted — the two
+    tracebacks are **165 lines each and differ on exactly one**: `context.py`'s frame moved from
+    line 82 to 102, because this slice's docstring and comments sit above it. Same frame, same
+    function, same source line (`await self.app(scope, receive, send)`), same order, same count.
+
+    So the criterion means **no frame added, removed, or re-attributed**, and that holds exactly.
+    A bare `raise` is what buys it: `raise exc` appends a *second* frame for the same function,
+    which `test_the_exception_reaches_the_server_with_its_traceback_unchanged` asserts against.
+
+    The same run corrected a claim this slice nearly shipped as a comment: the JSON line does
+    **not** land immediately before the traceback. uvicorn's access line for the request sits
+    between them, so the join is `request_id`, not proximity.
+
 **Scope decision, 2026-09-10, by the Owner.** US-1 said "every refused request recorded
 durably". With slice 2 landed that was **10 of 46** refusal raise sites in `app/`, and the
 difference was declared nowhere — so US-1 has been narrowed rather than left to be over-read, and

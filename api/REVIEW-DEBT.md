@@ -6,6 +6,44 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 
 <!-- Newest first. -->
 
+## 2026-09-10 — a Student's name can still reach the container log, by traceback
+- **What:** found by slice 3's live exercise against real uvicorn, not by a test. ADR-0007's rule
+  is scoped to **log lines**, and slice 3 honours it — the `ERROR` line carries
+  `exception=type(exc).__name__` and never `str(exc)`. But the traceback printed beside it is
+  SQLAlchemy's, and SQLAlchemy renders **bound parameters** into the exception it raises:
+
+  ```
+  sqlalchemy.exc.ProgrammingError: ... relation "attendance_records" does not exist
+  [SQL: SELECT ... WHERE students.class_id = $1::UUID ...]
+  [parameters: (UUID('68eb565b-...'), datetime.datetime(2021, 9, 11, ...))]
+  ```
+
+  That run bound no name. Five query sites do: `attendance_service.py:85`, `:278`, `:329` and
+  `student_service.py:176`, `:439` all bind a `LOWER(name) LIKE` pattern built from a
+  caller-supplied search term. A failing query at any of them prints a partial Student name to
+  stdout, in the same stream and the same rotation as the JSON lines.
+- **Where:** `app/database.py` constructs the engine without `hide_parameters`, which defaults to
+  `False`. **This one is not development-only** — that is the difference from the `echo` entry
+  below, and it was checked rather than assumed: `echo` is off in production because
+  `DEBUG: "false"`, but `hide_parameters` is unset everywhere, so exception rendering behaves the
+  same on the VM as locally.
+- **What green tests/gates did NOT prove:** nothing touches this. Spec 0005 lists "Reformatting
+  uvicorn's output" as out of scope and leaves the traceback path deliberately alone (US-14), so
+  no AC covers it and none should. The gap is not a violation of ADR-0007 — it is the distance
+  between what that ADR says (log **lines** carry ids) and what a reader will assume from it
+  (names never reach the log).
+- **Why it was not fixed here:** `hide_parameters=True` is a one-line change to the engine, and it
+  is not slice 3's to make. It trades away the bound values in every diagnostic traceback the app
+  will ever print — the thing that makes a production 500 debuggable — against a leak that needs a
+  failing query on one of five paths. That is a real trade with a real cost on both sides, so it
+  is the Owner's call, not a build decision taken in passing.
+- **Disposition:** **open, and it belongs to `INV-9`'s wording in slice 5.** If `INV-9` is written
+  as "no Student name reaches a log", this entry makes that false on the day it is written, which
+  is the pseudo-artifact ANTI-PATTERNS names. Either the invariant is scoped to lines the app
+  emits — matching ADR-0007's own careful scoping, and matching how that ADR already handles the
+  seven `pg_dump` backups — or `hide_parameters` is turned on first and the broader wording earns
+  itself.
+
 ## 2026-09-10 — "every refused request" is 10 of 46 refusal sites, and one of the silent ones is an invariant
 - **What:** spec 0005's **US-1** asks for "every refused request recorded durably". The AC table
   delivers four families — `INV-1` (AC-1), the three login branches (AC-2), registration codes
