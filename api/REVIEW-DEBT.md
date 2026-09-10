@@ -6,6 +6,30 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 
 <!-- Newest first. -->
 
+## 2026-09-10 — INV-9's gate cannot see through a `**kwargs` expansion, and its allowlist must be widened by hand
+- **What:** `scripts/log_lint.py` checks logger-call keywords against `ALLOWED_KEYWORDS` and
+  literal `event`/`rule`/`reason` values against three known sets. Two things it cannot do:
+  - **`**fields` is invisible.** `app/api/handlers.py` builds a `fields` dict and expands it into
+    `log_event(logging.WARNING, "denial", **fields)`. The keywords are not in the call's syntax,
+    so `ast` cannot name them and the gate skips the expansion entirely. Today that dict is built
+    three lines above from `reason`, `rule` and `status` — so it is safe by inspection, not by
+    gate. The same blind spot covers `rule=INV_1`, a module constant rather than a literal.
+  - **A widening is indistinguishable from a leak.** Adding a legitimate new field means editing
+    the allowlist, and nothing checks that the editor argued for it. The gate converts a silent
+    leak into a deliberate one, which is the whole gain, but it is not proof.
+- **What green tests/gates did NOT prove:** the runtime sweep in `tests/test_logging_inv9.py`
+  catches a name that actually reaches a line on one of the seven routes it drives, including
+  through `**fields`. So the two enforcers overlap rather than nest: the gate sees syntax the
+  test cannot reach, the test sees values the gate cannot resolve. Neither alone is INV-9.
+- **Why it was not fixed here:** resolving `**fields` means following a local dict through the
+  function, which is a small dataflow analysis. Spec 0005 delta 11 already argues the cheaper
+  direction — call sites should pass literals, so the gate can read them — and `handlers.py` is
+  the one site that does not.
+- **Disposition:** **open, low priority.** The honest fix is to make `handlers.py` pass its
+  fields explicitly rather than to teach the gate dataflow. Worth doing the next time that
+  handler is touched for another reason.
+
+
 ## 2026-09-10 — a cross-teacher merge was refused as INV-5 when the violation was INV-1's (FIXED same day)
 - **What:** spec 0005 slice 4 labelled `merge_students`' same-Class refusal `rule="INV-5"` so it
   reaches the log (AC-21). That comparison runs **before**
@@ -95,12 +119,16 @@ cut (`/confess`), read first by any architecture or review session, dispositione
   will ever print — the thing that makes a production 500 debuggable — against a leak that needs a
   failing query on one of five paths. That is a real trade with a real cost on both sides, so it
   is the Owner's call, not a build decision taken in passing.
-- **Disposition:** **open, and it belongs to `INV-9`'s wording in slice 5.** If `INV-9` is written
-  as "no Student name reaches a log", this entry makes that false on the day it is written, which
-  is the pseudo-artifact ANTI-PATTERNS names. Either the invariant is scoped to lines the app
-  emits — matching ADR-0007's own careful scoping, and matching how that ADR already handles the
-  seven `pg_dump` backups — or `hide_parameters` is turned on first and the broader wording earns
-  itself.
+- **The wording question this entry raised is DECIDED, 2026-09-10 (slice 5), by the Owner:**
+  `INV-9` is scoped to **lines this application emits**, matching ADR-0007's own scoping and how
+  that ADR already handles the seven `pg_dump` backups. `hide_parameters` stays `False`, so a
+  diagnostic traceback keeps its bound values and this gap stays real. The row was written that
+  way and names this entry.
+- **Disposition:** **open — the gap, not the question.** The invariant no longer overclaims, and
+  nothing else changed: a failing query on one of those five sites still prints a partial name to
+  stdout. Revisit if a name ever turns up in a pasted traceback, or if the diagnostic value of
+  bound parameters stops being worth it. Turning `hide_parameters` on is a one-line change to
+  `app/database.py` and would need its own test watched red.
 
 ## 2026-09-10 — "every refused request" is 10 of 46 refusal sites, and one of the silent ones is an invariant
 - **What:** spec 0005's **US-1** asks for "every refused request recorded durably". The AC table
@@ -145,7 +173,7 @@ cut (`/confess`), read first by any architecture or review session, dispositione
   but it reports a Class's absence *before* its ownership — deliberately, so a 404 never becomes a
   403 — so every INV-1 refusal is the `ForbiddenException` branch that AC-1 already logs.
 
-## 2026-09-10 — the `reason` vocabulary on a denial line has no enforcer
+## 2026-09-10 — the `reason` vocabulary on a denial line has no enforcer (CLOSED, slice 5)
 - **What:** spec 0005 slice 2 gives every denial line a `reason` — `unknown_email`,
   `wrong_password`, `inactive_account`, `code_used`, `code_revoked`, `code_expired`,
   `code_wrong_email`, `code_unknown`, `class_inactive` — and the `rule` beside it. Both are plain
@@ -168,8 +196,20 @@ cut (`/confess`), read first by any architecture or review session, dispositione
   drift-extra check that fails a `reason=` literal outside a known list — and slice 5 already
   installs a drift check over logger call sites for `INV-9`. Two checks over the same lines,
   written a week apart, is the seam to build once rather than twice.
-- **Disposition:** **open**, and pinned to slice 5 rather than left undated. If slice 5's check
-  lands without covering the vocabulary, this entry outlives it and should say so.
+- **Disposition:** **closed, 2026-09-10 (slice 5)** — and it closed the way this entry asked
+  for, as one check rather than two. `scripts/log_lint.py` holds `KNOWN_EVENTS`,
+  `KNOWN_RULES` and `KNOWN_REASONS` beside INV-9's keyword allowlist: same call sites, same
+  pass, one place to widen. (It landed in `drift-extra.sh` itself and moved when review found
+  the shell version false-clean — spec 0005 delta 15.) Watched failing on three planted values — an unknown `reason`, `rule="INV3"`,
+  and an unknown `event` token — plus a negative control re-adding known values, which stayed
+  clean. The Owner added **AC-22** to spec 0005 for it, so the work is accounted for in the AC
+  table rather than smuggled in beside AC-6.
+- **What it still does not prove, and this is the successor gap:** the check resolves **string
+  literals only**. `rule=INV_1` in `app/api/handlers.py` and `**fields` are skipped, because a
+  value reached through a name cannot be resolved textually — the same reason spec 0005 delta 11
+  gives for writing `event` inline at the call site. Every *raise* site passes literals today, so
+  the vocabulary cannot grow unnoticed; a future call site passing a constant would slip past.
+  Widening the vocabulary is meant to be a deliberate edit to this script in the same commit.
 
 ## 2026-09-09 — the log sink has no time-based erasure, and now there is something in it
 - **What:** spec 0005 slice 1 landed the first logger in `app/`, so denial lines now exist. Their

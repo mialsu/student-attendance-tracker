@@ -5,10 +5,11 @@
 >
 > **Invariants touched:** `INV-1`, `INV-3`, `INV-5`, `INV-6`, `INV-7`, and **`INV-9` is created here**.
 >
-> **`INV-9`'s row lands with its enforcer, in slice 5 — not now.** `drift-check.sh` check 7 refuses
-> an `INV-` row whose fifth field names no enforcer, but it matches *textually*: a row naming a test
-> file that does not exist yet would pass the gate while being a claim rather than a fact
-> (PRINCIPLES #6). The rule is decided here; the row is written when the test that fails for it does.
+> ~~**`INV-9`'s row lands with its enforcer, in slice 5 — not now.**~~ **It landed, in slice 5.**
+> `drift-check.sh` check 7 refuses an `INV-` row whose fifth field names no enforcer, but it matches
+> *textually*: a row naming a test file that did not exist yet would have passed the gate while being
+> a claim rather than a fact (PRINCIPLES #6). So the rule was decided here and the row was written
+> when the tests and the gate existed — `api/INVARIANTS.md`, INV-9, naming both.
 >
 > Modules and functions are named; **line numbers deliberately are not**. `INVARIANTS.md` records
 > why — the row this convention replaced pointed at `attendance_service.py:286`, which had already
@@ -173,10 +174,16 @@ Explicit calls are added only where the handler cannot see the information:
 
 ### Personal data
 
-**No Student name in any log line, ever.** This is `INV-9`. The four places a name arrives as free
-text are the autocomplete `query` parameter, the `student_name` attendance filter, the
-`student_name` bulk-logging body field, and the `name` field on student create and update. None may
-reach a log line, and the exception handler must not echo a request's query string.
+**No Student name in any log line, ever.** This is `INV-9`. ~~The four places~~ **The six places**
+a name arrives as free text are the autocomplete `query` parameter, the `student_name` attendance
+filter, the `student_name` bulk-logging body field, the `name` field on student create and update,
+and — **found by slice 5's review, not by this section** — the `search=` filter on the students
+list (`app/api/students.py`) and on the attendance summary (`app/api/attendance.py`), both
+documented "Filter by student name". None may reach a log line, and the exception handler must not
+echo a request's query string.
+
+Corrected 2026-09-10 rather than left standing: this list is what AC-5's sweep is written from, so
+an incomplete list here produced an incomplete enforcer. See delta 16.
 
 The rule is scoped to logs rather than to the whole system on purpose. `backup-db.sh` keeps the last
 seven `pg_dump`s, each a full dump including names, so a deleted Student's name already survives in
@@ -256,7 +263,7 @@ Verdicts are filled by `/verify-live`, per criterion. A task's verdict is the **
 | AC-2 | The three `authenticate_user` branches are distinguishable in the log while all three HTTP responses stay byte-identical | `test:` | US-2 | _pending_ |
 | AC-3 | A registration code refused for being used, revoked, expired or wrong-address emits a line naming which rule refused it | `test:` | US-1 | _pending_ |
 | AC-4 | New attendance refused on an inactive Class emits a denial line | `test:` | US-1 | _pending_ |
-| AC-5 | **`INV-9`:** no captured record contains a Student's name, across every route that handles one — autocomplete, attendance filter, bulk logging, create, update | `test:` | US-6, US-7 | _pending_ |
+| AC-5 | **`INV-9`:** no captured record contains a Student's name, across every route that handles one — autocomplete, attendance filter, bulk logging, create, update, **and the two `search=` filters** (students list, attendance summary), each on both the refused and the permitted path | `test:` | US-6, US-7 | _pending_ |
 | AC-6 | **`INV-9`:** a diff placing a name-bearing expression inside a logger call fails the gate, watched failing on a planted line and reverted | `gate:` drift-extra | US-7 | _pending_ |
 | AC-7 | Merge emits the count of attendance records moved; student delete emits the count destroyed; neither names anyone | `test:` | US-5, US-6 | _pending_ |
 | AC-8 | An unhandled exception emits an `ERROR` line with Teacher UUID, route and request id, **and** uvicorn's traceback is byte-identical to today's | `test:` | US-4, US-14 | _pending_ |
@@ -273,6 +280,7 @@ Verdicts are filled by `/verify-live`, per criterion. A task's verdict is the **
 | AC-19 | `REVIEW-DEBT.md` carries the retention confession, naming the absence of time-based erasure at this sink | `review-only` | US-12 | _pending_ |
 | AC-20 | ADR-0007 records the decision with its rejected alternatives | `review-only` | US-11 | _pending_ |
 | AC-21 | **`INV-5`:** a merge refused for crossing a Class boundary emits a denial line naming the rule, and names neither Student | `test:` | US-1, US-6 | _pending_ |
+| AC-22 | The log's vocabulary is closed: an `event`, `rule` or `reason` literal outside the known list fails the gate, watched failing on a planted value and reverted | `gate:` drift-extra | US-7 | _pending_ |
 
 ## Tracer Slices
 
@@ -285,8 +293,10 @@ Each cuts through to an observable log line and is demoable alone. Blocking orde
 3. **Errors with context.** AC-8.
 4. **Irreversible acts with counts, and the merge that was refused.** Merge and delete, plus
    `INV-5`'s cross-class refusal. AC-7, AC-21.
-5. **`INV-9`'s two enforcers.** The runtime assertion across every name-handling route, and the
-   drift check, each watched red first. AC-5, AC-6.
+5. **`INV-9`'s two enforcers, and the vocabulary.** The runtime assertion across every
+   name-handling route, and the drift check, each watched red first. AC-5, AC-6, and **AC-22**
+   — added 2026-09-10 by the Owner's decision, because `REVIEW-DEBT.md` had already argued that
+   two checks over the same call sites, written a week apart, is the seam to build once.
 6. **Deployment.** nginx `X-Request-ID`, the `db` logging block, the `jq` path in `logs.sh`.
    AC-11, AC-12, AC-16, AC-17.
 
@@ -549,3 +559,77 @@ its method are in `api/REVIEW-DEBT.md`, 2026-09-10.
     *Out of Scope* — "every INV-1 refusal is the `ForbiddenException` branch and is logged by
     AC-1" — by one site that previously escaped it. Details in `api/REVIEW-DEBT.md`,
     2026-09-10.
+
+**2026-09-10, slice 5.** Two, and the first is a hole the obvious version of AC-5 has.
+
+14. **AC-5 needs the PERMITTED path, not just the refused one — and the refused one alone would
+    have proved almost nothing.** The natural way to write "no line carries a Student's name" is
+    to drive each name-bearing route and inspect the output. Driven as the *owning* teacher, four
+    of the five routes emit **no line at all** (logging routine successful writes is this spec's
+    declined fourth family), so the assertion passes vacuously. Driven as a *refused* teacher, a
+    line appears — but `verify_class_ownership` raises **before** any code that handles the name
+    runs, so a service function logging `student_data.name` would never execute on that path.
+
+    Measured, not reasoned: a plant adding `log_event(logging.INFO, "student_create",
+    name=student.name)` to `create_student` leaves every denied-path assertion green. So AC-5 is
+    two sweeps over one route table — refused (a line exists; assert the name is not in it) and
+    permitted (the name-handling code runs; assert nothing captured carries it). The permitted
+    sweep asserts "no captured line carries the name" rather than "nothing was captured", which
+    is AC-5's own wording and which keeps it meaningful if a later slice decides one of those
+    routes should log something.
+
+    Six leaks were planted, one per route plus the `ERROR` line, each watched reddening exactly
+    the case that covers it — and note *which* case: the four service-level leaks redden the
+    **permitted** sweep, because that is the only direction that executes them. The refused
+    sweep's value is different and narrower: it is where a line exists at all, so it is what
+    fails if the handler starts echoing a query string. **AC-5's tests were green the moment they
+    were written** — slices 1-4 already comply — so the plants are the whole of their proof, and
+    that is stated in the test file rather than left for a reader to notice.
+
+    The route table reached **seven** entries, not five; delta 16 has why.
+
+15. **AC-6's gate took three designs, and the two that failed are the useful part of this
+    entry.** Each was defeated by review, by planting the leak rather than reading the code —
+    which is the only way any of this was found.
+
+    - **v1, awk over the diff's added lines.** Tracked paren depth from a logger call to catch a
+      name three lines below the opener. It worked when the whole call was new, and went
+      **clean** on the shape a real leak takes: one keyword line added to a call that already
+      exists, whose opening line is therefore not in the diff. Two independent reviews planted
+      exactly that and both got `clean`. Same defect as the `^` anchor that made an earlier
+      check match nothing, and as the baseline guard that scored a crashed tool as zero
+      problems — a gate reporting clean while doing nothing.
+    - **v2, a denylist of name-ish words** (`name|student_name|normalized_name|query|detail`).
+      Defeated in one line each by `search=`, `q=`, `who=student.full_name` and
+      `students=names`. A denylist of words cannot hold a rule about meaning.
+    - **v3, `scripts/log_lint.py`: `ast` over the FILE, and an allowlist of keywords.** Python's
+      parser gives every call's exact span, keyword names and literal values, so a multi-line
+      call is seen whole whether or not its opener was touched, and a `(` inside a string cannot
+      desynchronise anything. Keywords are checked against `ALLOWED_KEYWORDS`, so a keyword
+      nobody sanctioned fails **whatever it is called** — and `Student(name=...)`, which appears
+      throughout `app/`, is untouched because it is not a logger call. Twelve planted diffs:
+      eight that must fail, four negative controls that must stay clean. A file that cannot be
+      parsed is reported as a violation rather than skipped, because a gate that cannot read
+      must not answer "clean".
+
+    The diff still decides which calls are judged, so this stays a diff gate. What it reads to
+    judge them is the file at the **end of the range** — the index under `--cached`, which is
+    what the pre-commit hook judges, a commit under CI's resolved range, the working tree
+    otherwise.
+
+    **AC-6's wording — "a name-bearing expression inside a logger call" — is unchanged and is now
+    enforced more broadly than it says:** any unsanctioned keyword fails, not only one that looks
+    like a name. That is deliberate. The criterion describes the leak; the allowlist is the only
+    shape that cannot be renamed around.
+
+16. **The spec's own *Personal data* list was short by two routes, and AC-5 inherited the gap.**
+    That section said "the four places a name arrives as free text" and AC-5's sweep was written
+    from it. Slice 5's review found `search=` on the students list and on the attendance summary,
+    both `Query(None, description="Filter by student name ...")` — so a name arrives there exactly
+    as it does on the autocomplete query, and neither was being asserted. Both are in the route
+    table now, seven in total, and the section above is corrected in place with the count struck
+    through rather than quietly rewritten.
+
+    Worth stating plainly, because it is the argument for keeping the route table as **data** in
+    the test file rather than as five separate test functions: the gap was a missing row, and
+    closing it was one line per route.

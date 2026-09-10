@@ -1,8 +1,8 @@
 """The three event families a log line records: denials, errors, irreversible acts.
 
-Spec 0005's events, as opposed to its machinery -- the formatter, the request context and
-`LOG_LEVEL` are in `tests/test_logging.py`. Serves **AC-1, AC-2, AC-3, AC-4, AC-7, AC-8 and
-AC-21**, and is where slice 5's AC-5 and AC-6 belong.
+Spec 0005's events, as opposed to its machinery (`tests/test_logging.py`) or INV-9's
+cross-cutting property (`tests/test_logging_inv9.py`). Serves **AC-1, AC-2, AC-3, AC-4,
+AC-7, AC-8 and AC-21**.
 
 Split out of one file on 2026-09-10, before slice 4. **Each acceptance criterion is proven in
 exactly one file**, which is why AC-13 is wholly in the other one even though its route-level
@@ -13,17 +13,19 @@ Every assertion is something a person reading the container log could conclude.
 
 import json
 import traceback
-from collections.abc import AsyncGenerator, Awaitable, Callable
 from datetime import datetime, timedelta, timezone
-from typing import NoReturn
 
 import pytest
-import pytest_asyncio
-from httpx import ASGITransport, AsyncClient
 
-from app.main import app
 from app.services import attendance_service
-from tests.logging_helpers import assert_names_absent, capture_logs, objects, one_object
+from tests.logging_helpers import (
+    _raising,
+    assert_names_absent,
+    capture_logs,
+    non_reraising_client,  # noqa: F401 -- a fixture, resolved by NAME in this namespace
+    objects,
+    one_object,
+)
 
 # --- AC-1: an INV-1 denial is recorded, with who was refused and what refused them -----------
 
@@ -450,15 +452,6 @@ async def test_a_refusal_whose_message_contains_a_student_name_emits_nothing(
 # request in production.
 
 
-def _raising(exc: Exception) -> Callable[..., Awaitable[NoReturn]]:
-    """A stand-in for a service function that fails, raising the exception given."""
-
-    async def explode(*args: object, **kwargs: object) -> NoReturn:
-        raise exc
-
-    return explode
-
-
 @pytest.fixture
 def summary_route(test_class) -> str:
     """The route the AC-8 tests drive.
@@ -469,25 +462,6 @@ def summary_route(test_class) -> str:
     broke" case US-4 describes.
     """
     return f"/api/classes/{test_class.id}/attendance/summary"
-
-
-@pytest_asyncio.fixture
-async def non_reraising_client(client) -> AsyncGenerator[AsyncClient, None]:
-    """The same app, driven so a 500 comes back as a response instead of an exception.
-
-    A SECOND seam, and the spec's *Testing Decisions* names only one -- so it is declared there
-    too, as spec delta 8, rather than left as an undeclared extra. It exists because AC-8's two
-    halves cannot be observed through one flag: `raise_app_exceptions=True` (the `client`
-    fixture, httpx's default) surfaces the exception uvicorn would receive, which is what makes
-    the traceback assertion possible and is also what hides the response. This one shows what a
-    real caller gets.
-
-    Depends on `client` rather than replacing it, so `app.dependency_overrides[get_db]` is
-    already installed and torn down by the fixture that owns it.
-    """
-    transport = ASGITransport(app=app, raise_app_exceptions=False)
-    async with AsyncClient(transport=transport, base_url="http://test") as caller:
-        yield caller
 
 
 @pytest.mark.asyncio

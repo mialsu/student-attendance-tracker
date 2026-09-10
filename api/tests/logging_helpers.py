@@ -12,9 +12,15 @@ accumulator, detach in a finally.
 
 import json
 import logging
+from collections.abc import AsyncGenerator, Awaitable, Callable
 from contextlib import contextmanager
+from typing import NoReturn
+
+import pytest_asyncio
+from httpx import ASGITransport, AsyncClient
 
 from app.core.logging import LOGGER_NAME, JsonLineFormatter
+from app.main import app
 
 
 @contextmanager
@@ -77,3 +83,31 @@ def assert_names_absent(line: dict, *fragments: str) -> None:
     captured = json.dumps(line)
     for fragment in fragments:
         assert fragment not in captured, f"{fragment!r} reached the log line: {captured}"
+
+
+def _raising(exc: Exception) -> Callable[..., Awaitable[NoReturn]]:
+    """A stand-in for a service function that fails, raising the exception given."""
+
+    async def explode(*args: object, **kwargs: object) -> NoReturn:
+        raise exc
+
+    return explode
+
+
+@pytest_asyncio.fixture
+async def non_reraising_client(client) -> AsyncGenerator[AsyncClient, None]:
+    """The same app, driven so a 500 comes back as a response instead of an exception.
+
+    A SECOND seam, and the spec's *Testing Decisions* names only one -- so it is declared there
+    too, as spec delta 8, rather than left as an undeclared extra. It exists because AC-8's two
+    halves cannot be observed through one flag: `raise_app_exceptions=True` (the `client`
+    fixture, httpx's default) surfaces the exception uvicorn would receive, which is what makes
+    the traceback assertion possible and is also what hides the response. This one shows what a
+    real caller gets.
+
+    Depends on `client` rather than replacing it, so `app.dependency_overrides[get_db]` is
+    already installed and torn down by the fixture that owns it.
+    """
+    transport = ASGITransport(app=app, raise_app_exceptions=False)
+    async with AsyncClient(transport=transport, base_url="http://test") as caller:
+        yield caller
