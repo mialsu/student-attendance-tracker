@@ -259,28 +259,91 @@ Verdicts are filled by `/verify-live`, per criterion. A task's verdict is the **
 
 | # | Criterion | Proven by | Serves | Verdict |
 |---|---|---|---|---|
-| AC-1 | An `INV-1` denial emits exactly one `WARNING` line carrying Teacher UUID, route and request id | `test:` | US-1 | _pending_ |
-| AC-2 | The three `authenticate_user` branches are distinguishable in the log while all three HTTP responses stay byte-identical | `test:` | US-2 | _pending_ |
-| AC-3 | A registration code refused for being used, revoked, expired or wrong-address emits a line naming which rule refused it | `test:` | US-1 | _pending_ |
-| AC-4 | New attendance refused on an inactive Class emits a denial line | `test:` | US-1 | _pending_ |
-| AC-5 | **`INV-9`:** no captured record contains a Student's name, across every route that handles one — autocomplete, attendance filter, bulk logging, create, update, **and the two `search=` filters** (students list, attendance summary), each on both the refused and the permitted path | `test:` | US-6, US-7 | _pending_ |
-| AC-6 | **`INV-9`:** a diff placing a name-bearing expression inside a logger call fails the gate, watched failing on a planted line and reverted | `gate:` drift-extra | US-7 | _pending_ |
-| AC-7 | Merge emits the count of attendance records moved; student delete emits the count destroyed; neither names anyone | `test:` | US-5, US-6 | _pending_ |
-| AC-8 | An unhandled exception emits an `ERROR` line with Teacher UUID, route and request id, **and** uvicorn's traceback is byte-identical to today's | `test:` | US-4, US-14 | _pending_ |
-| AC-9 | With no `X-Request-ID` header a generated id appears in the line; with one supplied it is honoured verbatim | `test:` | US-3 | _pending_ |
-| AC-10 | With tracing off the `trace_id` field is **absent**, not zero-filled | `test:` | US-8, US-9 | _pending_ |
-| AC-11 | With tracing on the line's `trace_id` matches the trace the same request produced in Jaeger | `live:` | US-8 | _pending_ |
-| AC-12 | nginx forwards `$request_id` and a production log line carries the same id as its nginx access line | `live:` | US-3 | _pending_ |
-| AC-13 | Every emitted line is one valid JSON object, and a login attempt with an embedded newline in the email cannot produce a second line | `test:` | US-10 | _pending_ |
-| AC-14 | `LOG_LEVEL` changes the level and `conftest.py` still imports with it unset | `test:` | US-9 | _pending_ |
-| AC-15 | `app.middleware` is covered by an import-linter contract and `app.core` remains a leaf, watched failing on a planted upward import | `gate:` boundaries | — | _pending_ |
-| AC-16 | The `db` service's log is bounded in both compose files, confirmed on the VM after deploy | `live:` | US-13 | _pending_ |
-| AC-17 | `logs.sh` reads the new lines, with the documented `jq` path | `live:` | US-15 | _pending_ |
-| AC-18 | Both gate sets green on every commit: `just check` and `npm run check` | `gate:` | — | _pending_ |
-| AC-19 | `REVIEW-DEBT.md` carries the retention confession, naming the absence of time-based erasure at this sink | `review-only` | US-12 | _pending_ |
-| AC-20 | ADR-0007 records the decision with its rejected alternatives | `review-only` | US-11 | _pending_ |
-| AC-21 | **`INV-5`:** a merge refused for crossing a Class boundary emits a denial line naming the rule, and names neither Student | `test:` | US-1, US-6 | _pending_ |
-| AC-22 | The log's vocabulary is closed: an `event`, `rule` or `reason` literal outside the known list fails the gate, watched failing on a planted value and reverted | `gate:` drift-extra | US-7 | _pending_ |
+| AC-1 | An `INV-1` denial emits exactly one `WARNING` line carrying Teacher UUID, route and request id | `test:` | US-1 | **WORKS** |
+| AC-2 | The three `authenticate_user` branches are distinguishable in the log while all three HTTP responses stay byte-identical | `test:` | US-2 | **WORKS** ¹ |
+| AC-3 | A registration code refused for being used, revoked, expired or wrong-address emits a line naming which rule refused it | `test:` | US-1 | **WORKS** |
+| AC-4 | New attendance refused on an inactive Class emits a denial line | `test:` | US-1 | **WORKS** |
+| AC-5 | **`INV-9`:** no captured record contains a Student's name, across every route that handles one — autocomplete, attendance filter, bulk logging, create, update, **and the two `search=` filters** (students list, attendance summary), each on both the refused and the permitted path | `test:` | US-6, US-7 | **WORKS** |
+| AC-6 | **`INV-9`:** a diff placing a name-bearing expression inside a logger call fails the gate, watched failing on a planted line and reverted | `gate:` drift-extra | US-7 | **WORKS** |
+| AC-7 | Merge emits the count of attendance records moved; student delete emits the count destroyed; neither names anyone | `test:` | US-5, US-6 | **WORKS** |
+| AC-8 | An unhandled exception emits an `ERROR` line with Teacher UUID, route and request id, **and** uvicorn's traceback is byte-identical to today's | `test:` | US-4, US-14 | **WORKS** |
+| AC-9 | With no `X-Request-ID` header a generated id appears in the line; with one supplied it is honoured verbatim | `test:` | US-3 | **WORKS** |
+| AC-10 | With tracing off the `trace_id` field is **absent**, not zero-filled | `test:` | US-8, US-9 | **WORKS** |
+| AC-11 | With tracing on the line's `trace_id` matches the trace the same request produced in Jaeger | `live:` | US-8 | **BLOCKED** — slice 6 |
+| AC-12 | nginx forwards `$request_id` and a production log line carries the same id as its nginx access line | `live:` | US-3 | **BLOCKED** — slice 6 |
+| AC-13 | Every emitted line is one valid JSON object, and a login attempt with an embedded newline in the email cannot produce a second line | `test:` | US-10 | **WORKS** |
+| AC-14 | `LOG_LEVEL` changes the level and `conftest.py` still imports with it unset | `test:` | US-9 | **WORKS** ² |
+| AC-15 | `app.middleware` is covered by an import-linter contract and `app.core` remains a leaf, watched failing on a planted upward import | `gate:` boundaries | — | **WORKS** |
+| AC-16 | The `db` service's log is bounded in both compose files, confirmed on the VM after deploy | `live:` | US-13 | **BLOCKED** — slice 6 |
+| AC-17 | `logs.sh` reads the new lines, with the documented `jq` path | `live:` | US-15 | **BLOCKED** — slice 6 |
+| AC-18 | Both gate sets green on every commit: `just check` and `npm run check` | `gate:` | — | **WORKS** |
+| AC-19 | `REVIEW-DEBT.md` carries the retention confession, naming the absence of time-based erasure at this sink | `review-only` | US-12 | **WORKS** |
+| AC-20 | ADR-0007 records the decision with its rejected alternatives | `review-only` | US-11 | **WORKS** |
+| AC-21 | **`INV-5`:** a merge refused for crossing a Class boundary emits a denial line naming the rule, and names neither Student | `test:` | US-1, US-6 | **WORKS** |
+| AC-22 | The log's vocabulary is closed: an `event`, `rule` or `reason` literal outside the known list fails the gate, watched failing on a planted value and reverted | `gate:` drift-extra | US-7 | **WORKS** |
+
+## Verification — 2026-09-10, `/verify-live`
+
+Exercised against **real uvicorn** on a throwaway PostgreSQL (`live-verify-db`, port 5440,
+destroyed after — not the suite's 5439, so neither could drop the other's rows). Two teachers
+created through **signup with real registration codes**, then driven over HTTP with `httpx`;
+every request carried an `X-Request-ID` naming its step, so each captured line is attributable to
+the request that caused it. **24 JSON lines** came out of 49 steps. `LOG_LEVEL` and the boundary
+gate got their own runs.
+
+| # | What was exercised, and what came out |
+|---|---|
+| AC-1 | Teacher B read Teacher A's class → 403 and exactly one `WARNING` line: `rule=INV-1`, `status=403`, `teacher_id` = **B's** id (the refused teacher, not the owner), `route`, `request_id`. A's own read of the same class produced **no line**. |
+| AC-2 | All three branches live, three distinct reasons: `unknown_email`, `wrong_password`, `inactive_account`. Unknown-email and wrong-password bodies are **byte-identical** to each other. See note ¹ — the third is not, deliberately, and the criterion's wording overstates this. |
+| AC-3 | Four refusals, four labels: used / revoked / expired all `rule=INV-6`; wrong address `rule=INV-7`; an unknown code logs `reason=code_unknown` with **no `rule`**, which is right — a mistyped code breaks no invariant. |
+| AC-4 | The teacher closed her own class through `PUT /api/classes/{id}` (`active: false`), then logged attendance → 400, `rule=INV-3`, `reason=class_inactive`. |
+| AC-5 | `Kaarina Ylitalo` sent down **all seven** name-bearing routes, refused and permitted. Seven `INV-1` lines from the refused pass, **zero** lines from the permitted pass. Across all 24 captured lines, **none of the ten name fragments used anywhere in the exercise appears** — `Kaarina`, `Ylitalo`, `Liisa`, `Korhonen`, `Eino`, `Nieminen`, `Onni`, `Karjalainen`, `Helena`, `Salo`. Two duplicate-name refusals (400, with the name in `detail`) emitted nothing at all, which is the opt-in label doing its job. |
+| AC-6 | Twelve planted diffs against `scripts/log_lint.py`: eight leak shapes fail, four sanctioned shapes stay clean (including `Student(name=...)`, which is all over `app/`). A file that cannot be parsed is reported as a violation rather than skipped. |
+| AC-7 | `records_moved=4` — exactly the duplicate's four, not the target's new total of seven. `records_destroyed=7` — the three it owned plus the four just merged in, which is only knowable **before** the cascade, so the count demonstrably precedes the delete. Neither line names anyone. |
+| AC-8 | A real 500 landing after authentication *and* authorization (the table the route needs was renamed, so `users` and `classes` stayed intact). One `ERROR` line: `exception=ProgrammingError` — the **type**, never the message — plus teacher, route, request id. uvicorn's traceback followed, **60 frames**, chained and intact. Order confirmed live: JSON line, then uvicorn's access line, then the traceback — so the join is `request_id`, not proximity (delta 10). |
+| AC-9 | 23 of 24 lines carried the id supplied in the header, **verbatim**. The one request sent without the header produced a generated, uuid4-shaped id. |
+| AC-10 | With `OTEL_EXPORTER_OTLP_ENDPOINT` unset, **0 of 24** lines carry `trace_id`. Absent, not zero-filled. |
+| AC-13 | All 24 lines parse as exactly one JSON object each, and none contains an embedded newline. The forged-line attempt (`x@y.test\n{"event":"forged"}` as the email) was refused **422 by validation** — no line at all, and no `forged` event anywhere. Both mechanisms hold, as delta 5 records. |
+| AC-14 | A second run at `LOG_LEVEL=WARNING`: the `student_delete` **INFO act line vanished while the delete still returned 204**, and a login denial still appeared. Exactly one line captured. The suite runs with `LOG_LEVEL` unset (502 tests), which is the other half. See note ². |
+| AC-15 | `from app.api import handlers` planted in `app/core/logging.py` → three contracts BROKEN. `from app.api import auth` planted in `app/middleware/context.py` → `Middleware is transport plumbing` BROKEN, 4 kept 1 broken. Clean at 5/5 after restore. |
+| AC-18 | `just check-fast` green and the full suite **502 passed**; `npm run check` green in `client/` (40 e2e, including its own no-mouse walk). |
+| AC-19 | `api/REVIEW-DEBT.md`, 2026-09-09 — the sink rotates by size only and "erase after 90 days" is not expressible at it. |
+| AC-20 | `api/docs/adr/0007-personal-data-in-logs.md`, with **14** rejected alternatives, including the one this slice's gate exists to re-refuse. |
+| AC-21 | Same-teacher cross-Class merge → 400, `rule=INV-5`, `reason=cross_class_merge`. Cross-**teacher** duplicate → 403, `rule=INV-1`. Today's reorder, confirmed live rather than only in tests. |
+| AC-22 | An unknown `reason`, `rule="INV3"`, and a renamed `event` literal inside a multi-line call each fail the gate; known values re-added stay clean. |
+
+**Invariants attacked, not just exercised.** `INV-1` as a second real teacher on eight routes (all
+refused, by `verify_class_ownership`, and every refusal recorded); `INV-3` by logging attendance to
+a closed class; `INV-5` both ways; `INV-6` by replaying a used code, a revoked one and an expired
+one; `INV-7` by presenting one teacher's code from another's address; `INV-9` by pushing a name
+down every route that accepts one. **None went through.**
+
+**No surface, so no keyboard walk.** Slices 1–5 are backend-only and `DESIGN.md` does not exist in
+either repo, so there are no `A11Y-n` rows to prove and the drift gate's accessibility check stays
+inert by design. Stated rather than skipped silently. The client's own no-mouse e2e walk runs in
+`npm run check` and passed, but it proves `client/`, not this spec.
+
+**The four `live:` criteria are BLOCKED, not failing.** AC-11, AC-12, AC-16 and AC-17 need nginx
+config, a `db` logging block and `logs.sh` — none of which exists yet, because that is **slice 6**.
+They are not "unverified work"; they are unbuilt work, and calling them anything else would be the
+overclaim PRINCIPLES #10 exists to stop.
+
+**Task verdict: PARTIAL** — the worst criterion's verdict, and the worst is BLOCKED. **Slices 1–5
+are done: every criterion they own reads WORKS with evidence above.** Spec 0005 is not done until
+slice 6 lands and those four are exercised on the VM.
+
+¹ **AC-2's wording is wrong, and it always was** — recorded as delta 17 rather than dressed up as a
+pass. "All three HTTP responses stay byte-identical" is false: the inactive-account branch returns
+`Account is inactive. Please contact support.` where the other two return
+`Invalid email or password`. Two of three are byte-identical; the third differs **by design**, and
+the tests have encoded that difference since slice 2. What the criterion means, and what was
+proven, is that no branch's response was *changed* by the logging work. The different message is
+also a user-enumeration leak, which is a finding of its own — `api/REVIEW-DEBT.md`, 2026-09-10.
+
+² **AC-14 passes and the pass has a sharp edge**: `LOG_LEVEL=WARNING` silently switches off the
+irreversible-act record while leaving denials on, so US-5's "a record that a merge or a delete
+happened" is defeated by one environment variable. Production does not set `LOG_LEVEL`, so the
+default `INFO` applies today. Confessed — `api/REVIEW-DEBT.md`, 2026-09-10.
 
 ## Tracer Slices
 
@@ -633,3 +696,29 @@ its method are in `api/REVIEW-DEBT.md`, 2026-09-10.
     Worth stating plainly, because it is the argument for keeping the route table as **data** in
     the test file rather than as five separate test functions: the gap was a missing row, and
     closing it was one line per route.
+
+**2026-09-10, `/verify-live`.** One, and it corrects this document rather than the code.
+
+17. **AC-2's "all three HTTP responses stay byte-identical" is false, and was false when it was
+    written.** The live pass measured it: unknown-email and wrong-password return
+    `{"detail":"Invalid email or password"}` and are byte-identical to each other, but the
+    inactive-account branch returns `{"detail":"Account is inactive. Please contact support."}`.
+    Two of three, not three.
+
+    The difference is **deliberate and predates this spec** — `authenticate_user` has always had
+    three messages, and `tests/test_logging_events.py` has asserted the inactive one since slice
+    2. So the criterion was never falsifiable as written, and reading it literally would have
+    made a two-line message change look like a spec violation.
+
+    **What AC-2 means, and what is proven:** the three branches are distinguishable in the log
+    while **no branch's response was changed by the logging work**. That is the property the
+    spec's reasoning actually needs — "the distinction has to live in the log because it exists
+    nowhere else" — and it holds for the two branches that share a response.
+
+    **The third message is a user-enumeration leak, and that is a separate finding.** `Account is
+    inactive` tells an unauthenticated caller that the address is registered, and it is returned
+    **before** the password is verified, so no credential is needed to learn it. That contradicts
+    this spec's own stated rationale ("telling a stranger whether an address is registered is the
+    enumeration this app declines to answer"). Not spec 0005's to fix — it is an auth-path
+    decision with a usability side — so it is confessed in `api/REVIEW-DEBT.md` (2026-09-10) and
+    raised to the Owner.

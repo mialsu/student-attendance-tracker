@@ -6,6 +6,59 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 
 <!-- Newest first. -->
 
+## 2026-09-10 — `LOG_LEVEL=WARNING` silently switches off the irreversible-act record
+- **What:** found by `/verify-live`, not by a test. The merge and student-delete lines are `INFO`;
+  every denial and every error is `WARNING` or above. So setting `LOG_LEVEL=WARNING` keeps the
+  refusal record flowing while **the audit trail for destructive acts disappears**, and nothing
+  says so. Measured: at `WARNING` a delete returned 204 with no line at all, while a login denial
+  in the same run logged normally.
+- **Where:** `app/core/logging.py` — `resolve_level()` reads `LOG_LEVEL` from the environment with
+  `DEFAULT_LEVEL = logging.INFO`; the act lines are emitted at `logging.INFO` from
+  `student_service.merge_students` and `delete_student`.
+- **What green tests/gates did NOT prove:** `tests/test_logging.py` asserts `LOG_LEVEL` changes the
+  level, which is AC-14 and is correct. No test asks what is *lost* at each level, because the
+  criterion was written about the mechanism rather than about the consequence.
+- **Why this is not a bug today:** production sets no `LOG_LEVEL` — not in `deployment/production/`
+  and not in either compose file — so the default `INFO` applies and both act lines are recorded.
+  The hazard is that turning the log down is an obvious, innocuous-looking thing to do to a chatty
+  service, and it costs exactly the record US-5 asked for.
+- **Disposition:** **open, and the cheap fix is a line of documentation rather than code** —
+  `deployment/README.md` and `.env.example` should say that `LOG_LEVEL` above `INFO` drops the
+  merge/delete record. Emitting the acts at `WARNING` instead is the other option and is worse: it
+  would file a successful, intended operation under the same level as a refusal. Slice 6 touches
+  `deployment/`, so it is the natural place to write the note.
+
+## 2026-09-10 — the inactive-account login message tells a stranger the address is registered
+- **What:** found by `/verify-live` while measuring AC-2. `authenticate_user` returns three
+  messages for three branches, and the third is distinguishable from outside:
+  - unknown email -> `{"detail":"Invalid email or password"}`
+  - wrong password -> `{"detail":"Invalid email or password"}`  (byte-identical, by design)
+  - **inactive account** -> `{"detail":"Account is inactive. Please contact support."}`
+
+  The inactive check runs **before** `verify_password`, so an unauthenticated caller learns that an
+  address exists and is deactivated **without presenting a credential**. That is user enumeration,
+  and it contradicts spec 0005's own stated rationale for the other two being identical: "telling a
+  stranger whether an address is registered is the enumeration this app declines to answer".
+- **Where:** `app/services/auth_service.py` — `authenticate_user`, the `if not user.active` branch
+  above the password check.
+- **What green tests/gates did NOT prove:** `tests/test_logging_events.py::test_an_inactive_account_is_the_third_distinguishable_branch`
+  asserts this exact message, so the suite *locks the leak in*. It was written to prove the branch
+  is distinguishable in the log, and the response assertion came along with it.
+- **Scale, honestly:** this app has **one** production teacher and signup requires a
+  single-use, 24-hour, email-restricted registration code (INV-6, INV-7), so there is no
+  self-service population to enumerate. nginx rate-limits the auth path at 5 r/m. The finding is
+  real and its exploitability here is close to nil — which is why it is a ledger entry rather than
+  a fix jammed into a logging slice.
+- **Why it was not fixed here:** returning `Invalid email or password` for an inactive account
+  removes the leak and also removes the only hint a real deactivated teacher gets about why she
+  cannot log in. That is a product trade — the Owner decides, and `/audit`'s 2026-09-02 threat
+  model (the attacker is a logged-in teacher probing other teachers' rows) did not rank
+  unauthenticated enumeration.
+- **Disposition:** **open, for the Owner.** Either unify the message and let the teacher find out
+  by contacting the school, or accept it and record why. Spec 0005 delta 17 carries the same
+  finding from the criterion's side.
+
+
 ## 2026-09-10 — INV-9's gate cannot see through a `**kwargs` expansion, and its allowlist must be widened by hand
 - **What:** `scripts/log_lint.py` checks logger-call keywords against `ALLOWED_KEYWORDS` and
   literal `event`/`rule`/`reason` values against three known sets. Two things it cannot do:
