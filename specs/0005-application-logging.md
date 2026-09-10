@@ -488,3 +488,56 @@ its method are in `api/REVIEW-DEBT.md`, 2026-09-10.
    them *are* mutually byte-identical — unknown-email and wrong-password, which is the enumeration
    defence and the reason the log is the only place the distinction can live. The inactive-account
    branch keeps its own distinct message, as it did before this slice. Both facts are asserted.
+
+**2026-09-10, slice 4.** Two, and the first is a naming decision no earlier slice had to make.
+
+11. **The third event family has two `event` tokens, not one.** Slice 1 chose `denial` and slice 3
+    chose `error`, each one token for one family, and neither needed recording because neither had
+    a choice to make. The irreversible acts do: they are one family in prose and two acts in fact,
+    so the lines read `"event": "merge"` and `"event": "student_delete"` rather than a single
+    `irreversible` token with the act in a field.
+
+    The alternative mirrors the denial shape more closely — `denial` + `reason=unknown_email` is
+    exactly family + branch — and it was rejected for two reasons. `reason` exists on a denial
+    because the *response* is deliberately uniform and the log is the only place the distinction
+    can live; nothing hides the difference between a merge and a delete, which are different
+    routes with different fields. And a second closed vocabulary is already owed: `api/REVIEW-DEBT.md`
+    (2026-09-10) records that `reason` and `rule` have no enforcer and pins the fix to slice 5, so
+    adding an `act` vocabulary now would be a third string nothing checks. **Slice 5's check should
+    cover `event` as well as `reason` and `rule`** — the two act tokens are part of what it closes
+    over.
+
+12. **The merge count came from `rowcount` as predicted, and that is now measured rather than
+    assumed.** *Where the calls live* says the bulk `update`'s result carries the number of
+    attendance records moved. It does, through SQLAlchemy's asyncpg dialect:
+    `test_a_merge_records_the_number_of_attendance_records_it_moved` moves 4 of the 7 records
+    across the two Students, so a line reporting the target's new total (7) rather than the
+    number that moved (4) fails it. (This paragraph first said "4 of 6" and named 6 as the
+    table's total; 3 + 4 is 7, and the review caught it. The assertion always discriminated;
+    the arithmetic beside it did not.)
+
+    The delete count cannot come from anywhere so cheap — it is one added `SELECT count(*)`, taken
+    before `db.delete`, because after the commit the cascade has destroyed the rows it would count.
+    `class_id` is captured on the same line for a related reason: the ORM object is expired by the
+    delete, so reading `student.class_id` after the commit would refresh a row that no longer
+    exists. Neither cost is covered by a ratchet — `tests/test_query_budget.py` holds ceilings for
+    four **read** endpoints and none for a write path — which is confessed rather than left to be
+    discovered.
+
+13. **AC-21's label reaches one shape the criterion does not describe, and it is the wrong rule
+    for that shape.** AC-21 reads "a merge refused for **crossing a Class boundary**". The
+    label sits on the raise site of `merge_students`' same-Class comparison, and that
+    comparison runs **before** `verify_class_ownership` on the duplicate's Class — so a merge
+    reaching for **another teacher's** Student is refused there too, and logged as `rule=INV-5`
+    with no `INV-1` line written at all.
+
+    The refusal is intact; the attribution is not, which works directly against US-1's "only
+    the app knows which *rule* refused an authenticated Teacher". Established by running it,
+    not by reading the order: status 400, one line, `rule=INV-5`, `reason=cross_class_merge`.
+
+    **Not fixed here, and the reason is a boundary rather than effort.** The fix is to check
+    the duplicate's ownership before comparing Classes, which turns that 400 into a 403 — an
+    observable response change no acceptance criterion asks for, on the authorization path
+    spec 0003 consolidated. So it is confessed in `api/REVIEW-DEBT.md` (2026-09-10) and pinned
+    by `test_another_teachers_student_as_the_duplicate_is_logged_as_inv_5_not_inv_1`, which
+    fails the day someone reorders the checks and points at the decision.

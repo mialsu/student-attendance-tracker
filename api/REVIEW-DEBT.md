@@ -6,6 +6,57 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 
 <!-- Newest first. -->
 
+## 2026-09-10 — a cross-teacher merge is refused as INV-5 when the violation is INV-1's
+- **What:** spec 0005 slice 4 labelled `merge_students`' same-Class refusal `rule="INV-5"` so it
+  reaches the log (AC-21). That comparison runs **before**
+  `class_service.verify_class_ownership` is called on the *duplicate's* Class, so a teacher
+  reaching for **another teacher's** Student as the merge source is refused by the Class
+  comparison and logged as an `INV-5` violation. No `INV-1` line is written for it at all.
+- **Where:** `app/services/student_service.py` — `merge_students`, the same-Class comparison and
+  the `verify_class_ownership` call five lines below it.
+- **The enforcement is intact; the record is wrong.** Measured rather than reasoned about: the
+  request returns **400**, the merge does not happen, nothing moves, and exactly one line comes
+  out carrying `rule=INV-5`, `reason=cross_class_merge`. INV-1 still refuses the same request
+  through the *target's* ownership check whenever the target is another teacher's
+  (`tests/test_authorization.py::test_other_teacher_cannot_merge_another_teachers_students`
+  covers that side). What is broken is which rule the log names for the duplicate side.
+- **What green tests/gates did NOT prove:** nothing covered the duplicate-side denial before
+  this slice — the refusal was silent, so there was no attribution to get wrong.
+  `tests/test_logging_events.py::test_another_teachers_student_as_the_duplicate_is_logged_as_inv_5_not_inv_1`
+  now pins the current behaviour, so a reorder fails it deliberately rather than silently
+  changing what the log says.
+- **Why it was not fixed here:** the fix is to move `verify_class_ownership` above the Class
+  comparison, which turns that 400 into a 403. That is an observable response change on the
+  authorization path spec 0003 consolidated, and no acceptance criterion in spec 0005 asks for
+  it — AC-21 asks only that a cross-Class refusal be logged. A logging slice changing an
+  authorization response code is the Owner's call, not a build decision taken in passing
+  (PRINCIPLES #8). The client does not branch on this status (`client/src/api/students.ts`
+  posts and lets the error surface generically), so the cost of the reorder is low; the
+  decision is still not mine.
+- **Disposition:** **open, and it is a decision for the Owner** — reorder the two checks so the
+  line says `INV-1`, or accept that `rule=INV-5` on this route means "the two Students were not
+  in one Class, for whichever reason". Recorded in spec 0005's delta 13 and in `INVARIANTS.md`'s
+  INV-5 row.
+
+## 2026-09-10 — the two irreversible-act statements sit on a write path no ratchet watches
+- **What:** slice 4 added one `SELECT count(*)` to the student-delete path
+  (`count_attendance_for_student`, called before `db.delete` because the cascade destroys the
+  rows the count needs). The merge path added none — the bulk `UPDATE`'s `rowcount` was already
+  there and was being discarded.
+- **Where:** `app/services/student_service.py` — `delete_student`.
+- **What green tests/gates did NOT prove:** `tests/test_query_budget.py` holds statement
+  ceilings for **four read endpoints** — students list, autocomplete, attendance list,
+  attendance summary — and **none for any write path**. So this +1 is unmeasured by any gate,
+  and so is the next one somebody adds to a mutation. The N+1 loops that file was built for were
+  all on read paths, which is why the gap was never noticed.
+- **Why it was not fixed here:** a write-path budget needs a fixture shape the file does not
+  have — a mutation is not idempotent, so the count has to be taken against freshly built rows
+  per parametrisation rather than against the shared `populated_class`. That is its own change
+  and it would arrive untested by anything but itself.
+- **Disposition:** **open**, unpinned to a slice. Small and worth doing before the next feature
+  touches a mutation; it is not spec 0005's work.
+
+
 ## 2026-09-10 — a Student's name can still reach the container log, by traceback
 - **What:** found by slice 3's live exercise against real uvicorn, not by a test. ADR-0007's rule
   is scoped to **log lines**, and slice 3 honours it — the `ERROR` line carries
@@ -91,7 +142,13 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 - **What:** spec 0005 slice 2 gives every denial line a `reason` — `unknown_email`,
   `wrong_password`, `inactive_account`, `code_used`, `code_revoked`, `code_expired`,
   `code_wrong_email`, `code_unknown`, `class_inactive` — and the `rule` beside it. Both are plain
-  strings passed at the raise site. **Nothing checks the vocabulary.** A later denial written as
+  strings passed at the raise site. **Nothing checks the vocabulary.**
+
+  **Updated 2026-09-10, slice 4:** the gap now covers a third field and two more values.
+  `reason="cross_class_merge"` and `rule="INV-5"` joined the list, and the `event` name itself
+  became a vocabulary rather than a constant — `denial`, `error`, and slice 4's two act tokens
+  `merge` and `student_delete` (spec 0005 delta 11). Whatever slice 5 builds must close over
+  `event` as well as `reason` and `rule`, or this entry outlives it and should say so. A later denial written as
   `reason="inactive-class"` or `rule="INV3"` would log happily, and the grep a reader relies on
   (`rule=INV-6` to count real INV-6 refusals) would quietly miss it.
 - **Where:** `app/core/exceptions.py` (`BadRequestException.rule` / `.reason`),

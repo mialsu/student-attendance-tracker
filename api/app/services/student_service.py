@@ -1,14 +1,17 @@
 """Student service - Business logic for student management."""
 
+import logging
+from typing import Any, cast
 from uuid import UUID
 
-from sqlalchemy import and_, func, select
+from sqlalchemy import CursorResult, and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import (
     BadRequestException,
     NotFoundError,
 )
+from app.core.logging import log_event
 from app.models.attendance import AttendanceRecord
 from app.models.student import Student
 from app.models.user import User
@@ -34,6 +37,29 @@ def normalize_name(name: str) -> str:
         "  alice  cooper  " -> "Alice Cooper"
     """
     return " ".join(word.capitalize() for word in name.strip().split())
+
+
+async def count_attendance_for_student(db: AsyncSession, student_id: UUID) -> int:
+    """
+    Count the attendance records belonging to one student.
+
+    Four call sites needed this identical query -- three to fill `total_attendance` on a
+    response, and one (`delete_student`) to record how many records a cascade is about to
+    destroy. A fourth copy is a divergence waiting for a bug, so it lives here once.
+
+    Args:
+        db: Database session
+        student_id: Student UUID
+
+    Returns:
+        The number of attendance records, 0 when the student has none.
+    """
+    result = await db.execute(
+        select(func.count(AttendanceRecord.id)).where(
+            AttendanceRecord.student_id == student_id
+        )
+    )
+    return result.scalar() or 0
 
 
 async def get_or_create_student(
@@ -125,12 +151,7 @@ async def get_student_by_id(
     await class_service.verify_class_ownership(db, student.class_id, teacher)
 
     # Get total attendance count
-    count_result = await db.execute(
-        select(func.count(AttendanceRecord.id)).where(
-            AttendanceRecord.student_id == student_id
-        )
-    )
-    total_count = count_result.scalar() or 0
+    total_count = await count_attendance_for_student(db, student_id)
     setattr(student, "total_attendance", total_count)
 
     return student
@@ -341,12 +362,7 @@ async def update_student(
     await db.refresh(student)
 
     # Get total attendance count
-    count_result = await db.execute(
-        select(func.count(AttendanceRecord.id)).where(
-            AttendanceRecord.student_id == student_id
-        )
-    )
-    total_count = count_result.scalar() or 0
+    total_count = await count_attendance_for_student(db, student_id)
     setattr(student, "total_attendance", total_count)
 
     return student
@@ -359,6 +375,11 @@ async def delete_student(
 ) -> None:
     """
     Delete a student and all associated attendance records (cascade).
+
+    Irreversible, by decision: `CONTEXT.md` calls this app a tally sheet and the school holds
+    the credit. Emits one `INFO` log line after the commit carrying the student and class ids
+    and the number of attendance records the cascade destroyed -- ids and counts only, never
+    the name (ADR-0007, spec 0005 AC-7).
 
     Args:
         db: Database session
@@ -381,9 +402,29 @@ async def delete_student(
     # Verify class ownership
     await class_service.verify_class_ownership(db, student.class_id, teacher)
 
+    # The count and the class id are read HERE, and both have to be. After the commit the
+    # cascade has taken the attendance rows, so there is nothing left to count; and `student`
+    # is expired by the delete, so reading `student.class_id` afterwards would refresh a row
+    # that no longer exists. One extra statement, and it buys the only number that answers
+    # "how much did that destroy" (spec 0005, AC-7).
+    class_id = student.class_id
+    records_destroyed = await count_attendance_for_student(db, student_id)
+
     # Delete student (cascade will delete attendance records)
     await db.delete(student)
     await db.commit()
+
+    # Logged AFTER the commit, so the line records an act that happened rather than one that
+    # was attempted. Ids and a count, never the name: US-6 is the Student's own story --
+    # deletion means what `CONTEXT.md` says it means, so the record of the deletion must not
+    # become the copy of the name that outlives it (ADR-0007).
+    log_event(
+        logging.INFO,
+        "student_delete",
+        student_id=str(student_id),
+        class_id=str(class_id),
+        records_destroyed=records_destroyed,
+    )
 
 
 async def get_autocomplete_suggestions(
@@ -463,16 +504,22 @@ async def merge_students(
     """
     Merge duplicate student into target student.
 
+    Irreversible: the duplicate is destroyed and the attendance moves. Emits one `INFO` log
+    line after the commit carrying both student ids, the class id and the number of records
+    moved -- ids and counts only, never a name (ADR-0007, spec 0005 AC-7). A merge refused for
+    crossing a Class boundary emits a `WARNING` denial line naming `INV-5` instead (AC-21).
+
     Steps:
     1. Fetch both students, verify ownership and same class
     2. Validate: cannot merge same student, must be same class
     3. Transfer all attendance records: UPDATE attendance_records
        SET student_id = target_student_id
-       WHERE student_id = duplicate_student_id
+       WHERE student_id = duplicate_student_id,
+       keeping the statement's `rowcount` as the number of records moved
     4. Merge course credit: target.course_credit_received =
        target.course_credit_received OR duplicate.course_credit_received
     5. Delete duplicate student: await db.delete(duplicate_student)
-    6. Commit transaction and return updated target student
+    6. Commit transaction, log the act, and return updated target student
 
     Args:
         db: Database session
@@ -515,7 +562,15 @@ async def merge_students(
 
     # Verify both students are in the same class
     if target_student.class_id != duplicate_student.class_id:
-        raise BadRequestException("Cannot merge students from different classes")
+        # INV-5's one enforcement site, and the refusal labels itself so that it reaches the
+        # log (spec 0005, AC-21). It was the one silent refusal on the wrong side of US-1's
+        # narrowing: an invariant violation going unrecorded while a login typo was recorded.
+        # The message names neither Student, and `detail` is never logged from any exception.
+        raise BadRequestException(
+            "Cannot merge students from different classes",
+            rule="INV-5",
+            reason="cross_class_merge",
+        )
 
     # Verify ownership of duplicate student's class (should be same, but explicit check)
     await class_service.verify_class_ownership(db, duplicate_student.class_id, teacher)
@@ -529,7 +584,19 @@ async def merge_students(
         .where(AttendanceRecord.student_id == duplicate_student_id)
         .values(student_id=target_student_id)
     )
-    await db.execute(update_stmt)
+    # The count that matters, and it costs nothing: the bulk UPDATE already reports how many
+    # rows it moved. Spec 0005 names this function for exactly that reason -- the number was
+    # being discarded, and it is the one that answers "was that the pair I meant". Read before
+    # the commit because the result is consumed here; logged after it (below).
+    #
+    # The cast is a real narrowing, not a silenced error: `AsyncSession.execute` is typed
+    # `Result[Any]`, which has no `rowcount`, but a DML statement always returns a
+    # `CursorResult` -- so the type is lost by the async wrapper's signature rather than wrong
+    # here. A cast rather than a type suppression, because mypy still checks the attribute
+    # against the narrowed type, where a suppression would check nothing and would owe a
+    # confession of its own.
+    update_result = cast("CursorResult[Any]", await db.execute(update_stmt))
+    records_moved = update_result.rowcount
 
     # Merge course credit (OR logic)
     if duplicate_student.course_credit_received:
@@ -542,13 +609,21 @@ async def merge_students(
     await db.commit()
     await db.refresh(target_student)
 
-    # Get updated total attendance count
-    count_result = await db.execute(
-        select(func.count(AttendanceRecord.id)).where(
-            AttendanceRecord.student_id == target_student_id
-        )
+    # Logged AFTER the commit: a merge line is a record of an irreversible act, so it must not
+    # appear for one that rolled back. Ids and counts only -- both Students are named right up
+    # to this moment and neither name goes on the line (ADR-0007). `duplicate_student_id` is
+    # the parameter rather than the ORM object's attribute, which is now deleted.
+    log_event(
+        logging.INFO,
+        "merge",
+        target_student_id=str(target_student_id),
+        duplicate_student_id=str(duplicate_student_id),
+        class_id=str(target_student.class_id),
+        records_moved=records_moved,
     )
-    total_count = count_result.scalar() or 0
+
+    # Get updated total attendance count
+    total_count = await count_attendance_for_student(db, target_student_id)
     setattr(target_student, "total_attendance", total_count)
 
     return target_student

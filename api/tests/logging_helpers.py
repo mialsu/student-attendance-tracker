@@ -60,3 +60,20 @@ def objects(lines: list[str], expected: int) -> list[dict]:
     for line in lines:
         assert "\n" not in line, f"a single record produced more than one line: {line!r}"
     return [json.loads(line) for line in lines]
+
+
+def assert_names_absent(line: dict, *fragments: str) -> None:
+    """Assert no fragment of a person's name appears anywhere in a line.
+
+    ADR-0007's rule, as an assertion: a log line identifies people by opaque id. Checked
+    against the SERIALIZED line rather than field by field, so a name arriving in a field
+    nobody thought to look at still fails.
+
+    Args:
+        line: One parsed log line, from `one_object` or `objects`.
+        *fragments: Name parts that must not appear. Pass both halves of a name -- a line
+            carrying only the surname is still a line carrying a name.
+    """
+    captured = json.dumps(line)
+    for fragment in fragments:
+        assert fragment not in captured, f"{fragment!r} reached the log line: {captured}"
