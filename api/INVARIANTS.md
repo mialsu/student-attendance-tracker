@@ -41,6 +41,18 @@ Referenced from three places, which is what makes these load-bearing rather than
 
 The drift gate fails any new `INV-` row whose `Enforced by` cell is empty.
 
+**This file assigns the numbers. A spec proposes an invariant; it does not reserve an id.** Take
+the next free number when you write the row, not when you write the spec — and read the table
+above rather than the last spec you happened to open.
+
+The rule exists because the alternative was tried and failed twice. `specs/0004-shared-classes.md`
+(not built) and `specs/0005-application-logging.md` both claimed `INV-9`, for unrelated rules, and
+the collision went unnoticed through both specs' reviews because neither number existed here yet.
+The Owner settled it on 2026-09-10 — spec 0005 takes `INV-9`, since a number belongs to the rule
+that will have an enforcer — and spec 0004's is now deliberately unnumbered until it is built. The
+same shape had already cost the project once: ADR-0005 took the number spec 0004 had reserved for
+the `class_teachers` decision, which the root `CLAUDE.md` records.
+
 ## Deliberately not invariants
 
 Recorded so a later session does not re-litigate them or promote them by accident. Each was put to
