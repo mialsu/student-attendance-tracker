@@ -3,7 +3,7 @@
 > Shaped with the Owner on 2026-09-09 (`/grill-with-docs` → `/to-spec`), eleven decisions, one
 > seam. Weight: **Standard**.
 >
-> **Invariants touched:** `INV-1`, `INV-3`, `INV-6`, `INV-7`, and **`INV-9` is created here**.
+> **Invariants touched:** `INV-1`, `INV-3`, `INV-5`, `INV-6`, `INV-7`, and **`INV-9` is created here**.
 >
 > **`INV-9`'s row lands with its enforcer, in slice 5 — not now.** `drift-check.sh` check 7 refuses
 > an `INV-` row whose fifth field names no enforcer, but it matches *textually*: a row naming a test
@@ -66,9 +66,17 @@ applies harder to logs than to spans.
 
 ## User Stories
 
-1. As the Owner operating the app, I want every refused request recorded durably, so that an
-   `INV-1` denial — which no legitimate use of a one-Teacher app can produce — is visible after the
-   fact instead of vanishing.
+1. As the Owner operating the app, I want every refusal **my application decided** recorded
+   durably — a rule refusing a request, not a caller turned away at the door — so that an `INV-1`
+   denial, which no legitimate use of a one-Teacher app can produce, is visible after the fact
+   instead of vanishing.
+
+   *Narrowed 2026-09-10 by the Owner, from "every refused request".* The line is **what nginx
+   cannot interpret**: `deployment/production/nginx.conf:14-18` already logs every request's IP,
+   method, path, status and time, so "someone was refused" is recorded whatever this app does.
+   What nginx cannot say is *which rule* refused an authenticated Teacher — and that is the whole
+   of what these lines add. The measurement that forced the narrowing is in `api/REVIEW-DEBT.md`,
+   2026-09-10.
 2. As the Owner, I want to tell a mistyped password from someone working through addresses, so that
    I can respond proportionately rather than guess.
 3. As the Owner, I want a log line joinable to nginx's access line, so that I can see how many
@@ -264,6 +272,7 @@ Verdicts are filled by `/verify-live`, per criterion. A task's verdict is the **
 | AC-18 | Both gate sets green on every commit: `just check` and `npm run check` | `gate:` | — | _pending_ |
 | AC-19 | `REVIEW-DEBT.md` carries the retention confession, naming the absence of time-based erasure at this sink | `review-only` | US-12 | _pending_ |
 | AC-20 | ADR-0007 records the decision with its rejected alternatives | `review-only` | US-11 | _pending_ |
+| AC-21 | **`INV-5`:** a merge refused for crossing a Class boundary emits a denial line naming the rule, and names neither Student | `test:` | US-1, US-6 | _pending_ |
 
 ## Tracer Slices
 
@@ -274,7 +283,8 @@ Each cuts through to an observable log line and is demoable alone. Blocking orde
    wrong Teacher, see one JSON line with the ids. Serves AC-1, AC-9, AC-10, AC-13, AC-14, AC-15.
 2. **The remaining denials.** Auth branches, registration codes, inactive Class. AC-2, AC-3, AC-4.
 3. **Errors with context.** AC-8.
-4. **Irreversible acts with counts.** Merge and delete. AC-7.
+4. **Irreversible acts with counts, and the merge that was refused.** Merge and delete, plus
+   `INV-5`'s cross-class refusal. AC-7, AC-21.
 5. **`INV-9`'s two enforcers.** The runtime assertion across every name-handling route, and the
    drift check, each watched red first. AC-5, AC-6.
 6. **Deployment.** nginx `X-Request-ID`, the `db` logging block, the `jq` path in `logs.sh`.
@@ -293,6 +303,18 @@ purpose: everything provable without a deploy is proven first.
 - **Logging routine successful writes.** Class and student create/update, attendance logged, course
   credit toggled. The Owner chose three event families and this is the fourth, declined.
 - **Rebuilding an access log.** nginx already logs every request.
+- **The token-path refusals** — the eight in `app/dependencies.py` and the six in `app/api/auth.py`'s
+  refresh handler. A caller presenting a missing, malformed, expired, revoked or wrong-type token
+  is turned away at the door, and nginx's access log already records the attempt with its IP,
+  path, status and time. What an app line would add is *which* of the checks refused, which on a
+  one-Teacher app is detail behind a fact nginx already gives you. Declared out of scope
+  2026-09-10 rather than left as an undeclared gap; a 401 storm is visible in nginx today.
+- **The `NotFoundError` refusals.** A missing row is not a rule refusing anything, and this
+  costs no `INV-1` signal — which is worth stating, because `class_service.verify_class_ownership`
+  raises both. It reports a Class's **absence before its ownership**, deliberately, so that a 404
+  never becomes a 403 and no Teacher learns a class id exists. The consequence for logging is
+  clean: every INV-1 refusal is the `ForbiddenException` branch and is logged by AC-1, while the
+  `NotFoundError` branch means the row genuinely is not there.
 - **Reformatting uvicorn's output**, and touching its access log at all.
 - **Alerting.** Nothing watches these lines and nothing notifies anyone. A log is a record, not a
   monitor, and `setup-ssl-monitoring.sh`'s stance on external services still holds.
@@ -397,6 +419,19 @@ See `api/REVIEW-DEBT.md`, 2026-09-09.
    a **Student's name** into the message, so a handler that logged every `BadRequestException` —
    or that logged `detail` — would break ADR-0007 with every other test still green. Asserted:
    `test_a_refusal_whose_message_contains_a_student_name_emits_nothing`.
+
+**Scope decision, 2026-09-10, by the Owner.** US-1 said "every refused request recorded
+durably". With slice 2 landed that was **10 of 46** refusal raise sites in `app/`, and the
+difference was declared nowhere — so US-1 has been narrowed rather than left to be over-read, and
+the line is drawn where it can be defended: **the app logs what nginx cannot interpret.** nginx
+records that someone was refused, from where, and how often; only the app knows which *rule*
+refused an authenticated Teacher.
+
+Three consequences, all now in the text above: US-1 is reworded; the 14 token-path refusals and
+the 12 `NotFoundError`s are explicit non-goals with their reasons; and **`INV-5`'s cross-class
+merge refusal moves into slice 4 as AC-21** — it was the one silent site on the wrong side of the
+line, an invariant refusal going unrecorded while a login typo was recorded. The measurement and
+its method are in `api/REVIEW-DEBT.md`, 2026-09-10.
 
 7. **`authenticate_user`'s lines carry no `status`.** Slice 1's handler-emitted lines do, because
    a handler legitimately knows the response. A service asserting what its refusal will become

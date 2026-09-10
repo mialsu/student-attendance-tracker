@@ -35,8 +35,19 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 - **Why it was not fixed here:** it is outside slice 2's ACs, and widening a slice to match a user
   story nobody re-scoped is *silent scope-filling*. The Owner decides whether this becomes a
   seventh slice, a narrowed US-1, or an explicit non-goal.
-- **Disposition:** **open, needs the Owner.** Raised at the end of the 2026-09-10 session rather
-  than left in the ledger alone.
+- **Disposition:** **decided by the Owner, 2026-09-10 — and the decision is a line, not a list.**
+  *The app logs what nginx cannot interpret.* nginx records that someone was refused, from where,
+  and how often; only the app knows which rule refused an authenticated Teacher. So:
+  **`INV-5`'s cross-class merge refusal moves into slice 4** as spec 0005's new **AC-21** (it was
+  the one silent site on the wrong side of that line); the **14 token-path refusals** and the
+  **12 `NotFoundError`s** become explicit non-goals in the spec, with their reasons; and **US-1 is
+  reworded** from "every refused request" to every refusal the application itself decided.
+  This entry stays in the ledger as the measurement that forced the narrowing.
+
+  One thing checked while writing it up, because the first draft got it backwards: declaring the
+  `NotFoundError`s out of scope costs **no** `INV-1` signal. `verify_class_ownership` raises both,
+  but it reports a Class's absence *before* its ownership — deliberately, so a 404 never becomes a
+  403 — so every INV-1 refusal is the `ForbiddenException` branch that AC-1 already logs.
 
 ## 2026-09-10 — the `reason` vocabulary on a denial line has no enforcer
 - **What:** spec 0005 slice 2 gives every denial line a `reason` — `unknown_email`,
