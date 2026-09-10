@@ -23,6 +23,7 @@ import { format } from 'date-fns';
 import { fi } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
 import { useDebounce } from '@/hooks/useDebounce';
+import { QueryErrorState } from '@/components/QueryErrorState';
 import type { AttendanceSummary } from '@/api/types';
 
 interface StudentLogsProps {
@@ -100,7 +101,14 @@ const StudentLogs = ({ classId }: StudentLogsProps) => {
   const skip = (currentPage - 1) * ITEMS_PER_PAGE;
 
   // Fetch attendance summary with search, pagination, and sorting
-  const { data: paginatedResponse, isLoading } = useAttendanceSummary(classId, {
+  // `error` was dropped here, so a failed request said "Ei opiskelijoita vielä" about a register
+  // that holds thirty. DESIGN.md §3, spec 0006.
+  const {
+    data: paginatedResponse,
+    isLoading,
+    error,
+    refetch,
+  } = useAttendanceSummary(classId, {
     skip,
     limit: ITEMS_PER_PAGE,
     search: debouncedSearch || undefined,
@@ -589,6 +597,27 @@ const StudentLogs = ({ classId }: StudentLogsProps) => {
             <Loader2 className="w-6 h-6 animate-spin" />
             <p className="text-muted-foreground">Ladataan lokeja...</p>
           </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // Same frame as the loading branch above, and before the main return: the DataTable's
+  // `emptyMessage` is what a failure used to fall into. DESIGN.md §3, spec 0006.
+  if (error) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Opiskelijoiden läsnäolot</CardTitle>
+          <CardDescription>
+            Näet kaikki opiskelijat ja heidän läsnäolomerkintänsä kurssilla
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <QueryErrorState
+            message="Opiskelijoiden lataaminen epäonnistui"
+            onRetry={() => void refetch()}
+          />
         </CardContent>
       </Card>
     );

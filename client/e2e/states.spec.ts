@@ -8,15 +8,27 @@
  * is a manual act nobody is prompted to perform."* A journey visits the states it happens to
  * cross; a table names the ones that must exist.
  *
- * **Three states per surface, not four.** The error state is missing on purpose. All three read
- * surfaces render a *failed* request as the *empty* state — `StudentLogs.tsx`,
- * `TeacherDashboard.tsx` and `ClassStatistics.tsx` each destructure `data` and `isLoading` and
- * never consult `error` — so asserting anything here would lock the defect in. `DESIGN.md` §3
- * calls it "one bug in three places". When it is fixed, the fourth state joins this table and the
- * walk holds the fix.
+ * **Four states per read surface since 2026-09-10 — the error state has arrived.** It used to be
+ * absent on purpose: all three read surfaces rendered a *failed* request as the *empty* state,
+ * because `StudentLogs.tsx`, `TeacherDashboard.tsx` and `ClassStatistics.tsx` each destructured
+ * `data` and `isLoading` and never consulted `error`, so asserting anything would have locked the
+ * defect in. `DESIGN.md` §3 called it "one bug in three places". Spec 0006 slice 1 fixed it, and
+ * the three `— refused` states below are the half of that fix that keeps it fixed: revert any one
+ * `error` branch and its state here goes red. This is the note that said "when it is fixed, the
+ * fourth state joins this table" — it has.
  */
 import { EMPTY_REGISTER, KURSSI, LONGEST_NAME, NO_STATISTICS } from './rows';
-import { noKurssi, oneKurssi, pending, register, ROUTES, signedIn, statistics } from './mocks';
+import {
+  failing,
+  noKurssi,
+  oneKurssi,
+  pending,
+  register,
+  RETRY_BACKOFF_MS,
+  ROUTES,
+  signedIn,
+  statistics,
+} from './mocks';
 import { expectNoAxeViolations, expectNoHorizontalScroll } from './assertions';
 import { expect, test } from './fixtures';
 import type { Page } from '@playwright/test';
@@ -78,6 +90,22 @@ const STATES: SweptState[] = [
     reach: async (page) => {
       await page.goto('/dashboard');
       await expect(page.getByText(KURSSI.name).first()).toBeVisible();
+    },
+  },
+  {
+    // The one that could do real damage: as the empty state, this invited her to create a course
+    // she already owns. Asserting the invitation is GONE is the half that holds the fix.
+    name: '/dashboard — refused',
+    arrange: async (page) => {
+      await signedIn(page);
+      await failing(page, ROUTES.classList);
+    },
+    reach: async (page) => {
+      await page.goto('/dashboard');
+      await expect(page.getByRole('alert')).toContainText('Kurssien lataaminen epäonnistui', {
+        timeout: RETRY_BACKOFF_MS,
+      });
+      await expect(page.getByText(/Ei kursseja vielä/)).toBeHidden();
     },
   },
   {
@@ -143,6 +171,25 @@ const STATES: SweptState[] = [
     },
   },
   {
+    name: 'Läsnäolot — refused',
+    arrange: async (page) => {
+      await signedIn(page);
+      await oneKurssi(page);
+      await failing(page, ROUTES.summary);
+      await failing(page, ROUTES.autocomplete);
+    },
+    reach: async (page) => {
+      await page.goto(classUrl);
+      // The Card header renders in the error branch too, so the tab is reached the same way.
+      await openTab(page, 'Läsnäolot', 'Opiskelijoiden läsnäolot');
+      await expect(page.getByRole('alert')).toContainText(
+        'Opiskelijoiden lataaminen epäonnistui',
+        { timeout: RETRY_BACKOFF_MS },
+      );
+      await expect(page.getByText('Ei opiskelijoita vielä')).toBeHidden();
+    },
+  },
+  {
     name: 'Tilastot — loading',
     arrange: async (page) => {
       await signedIn(page);
@@ -181,6 +228,23 @@ const STATES: SweptState[] = [
       await page.goto(classUrl);
       await page.getByRole('tab', { name: 'Tilastot' }).click();
       await expect(page.getByText('Ladataan tilastoja...')).toBeHidden();
+    },
+  },
+  {
+    name: 'Tilastot — refused',
+    arrange: async (page) => {
+      await signedIn(page);
+      await oneKurssi(page);
+      await register(page);
+      await failing(page, ROUTES.statistics);
+    },
+    reach: async (page) => {
+      await page.goto(classUrl);
+      await page.getByRole('tab', { name: 'Tilastot' }).click();
+      await expect(page.getByRole('alert')).toContainText('Tilastojen lataaminen epäonnistui', {
+        timeout: RETRY_BACKOFF_MS,
+      });
+      await expect(page.getByText(/Ei läsnäoloja näytettäväksi/)).toBeHidden();
     },
   },
   {

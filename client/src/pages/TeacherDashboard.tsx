@@ -12,11 +12,19 @@ import { format } from 'date-fns';
 import { fi } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
 import { TeacherLayout } from '@/components/layouts/TeacherLayout';
+import { QueryErrorState } from '@/components/QueryErrorState';
 
 const TeacherDashboard = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { data: classes, isLoading: classesLoading } = useClasses();
+  const {
+    data: classes,
+    isLoading: classesLoading,
+    // `error` used to be dropped here, which is what made a failed load render the empty
+    // state — "Ei kursseja vielä" to a teacher who owns a Kurssi. DESIGN.md §3, spec 0006.
+    error: classesError,
+    refetch: refetchClasses,
+  } = useClasses();
   const createClassMutation = useCreateClass();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [className, setClassName] = useState('');
@@ -115,6 +123,15 @@ const TeacherDashboard = () => {
                   <Loader2 className="w-6 h-6 animate-spin" />
                   <p className="text-muted-foreground">Ladataan kursseja...</p>
                 </div>
+              </CardContent>
+            </Card>
+          ) : classesError ? (
+            <Card>
+              <CardContent className="py-12">
+                <QueryErrorState
+                  message="Kurssien lataaminen epäonnistui"
+                  onRetry={() => void refetchClasses()}
+                />
               </CardContent>
             </Card>
           ) : !classes || classes.length === 0 ? (

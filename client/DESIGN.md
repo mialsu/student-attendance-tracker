@@ -92,27 +92,46 @@ accessibility check available here is also the width decision.
 
 | Surface | Empty | Loading | Refused / error | Success |
 |---|---|---|---|---|
-| `/dashboard` | "Ei kursseja vielä. Luo ensimmäinen kurssisi yllä olevasta painikkeesta." | spinner in place of the list | **see the hole below** | the Kurssi list, each card a link |
+| `/dashboard` | "Ei kursseja vielä. Luo ensimmäinen kurssisi yllä olevasta painikkeesta." | spinner in place of the list | "Kurssien lataaminen epäonnistui" + the retry | the Kurssi list, each card a link |
 | *Kirjaa läsnäolo* | n/a — the form is always the form | the submit button becomes "Kirjataan…" and disables | toast, `detail` from the API or "Läsnäolon kirjaaminen epäonnistui" | toast, and the field clears |
-| *Läsnäolot* | "Ei opiskelijoita vielä" (desktop) / "Ei läsnäoloja kirjattu vielä tälle kurssille" (narrow); searching yields "Ei hakutuloksia haulla …" | Card header stays, body becomes a spinner | **see the hole below** | rows, tally, and the *Suoritus* tick |
-| *Tilastot* | "Ei läsnäoloja näytettäväksi" + "Kirjaa opiskelijoiden läsnäoloja nähdäksesi tilastot." | "Ladataan tilastoja…" | **see the hole below** | the daily and monthly aggregates |
+| *Läsnäolot* | "Ei opiskelijoita vielä" (desktop) / "Ei läsnäoloja kirjattu vielä tälle kurssille" (narrow); searching yields "Ei hakutuloksia haulla …" | Card header stays, body becomes a spinner | "Opiskelijoiden lataaminen epäonnistui" + the retry | rows, tally, and the *Suoritus* tick |
+| *Tilastot* | "Ei läsnäoloja näytettäväksi" + "Kirjaa opiskelijoiden läsnäoloja nähdäksesi tilastot." | "Ladataan tilastoja…" | "Tilastojen lataaminen epäonnistui" + the retry | the daily and monthly aggregates |
 | `/settings` | n/a | button disables | toast with the API's `detail` | toast |
 | `/auth` | n/a | button disables | toast: "Väärä sähköposti tai salasana" / "Rekisteröinti epäonnistui" | redirect to the dashboard |
 | `/class/:id` | n/a | full-surface spinner | redirect to `/dashboard`, silently | the three tabs |
 | 404 | n/a | n/a | n/a | English copy, untokenized colours |
 
-**The hole, and it is one bug in three places.** None of the three read surfaces consults its
-query's `error` — `StudentLogs.tsx:120`, `TeacherDashboard.tsx:19` and `ClassStatistics.tsx:27` all
-destructure `data` and `isLoading` and stop. So a **failed** request renders the **empty** state:
+**The hole is CLOSED — 2026-09-10, spec 0006 slice 1.** For the record of what it was: none of the
+three read surfaces consulted its query's `error`. `StudentLogs.tsx`, `TeacherDashboard.tsx` and
+`ClassStatistics.tsx` each destructured `data` and `isLoading` and stopped, so a **failed** request
+rendered the **empty** state — the dashboard told a teacher who owns a Kurssi that she had none and
+invited her to create one, *Läsnäolot* said "no Students yet" about a register holding thirty, and
+*Tilastot* told someone with two hundred records to go and record some attendance. Each sentence was
+false and actionable in the wrong direction, which is worse than an error message: `ANTI-PATTERNS`
+calls a labelled honest empty state the bar, and this was an empty state lying about an error.
 
-- the dashboard tells a teacher who owns a Kurssi that she has none, and invites her to create one;
-- *Läsnäolot* says "no Students yet" about a register that has thirty;
-- *Tilastot* tells someone with two hundred records to go and record some attendance.
+It was fixed **before** any restyling, because an error state is one of the four states and a reskin
+cannot reconcile a state that does not exist. Three things now hold it shut:
 
-Each of those sentences is false and actionable in the wrong direction, which is worse than an
-error message. `ANTI-PATTERNS` calls a labelled honest empty state the bar; this is an empty state
-lying about an error. Fixing it is the first item of the re-skin, not a later polish pass: an error
-state is one of the four states, and the re-skin cannot reconcile a state that does not exist.
+- **One component, three surfaces.** `QueryErrorState.tsx` renders the message, the
+  `Tarkista verkkoyhteys ja yritä uudelleen.` hint and a `Yritä uudelleen` button wired to the
+  query's own `refetch`. Each surface wraps it in the frame its loading branch already used, and
+  each passes its own noun — `Kurssien` / `Opiskelijoiden` / `Tilastojen` `lataaminen epäonnistui` —
+  matching the twelve `… epäonnistui` strings the app already had.
+- **`src/__tests__/error-states.test.tsx`**, which asserts the error state appears *and* that the
+  empty sentence is gone. The second assertion is the one the old code would have survived; each of
+  the three `error` branches was neutered individually and exactly its own three tests watched go
+  red.
+- **Three `— refused` states in `e2e/states.spec.ts`**, through axe with contrast on and past the
+  320px reflow measurement at both viewports. Neutering the dashboard branch was watched red there
+  too.
+
+**One thing the fix does not change, and it is worth knowing before anyone calls it slow.** `App.tsx:15`
+builds a bare `new QueryClient()`, so a failing query retries three times with 1s/2s/4s backoff
+before `error` is ever set. The teacher therefore sees the **loading** state for about seven seconds
+and only then the error. That is the library's default and it is left alone deliberately: a
+transient blip self-heals inside those seven seconds and she never sees a failure at all. If the
+delay is ever judged too long, `retry` is the dial and it is a product decision, not a bug.
 
 **Loading is the one state design owns outright** — no product decision sits behind it. Decided
 here, and each of these is a change the current code does not yet make:
@@ -240,7 +259,8 @@ The honest list, because §5's tags make the rest of this document look more enf
   1.42:1 is deliberately below 3:1 — legitimate for a divider under WCAG 1.4.11, wrong the moment a
   control is identified by that border alone, and nothing checks which one a given border is doing.
 - **Whether the flow makes sense, or an empty state invites action.** Both `[review-only]` in their
-  entirety — and §3 has one empty state that actively misleads.
+  entirety. §3 used to carry an empty state that actively misled; that one is closed, and the
+  three error states are now swept by the walk.
 - **Whether the design survives real content.** A 60-character Finnish name, a Student with zero
   attendances, one row, or the ~14 rows this Kurssi actually holds. Nothing generates those.
 - **Everything in §2 and §4.** Flows and component boundaries are `[review-only]` by nature.

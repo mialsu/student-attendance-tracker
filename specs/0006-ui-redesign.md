@@ -252,13 +252,22 @@ blocks the end of slice 1.
    affordance in the UI today, so the prototype's badge would be the first screen for a state
    nothing can set. Its own spec.
 
-5. **Error-state copy — OPEN, and the only thing blocking slice 1's completion.** The branch is
-   decided; the words are not, and they are the Owner's. Needed per surface (`/dashboard`,
-   *Läsnäolot*, *Tilastot*): the Finnish string, and whether it offers a **retry** control or only
-   states the failure. Constraints already settled elsewhere: Finnish only (AC8), and no roadmap
-   copy — `ANTI-PATTERNS` allows a labelled honest state and nothing dressed up as real. Recording
-   it here rather than picking a string, because a plausible invented error message is exactly the
-   silent scope-filling the method forbids.
+5. **Error-state copy — RESOLVED 2026-09-10, approved by the Owner as proposed.** Each surface
+   names its own noun, following the twelve `… epäonnistui` strings the app already had:
+
+   | Surface | Message |
+   |---|---|
+   | `/dashboard` | Kurssien lataaminen epäonnistui |
+   | *Läsnäolot* | Opiskelijoiden lataaminen epäonnistui |
+   | *Tilastot* | Tilastojen lataaminen epäonnistui |
+
+   Second line on each: **Tarkista verkkoyhteys ja yritä uudelleen.** — following the `Tarkista …`
+   habit already in the settings errors. **Retry: yes**, a `Yritä uudelleen` button wired to the
+   query's own `refetch`; every hook here returns the raw `useQuery` result, so nothing had to
+   change to expose it. `Yritä uudelleen` is a new string — nothing in the app said it before.
+
+   The API's `detail` is deliberately **not** shown: these three fail on transport far more than on
+   logic, where the underlying message is empty or English, and AC8 keeps every string Finnish.
 
 ## Spec deltas
 

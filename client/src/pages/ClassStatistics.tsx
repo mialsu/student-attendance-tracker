@@ -7,6 +7,7 @@ import { fi } from 'date-fns/locale';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from 'recharts';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import type { ChartConfig } from '@/components/ui/chart';
+import { QueryErrorState } from '@/components/QueryErrorState';
 
 interface ClassStatisticsProps {
   classId: string;
@@ -24,7 +25,14 @@ const ClassStatistics = ({ classId }: ClassStatisticsProps) => {
   // For now, exclude the bulk log from 2026-02-27
   const excludeDates = ['2026-02-27'];
 
-  const { data: stats, isLoading } = useAttendanceStatistics(classId, excludeDates);
+  // `error` was dropped here, so a failed request rendered "Ei läsnäoloja näytettäväksi" to
+  // someone with hundreds of records. DESIGN.md §3, spec 0006.
+  const {
+    data: stats,
+    isLoading,
+    error,
+    refetch,
+  } = useAttendanceStatistics(classId, excludeDates);
 
   // Format daily data for chart
   const dailyData = useMemo(() => {
@@ -51,6 +59,24 @@ const ClassStatistics = ({ classId }: ClassStatisticsProps) => {
       <div className="flex items-center justify-center p-8">
         <p className="text-muted-foreground">Ladataan tilastoja...</p>
       </div>
+    );
+  }
+
+  // Before the empty check, always: `!stats` is true on failure too, and whichever branch runs
+  // first owns the failure.
+  if (error) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Tilastot</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <QueryErrorState
+            message="Tilastojen lataaminen epäonnistui"
+            onRetry={() => void refetch()}
+          />
+        </CardContent>
+      </Card>
     );
   }
 
