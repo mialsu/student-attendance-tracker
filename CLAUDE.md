@@ -1096,6 +1096,25 @@ Closes #123
 - **Ongoing**: €3.49/month (~$3.80 USD)
 - **Multi-Backend**: Can host multiple hobby backends on same VM for cost efficiency
 
+## Agent skills
+
+Configuration for Matt Pocock's engineering skills (`/to-spec`, `/to-tickets`, `/triage`, …),
+installed via the `mattpocock-skills` plugin. Set up 2026-09-10.
+
+### Issue tracker
+
+Specs live as `specs/NNNN-<slug>.md` (local markdown; no external tracker — GitHub Issues is
+deliberately unused). See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Five canonical roles, default strings. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Multi-context: root `CONTEXT-MAP.md` → `api/CONTEXT.md` + `client/CONTEXT.md`, per-package
+`docs/adr/`. See `docs/agents/domain.md`.
+
 ---
 
 **Document Version:** 3.3
