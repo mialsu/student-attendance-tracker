@@ -299,8 +299,16 @@ async function mockAutocomplete(page: Page): Promise<void> {
  * Shrink-only in both directions — see `expectNoAxeViolations`.
  */
 const KNOWN_VIOLATIONS: Record<string, string[]> = {
-  'reflow-320 · Läsnäolot — the register, including a 32-character name': ['color-contrast'],
-  'desktop-1280 · Läsnäolot — the register, including a 32-character name': ['color-contrast'],
+  // The register's two `color-contrast` rows are GONE — deleted 2026-09-10, spec 0006 slice 2.
+  // The *Suoritus* badge measured 3.25:1 as `bg-primary/10 text-primary`; `badge.tsx` now paints
+  // the solid `--accent` / `--accent-foreground` pair at 5.61:1 light and 4.98:1 dark, and that
+  // pair is asserted by `tokens-contrast.test.ts` — so the check moved from "only axe can see it"
+  // to gated in both themes. This ratchet is what forced the deletion: it failed with
+  // "Saw: nothing" and named the rows, which is the half that stops ground being given back.
+  //
+  // The 404's row stays, and the palette had nothing to do with it: that file bypasses the token
+  // system entirely (`bg-gray-100`, `text-gray-600`, `text-blue-500`) and is the only English
+  // screen in the app, so re-hueing the tokens cannot move its 3.34:1. Spec 0006 slice 8 owns it.
   'reflow-320 · 404 — the wrong address': ['color-contrast'],
   'desktop-1280 · 404 — the wrong address': ['color-contrast'],
   // Keyed by viewport as well as state, and this row is why: the empty register scrolls only

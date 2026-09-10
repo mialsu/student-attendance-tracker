@@ -122,12 +122,36 @@ cut (`/confess`), read first by any architecture or review session, dispositione
   only victim is a keyboard user sideways-scrolling an *empty* table. Listed in
   `KNOWN_VIOLATIONS` under the `reflow-320` key alone, because at 1280px there is nothing to
   scroll and therefore nothing to report.
-- **Disposition:** open, and deliberately **not** fixed here. Both are decisions the Owner owns:
-  the badge is a palette change (`DESIGN.md` delegates the look to `frontend-design`, and the
-  token values live in `src/index.css`), and the 404 needs tokenizing *and* translating — it is
-  the only untokenized, English surface in the app, which `DESIGN.md` §1 already records. The
-  three defects that were pure plumbing — two missing accessible names and one keyboard-unreachable
-  scroll region — were fixed in the same commit instead of listed.
+- **Disposition — the badge is CLOSED (2026-09-10, spec 0006 slice 2); the 404 and the
+  `scrollable-region-focusable` row stay open.**
+
+  **Badge, closed and structurally so.** It was fixed the way this entry predicted — a palette
+  change — but with one addition that matters more than the new hue: `badge.tsx`'s `default`
+  variant no longer paints an alpha composite at all. It carries the solid
+  `--accent` / `--accent-foreground` pair, which measures **5.61:1 light and 4.98:1 dark** and is
+  now a row in `tokens-contrast.test.ts`'s `PAIRS`. So the gap this entry describes — "no way to
+  express a 10%-alpha composite over a Card" — is not merely worked around; the pair moved
+  *into* the token test's reach and is asserted in both themes. Both `KNOWN_VIOLATIONS` rows were
+  deleted, and the ratchet is what forced it: the sweep failed with "Saw: nothing" and named them.
+
+  Worth keeping from this entry: the indigo primary was deliberately darkened one step
+  (`#5A4FF3` → `#4F45E0`) *because* of this defect. At the design system's own value the badge
+  measured 4.73:1 over a Card but 4.41:1 over the page — a pass that depended on what sat behind
+  it, which is the same fragility one hue lighter. `--input` was likewise darkened well past the
+  design system's `--border-strong`, whose documentation claims it "clears 3:1" and which actually
+  measures 1.53:1. Two numbers in a design document that were wrong; the test is why they were
+  checked.
+
+  **`destructive` badge: still the composite shape**, and still uncovered. `bg-destructive/10
+  text-destructive` was left alone because no surface renders it — grep finds only `default` and
+  `secondary` in use — and giving it a solid pair means adding a `--destructive-soft` token, which
+  is a palette decision nobody has needed yet. It will surface the day a destructive badge renders
+  in a swept state, exactly as this entry warned.
+
+  **404: open, and untouched by the palette.** It bypasses the token system entirely
+  (`bg-gray-100`, `text-gray-600`, `text-blue-500`), so re-hueing the tokens could not move its
+  3.34:1. It needs tokenizing *and* translating — the only untokenized, English surface in the
+  app, which `DESIGN.md` §1 records. Spec 0006 slice 8 owns it.
 
 ## 2026-09-07 — the sweep measured contrast mid-animation before it was told not to
 - **What:** the first run of the state sweep reported `color-contrast` on `/settings`'s inactive

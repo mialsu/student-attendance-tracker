@@ -76,6 +76,19 @@ const PAIRS: Pair[] = [
   { fg: 'destructive-foreground', bg: 'destructive', need: TEXT, where: '6 uses of bg-destructive' },
   { fg: 'ring', bg: 'background', need: UI, where: 'the focus ring, 23 components' },
   { fg: 'input', bg: 'background', need: UI, where: 'a form field is identified by its border alone' },
+
+  // Added by spec 0006 slice 2, and the first two exist because a pair moved INTO this test's
+  // reach. The *Suoritus* badge used to be `bg-primary/10 text-primary` — an alpha composite with
+  // no token behind it, which this file's maths cannot express and which therefore lived in
+  // `e2e/states.spec.ts`'s KNOWN_VIOLATIONS at 3.25:1 where only axe could see it. `badge.tsx`
+  // now paints `--accent` / `--accent-foreground`, so the pair is solid, gated here in both
+  // themes, and that exemption is deleted.
+  { fg: 'accent-foreground', bg: 'accent', need: TEXT, where: 'the Suoritus badge (badge.tsx default variant)' },
+  { fg: 'accent-foreground', bg: 'card', need: TEXT, where: 'accent text on a Card' },
+  // The tighter half of the control-boundary rule, and it was missing: a field usually sits on a
+  // Card, not on the page, and `--card` is lighter than `--background` in the light theme. Solving
+  // `--input` against `background` alone would have left the commoner case unasserted.
+  { fg: 'input', bg: 'card', need: UI, where: 'a form field inside a Card — the commoner case' },
 ];
 
 /**
