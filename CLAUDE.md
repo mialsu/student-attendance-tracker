@@ -971,10 +971,23 @@ async def get_user_by_email(
 ## Git Workflow
 
 ### Branch Strategy
-- `main` - Production-ready code
-- `develop` - Integration branch
-- `feature/*` - New features
-- `fix/*` - Bug fixes
+
+**There is no `develop` branch and there never has been.** This section listed one until
+2026-09-10; no ref, no reflog entry and no merge commit in this repository's history has ever
+carried the name. Anything that told you to branch off `develop` was wrong.
+
+- `main` — the only long-lived branch, and the only one that deploys. Every push to it that
+  passes its gates goes to production (see *CI/CD* above).
+- **Topic branch off `main`, merged back into `main`.** The merge keeps both parents — no squash,
+  no rebase — so `main` is deliberately non-linear and `git log --first-parent main` reads as the
+  list of landed changes while plain `git log main` reads as every commit that got them there.
+- Prefixes in use: `feature/`, `fix/`, `chore/`, `docs/`, `ci/`, `proto/`. The authoritative
+  list is `git branch -a`, not this line — it is a habit, not a rule, and nothing enforces it.
+
+A topic branch may be pushed freely: every workflow is `on: push: branches: [main]`, so a
+feature-branch push runs no gates, no tests, no secret scan and no deploy. A PR against `main`
+runs gates, tests and security but still does not deploy. **Pushing `main` deploys.** Stale
+topic branches do accumulate on the remote; `git branch -r` is the current list.
 
 ### Commit Message Format
 ```
