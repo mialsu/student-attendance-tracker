@@ -18,6 +18,7 @@ deliberately leaves alone.
 import json
 import logging
 from contextlib import contextmanager
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -280,3 +281,417 @@ def test_an_unusable_log_level_falls_back_to_the_default(monkeypatch):
     """A typo must not silence the log or crash the app at import."""
     monkeypatch.setenv(LEVEL_VAR, "LOUD")
     assert resolve_level() == DEFAULT_LEVEL
+
+
+# =============================================================================================
+# Slice 2 — the remaining denials: the auth branches, registration codes, an inactive Class.
+# Serves AC-2, AC-3, AC-4, and completes AC-13's second half at a real route.
+#
+# Two mechanisms are under test here and the difference matters to a reader:
+#
+#   * `authenticate_user` logs EXPLICITLY, because its three branches deliberately return the
+#     same response and no handler downstream can tell them apart.
+#   * every other refusal LABELS ITSELF on the exception and the one handler logs it. The label
+#     is opt-in, which is what keeps a refusal whose message contains a Student's name silent --
+#     asserted below, since that is INV-9's shape before INV-9's own enforcers land in slice 5.
+# =============================================================================================
+
+
+def objects(lines: list[str], expected: int) -> list[dict]:
+    """Assert the capture holds exactly `expected` lines and return them parsed."""
+    assert len(lines) == expected, f"expected {expected} line(s), got {len(lines)}: {lines!r}"
+    for line in lines:
+        assert "\n" not in line, f"a single record produced more than one line: {line!r}"
+    return [json.loads(line) for line in lines]
+
+
+# --- AC-2: the three authenticate_user branches, distinguishable in the log only --------------
+
+
+@pytest.mark.asyncio
+async def test_unknown_email_and_wrong_password_are_one_response_and_two_reasons(
+    client, test_user
+):
+    """AC-2, the half that carries the security property.
+
+    The two branches return a byte-identical response ON PURPOSE -- telling a stranger whether
+    an address is registered is the enumeration this app declines to answer. That is exactly
+    why the distinction has to live in the log: it exists nowhere else.
+    """
+    with capture_logs() as unknown_lines:
+        unknown = await client.post(
+            "/api/auth/login",
+            json={"email": "nobody@example.com", "password": "testpassword123"},
+        )
+
+    with capture_logs() as wrong_lines:
+        wrong = await client.post(
+            "/api/auth/login",
+            json={"email": test_user.email, "password": "not-the-password"},
+        )
+
+    # The responses are indistinguishable, down to the bytes.
+    assert unknown.status_code == wrong.status_code == 401
+    assert unknown.content == wrong.content
+
+    # The log tells them apart.
+    assert objects(unknown_lines, 1)[0]["reason"] == "unknown_email"
+    assert objects(wrong_lines, 1)[0]["reason"] == "wrong_password"
+
+
+@pytest.mark.asyncio
+async def test_an_inactive_account_is_the_third_distinguishable_branch(client, inactive_user):
+    """AC-2, the third branch. Its response is unchanged by this slice, which is the other half
+    of "byte-identical": no branch's bytes moved, whatever the log now says about it."""
+    with capture_logs() as lines:
+        response = await client.post(
+            "/api/auth/login",
+            json={"email": inactive_user.email, "password": "testpassword123"},
+        )
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Account is inactive. Please contact support."
+    assert objects(lines, 1)[0]["reason"] == "inactive_account"
+
+
+@pytest.mark.asyncio
+async def test_the_three_login_branches_carry_the_attempted_address(client, test_user):
+    """The attempted email is what makes the line actionable -- who tried, not just that
+    someone did. Spec 0005 sanctions it explicitly: an email is a Teacher's own credential
+    attempt, never a Student's name."""
+    with capture_logs() as lines:
+        await client.post(
+            "/api/auth/login",
+            json={"email": test_user.email, "password": "not-the-password"},
+        )
+
+    line = objects(lines, 1)[0]
+    assert line["level"] == "WARNING"
+    assert line["event"] == "denial"
+    assert line["attempted_email"] == test_user.email
+    assert line["route"] == "/api/auth/login"
+    assert line["request_id"]
+
+
+@pytest.mark.asyncio
+async def test_a_successful_login_is_not_logged_as_a_denial(client, test_user):
+    """The positive control. Without it, a call that logged every login attempt would pass
+    every assertion above."""
+    with capture_logs() as lines:
+        response = await client.post(
+            "/api/auth/login",
+            json={"email": test_user.email, "password": "testpassword123"},
+        )
+
+    assert response.status_code == 200
+    assert lines == []
+
+
+# --- AC-13, second half: attacker-supplied text at a REAL route ------------------------------
+
+
+@pytest.mark.asyncio
+async def test_a_newline_in_a_login_email_produces_no_second_line(client):
+    """AC-13's literal criterion, at the route it names.
+
+    It holds by a mechanism the spec did not anticipate: `UserLogin.email` is an `EmailStr`, so
+    `email-validator` refuses the address at validation and `authenticate_user` never runs. The
+    request is answered 422 and emits NOTHING -- a forged second line is not merely escaped, it
+    is unreachable.
+
+    The formatter-level assertion above is still the one that matters, because it is the half
+    that survives someone relaxing this schema. Two independent mechanisms, and only one of
+    them depends on a decision another file could reverse.
+    """
+    with capture_logs() as lines:
+        response = await client.post(
+            "/api/auth/login",
+            json={"email": 'attacker@example.com\n{"event": "forged"}', "password": "x"},
+        )
+
+    assert response.status_code == 422
+    assert lines == []
+
+
+# --- AC-3: a refused registration code names the rule that refused it ------------------------
+
+
+@pytest.mark.asyncio
+async def test_a_used_code_is_refused_and_the_line_names_inv_6(
+    client, db, registration_code_for
+):
+    """AC-3. Used, revoked and expired are INV-6's three one-way states."""
+    email = "second-comer@example.com"
+    code = await registration_code_for(email)
+    code.used = True
+    await db.commit()
+
+    with capture_logs() as lines:
+        response = await client.post(
+            "/api/auth/signup",
+            json={"email": email, "password": "password123", "registration_code": code.code},
+        )
+
+    assert response.status_code == 400
+    line = objects(lines, 1)[0]
+    assert line["event"] == "denial"
+    assert line["rule"] == "INV-6"
+    assert line["reason"] == "code_used"
+    assert line["status"] == 400
+
+
+@pytest.mark.asyncio
+async def test_a_revoked_code_is_refused_and_the_line_says_which_state(
+    client, db, registration_code_for
+):
+    """AC-3. INV-6 again, and the reason is what tells a reader which of its three states hit."""
+    email = "revoked-holder@example.com"
+    code = await registration_code_for(email)
+    code.revoked = True
+    await db.commit()
+
+    with capture_logs() as lines:
+        response = await client.post(
+            "/api/auth/signup",
+            json={"email": email, "password": "password123", "registration_code": code.code},
+        )
+
+    assert response.status_code == 400
+    line = objects(lines, 1)[0]
+    assert line["rule"] == "INV-6"
+    assert line["reason"] == "code_revoked"
+
+
+@pytest.mark.asyncio
+async def test_an_expired_code_is_refused_and_the_line_says_expired(
+    client, db, registration_code_for
+):
+    """AC-3. The third INV-6 state, reached by ageing the row rather than waiting a day."""
+    email = "too-late@example.com"
+    code = await registration_code_for(email)
+    code.expires_at = datetime.now(timezone.utc) - timedelta(minutes=1)
+    await db.commit()
+
+    with capture_logs() as lines:
+        response = await client.post(
+            "/api/auth/signup",
+            json={"email": email, "password": "password123", "registration_code": code.code},
+        )
+
+    assert response.status_code == 400
+    line = objects(lines, 1)[0]
+    assert line["rule"] == "INV-6"
+    assert line["reason"] == "code_expired"
+
+
+@pytest.mark.asyncio
+async def test_a_code_presented_by_the_wrong_address_names_inv_7(
+    client, registration_code_for
+):
+    """AC-3. A different rule, and the line must say so rather than lump it with INV-6: a code
+    refused for the wrong address is still live for its rightful holder, which is the opposite
+    operational situation from a code that is dead."""
+    code = await registration_code_for("rightful@example.com")
+
+    with capture_logs() as lines:
+        response = await client.post(
+            "/api/auth/signup",
+            json={
+                "email": "someone-else@example.com",
+                "password": "password123",
+                "registration_code": code.code,
+            },
+        )
+
+    assert response.status_code == 400
+    line = objects(lines, 1)[0]
+    assert line["rule"] == "INV-7"
+    assert line["reason"] == "code_wrong_email"
+
+
+@pytest.mark.asyncio
+async def test_an_unknown_code_is_logged_with_no_rule(client):
+    """A code that does not exist breaks no invariant -- it is a wrong guess, not a violation.
+    The line records the attempt and deliberately carries NO `rule`, so grepping `rule=INV-6`
+    counts real INV-6 refusals and nothing else."""
+    with capture_logs() as lines:
+        response = await client.post(
+            "/api/auth/signup",
+            json={
+                "email": "guesser@example.com",
+                "password": "password123",
+                "registration_code": "nosuchcodeatall",
+            },
+        )
+
+    assert response.status_code == 400
+    line = objects(lines, 1)[0]
+    assert line["reason"] == "code_unknown"
+    assert "rule" not in line
+
+
+@pytest.mark.asyncio
+async def test_no_refused_code_line_ever_carries_the_code_itself(
+    client, registration_code_for
+):
+    """A registration code is a live 96-bit credential. On the wrong-address branch it is still
+    redeemable by its rightful holder, so writing it to a log whose retention is size-only would
+    park a working credential there indefinitely. The rule refused it; the token is not needed
+    to know that."""
+    code = await registration_code_for("rightful@example.com")
+
+    with capture_logs() as lines:
+        await client.post(
+            "/api/auth/signup",
+            json={
+                "email": "someone-else@example.com",
+                "password": "password123",
+                "registration_code": code.code,
+            },
+        )
+
+    assert code.code not in json.dumps(objects(lines, 1)[0])
+
+
+@pytest.mark.asyncio
+async def test_a_successful_signup_is_not_logged_as_a_denial(client, registration_code_for):
+    """The positive control for AC-3."""
+    email = "welcome@example.com"
+    code = await registration_code_for(email)
+
+    with capture_logs() as lines:
+        response = await client.post(
+            "/api/auth/signup",
+            json={"email": email, "password": "password123", "registration_code": code.code},
+        )
+
+    assert response.status_code == 201
+    assert lines == []
+
+
+# --- AC-4: new attendance refused on an inactive Class ---------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_attendance_refused_on_an_inactive_class_names_inv_3(
+    client, auth_headers, inactive_class
+):
+    """AC-4. INV-3 is the rule: a new Attendance record may only be created against an active
+    Class. Its owner is `attendance_service.create_attendance_record`."""
+    with capture_logs() as lines:
+        response = await client.post(
+            f"/api/classes/{inactive_class.id}/attendance",
+            json={"student_name": "Ada Lovelace", "quantity": 1},
+            headers=auth_headers,
+        )
+
+    assert response.status_code == 400
+    line = objects(lines, 1)[0]
+    assert line["event"] == "denial"
+    assert line["rule"] == "INV-3"
+    assert line["reason"] == "class_inactive"
+    assert line["route"] == f"/api/classes/{inactive_class.id}/attendance"
+    assert line["teacher_id"]
+
+
+@pytest.mark.asyncio
+async def test_the_inactive_class_denial_carries_no_student_name(
+    client, auth_headers, inactive_class
+):
+    """INV-9's shape, at the one slice-2 route where a name arrives in the BODY.
+
+    `student_name` on the bulk-logging body is one of the four places a Student's name enters
+    this app as free text. The route it is refused on now emits a line, so this is the first
+    chance for a name to ride out on one.
+    """
+    with capture_logs() as lines:
+        await client.post(
+            f"/api/classes/{inactive_class.id}/attendance",
+            json={"student_name": "Ada Lovelace", "quantity": 1},
+            headers=auth_headers,
+        )
+
+    captured = json.dumps(objects(lines, 1)[0])
+    assert "Ada" not in captured
+    assert "Lovelace" not in captured
+
+
+@pytest.mark.asyncio
+async def test_attendance_on_an_active_class_is_not_logged_as_a_denial(
+    client, auth_headers, test_class
+):
+    """The positive control for AC-4."""
+    with capture_logs() as lines:
+        response = await client.post(
+            f"/api/classes/{test_class.id}/attendance",
+            json={"student_name": "Ada Lovelace", "quantity": 1},
+            headers=auth_headers,
+        )
+
+    assert response.status_code == 201
+    assert lines == []
+
+
+# --- the label is opt-in, and that is what keeps a name off a line ---------------------------
+
+
+@pytest.mark.asyncio
+async def test_a_refusal_whose_message_contains_a_student_name_emits_nothing(
+    client, auth_headers, test_class, test_student
+):
+    """The load-bearing test for the whole design.
+
+    `BadRequestException` is raised at fourteen sites in `app/`, and two of them build their
+    message by interpolating a Student's name -- a duplicate-name refusal says which name.
+    Logging every `BadRequestException`, or logging `exc.detail`, would put that name on a line
+    and break ADR-0007 while every other test here stayed green.
+
+    So the line is opt-in at the raise site. This asserts the consequence: a refusal nobody
+    labelled is silent, and the silence is structural rather than remembered.
+    """
+    with capture_logs() as lines:
+        response = await client.post(
+            f"/api/classes/{test_class.id}/students",
+            json={"name": test_student.name},
+            headers=auth_headers,
+        )
+
+    assert response.status_code == 400
+    assert test_student.name.split()[0] in response.json()["detail"]
+    assert lines == []
+
+
+# --- the teacher-id context reset, observable for the first time ------------------------------
+
+
+@pytest.mark.asyncio
+async def test_an_unauthenticated_denial_carries_no_teacher_id_from_an_earlier_request(
+    client, auth_headers, test_class, test_user
+):
+    """The detector `api/REVIEW-DEBT.md` (2026-09-09) said would arrive with slice 2.
+
+    `RequestContextMiddleware` claims and resets `teacher_id_var` even though `get_current_user`
+    is what fills it, so that one place owns the reset of every context variable. Slice 1 could
+    not observe that: the only event it logged was an `INV-1` denial, which by construction
+    always has an authenticated teacher, so removing the reset left the whole suite green.
+
+    Slice 2 logs the first denial with **no** session. A leaked id would name whoever was
+    refused before it -- an anonymous line accusing the last teacher to use the app.
+    """
+    # A real authenticated request first, which sets the variable for its own duration.
+    permitted = await client.get(f"/api/classes/{test_class.id}", headers=auth_headers)
+    assert permitted.status_code == 200
+
+    # Then a refusal with no session at all. The suite drives the app through httpx's
+    # ASGITransport in the TEST's own task, so a value that outlived the first request is
+    # still visible here -- which is what makes the leak observable at this seam.
+    with capture_logs() as lines:
+        response = await client.post(
+            "/api/auth/login",
+            json={"email": "nobody@example.com", "password": "testpassword123"},
+        )
+
+    assert response.status_code == 401
+    line = objects(lines, 1)[0]
+    assert "teacher_id" not in line, "a teacher id survived into an unauthenticated request"
+    assert str(test_user.id) not in json.dumps(line)

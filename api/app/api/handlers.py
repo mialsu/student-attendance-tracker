@@ -4,9 +4,27 @@ Spec 0005 puts the denial logging here rather than at each raise site, because e
 this app raises an `HTTPException` -- the custom exceptions in `app/core/exceptions.py` all
 subclass it -- so one handler sees them all and has the `Request` in hand.
 
-**Slice 1 wires `INV-1` only.** The remaining denials (the auth branches, refused registration
-codes, an inactive Class) are slice 2, and this handler stays silent for them until then rather
-than emitting a line labelled with a rule nobody has decided.
+**Two mechanisms here, and one deliberate exception elsewhere.** `ForbiddenException` is
+identified by TYPE, which is exact because it is raised in exactly one place. Every other
+refusal this file logs identifies ITSELF, carrying a `rule` and a `reason` set at the raise site
+(slice 2).
+
+The exception is `auth_service.authenticate_user`, which logs its own three branches and never
+relies on this file. It has to: two of the three deliberately return a byte-identical response,
+so by the time the exception arrives here the distinction has already been erased. That is the
+one thing a handler cannot recover, which is why it is the one place spec 0005 puts an explicit
+call. So a reader looking for every source of a `denial` line needs this file and that function,
+and nothing else.
+
+The asymmetry is not untidiness -- each is the only mechanism that works where it is used.
+Type identification cannot be forgotten, so INV-1 keeps it and `scripts/drift-extra.sh` check 4
+keeps the single raise site true. But `BadRequestException` is raised at fourteen sites and two
+of them interpolate a Student's name into the message, so type alone would either miss the
+denials or leak a name. There, opt-in labelling is what makes the silent refusals silent by
+construction. `app/core/exceptions.py` carries the same reasoning at the other end.
+
+`detail` is never logged, from any exception. It is the one field that carries free text a
+Student's name can reach.
 
 **The response is not this handler's business.** It logs, then delegates to FastAPI's own
 `http_exception_handler`, so the bytes a client receives are byte-identical to what they were
@@ -21,7 +39,7 @@ from fastapi import Request, Response
 from fastapi.exception_handlers import http_exception_handler
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from app.core.exceptions import ForbiddenException
+from app.core.exceptions import BadRequestException, ForbiddenException
 from app.core.logging import log_event
 
 # INV-1's rule id, carried on the line so a reader greps for the rule rather than for a status
@@ -58,6 +76,18 @@ async def http_exception_log_handler(request: Request, exc: Exception) -> Respon
         # says nothing the route does not, and every field here has to justify itself against
         # a sink whose retention is size-based only.
         log_event(logging.WARNING, "denial", rule=INV_1, status=exc.status_code)
+    elif isinstance(exc, BadRequestException) and exc.reason is not None:
+        # A refusal that labelled itself. `isinstance` rather than `getattr` so mypy sees real
+        # attributes and this needs no suppression comment to type-check.
+        #
+        # `rule` is omitted when the raise site set none, because the formatter drops only the
+        # request-context fields it manages -- an event field passed as None would print as
+        # `"rule": null`, and a reader grepping for INV-6 would have to know that a null rule
+        # means "no invariant" rather than "nobody filled it in".
+        fields = {"reason": exc.reason, "status": exc.status_code}
+        if exc.rule is not None:
+            fields["rule"] = exc.rule
+        log_event(logging.WARNING, "denial", **fields)
 
     if not isinstance(exc, StarletteHTTPException):
         raise exc

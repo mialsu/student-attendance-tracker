@@ -6,6 +6,58 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 
 <!-- Newest first. -->
 
+## 2026-09-10 — "every refused request" is 10 of 46 refusal sites, and one of the silent ones is an invariant
+- **What:** spec 0005's **US-1** asks for "every refused request recorded durably". The AC table
+  delivers four families — `INV-1` (AC-1), the three login branches (AC-2), registration codes
+  (AC-3) and an inactive Class (AC-4) — and slices 3 and 4 add errors and irreversible acts. The
+  difference between those and *every* refusal is **not declared** in the spec's *Out of Scope* or
+  *Non-Goals*, so a reader of US-1 will over-read what got built.
+- **Measured 2026-09-10**, by walking the AST of `app/` for `raise` of any refusal type: **46
+  refusal raise sites, 10 of which now produce a log line** — 6 labelled (`rule`/`reason`), 1 by
+  type (`class_service.py:237`, INV-1), and 3 by the explicit calls in `authenticate_user`.
+  **36 are silent.** Re-measure rather than trusting the figure — it was true at slice 2. The
+  method: parse each file under `app/` with `ast`, walk for `ast.Raise` whose `exc` is a call to
+  one of the eight refusal types in `app/core/exceptions.py`, and count how many carry a `reason`
+  keyword. Grep cannot do it: a multi-line labelled raise puts `rule=`/`reason=` on a different
+  line from `raise`, which scored five labelled sites as silent on the first attempt.
+- **The one that matters most:** `app/services/student_service.py:518` — a merge refused for
+  crossing a Class boundary. That is **INV-5's enforcement site**, so an invariant refusal goes
+  unrecorded while three login typos are recorded. Slice 4 logs a merge that *succeeds* (AC-7); it
+  does not log the merge that was refused.
+- **Also silent, and the group most likely to be wanted:** the 14 token-path refusals in
+  `app/dependencies.py` (8) and `app/api/auth.py`'s refresh handler (6). A caller presenting a
+  revoked, expired or forged token leaves no line at all — which is the shape of the thing US-1
+  says it wants visible after the fact. The remaining 12 `NotFoundError`s are the group least
+  likely to be worth a line.
+- **What green tests/gates did NOT prove:** nothing here is a broken test. Every AC slice 2 owns
+  passes. This is scope: the spec promised broadly in a user story and delivered narrowly in the
+  criteria, and only the criteria got built.
+- **Why it was not fixed here:** it is outside slice 2's ACs, and widening a slice to match a user
+  story nobody re-scoped is *silent scope-filling*. The Owner decides whether this becomes a
+  seventh slice, a narrowed US-1, or an explicit non-goal.
+- **Disposition:** **open, needs the Owner.** Raised at the end of the 2026-09-10 session rather
+  than left in the ledger alone.
+
+## 2026-09-10 — the `reason` vocabulary on a denial line has no enforcer
+- **What:** spec 0005 slice 2 gives every denial line a `reason` — `unknown_email`,
+  `wrong_password`, `inactive_account`, `code_used`, `code_revoked`, `code_expired`,
+  `code_wrong_email`, `code_unknown`, `class_inactive` — and the `rule` beside it. Both are plain
+  strings passed at the raise site. **Nothing checks the vocabulary.** A later denial written as
+  `reason="inactive-class"` or `rule="INV3"` would log happily, and the grep a reader relies on
+  (`rule=INV-6` to count real INV-6 refusals) would quietly miss it.
+- **Where:** `app/core/exceptions.py` (`BadRequestException.rule` / `.reason`),
+  `app/services/registration_code_service.py`, `app/services/attendance_service.py:153`,
+  `app/services/auth_service.py` — the three login branches.
+- **What green tests/gates did NOT prove:** the tests assert the exact strings the code emits
+  today, so they lock in the *current* nine and notice nothing about a tenth. This is *a standard
+  with no enforcer* (ANTI-PATTERNS), arriving as a string literal rather than as prose.
+- **Why it was not fixed here:** the fix worth having is a closed vocabulary — an enum, or a
+  drift-extra check that fails a `reason=` literal outside a known list — and slice 5 already
+  installs a drift check over logger call sites for `INV-9`. Two checks over the same lines,
+  written a week apart, is the seam to build once rather than twice.
+- **Disposition:** **open**, and pinned to slice 5 rather than left undated. If slice 5's check
+  lands without covering the vocabulary, this entry outlives it and should say so.
+
 ## 2026-09-09 — the log sink has no time-based erasure, and now there is something in it
 - **What:** spec 0005 slice 1 landed the first logger in `app/`, so denial lines now exist. Their
   sink is Docker's `json-file` driver at `max-size: 10m`, `max-file: 3`, which rotates by **size
@@ -61,8 +113,18 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 - **What green tests/gates did NOT prove:** that the *production path* from a hostile email to a
   log line is safe. The formatter is the only thing between them and it is proven; the path is not
   yet built.
-- **Disposition:** **open until slice 2.** AC-13 is PARTIAL, not met. Recorded so the AC table is
-  not read as fully green when `/verify-live` reaches it.
+- **Disposition:** **closed, 2026-09-10 (slice 2)** — and the mechanism is not the one this entry
+  predicted, which is worth more than the closure. The real-route assertion is
+  `test_a_newline_in_a_login_email_produces_no_second_line`, and it passes because
+  `UserLogin.email` is an `EmailStr`: `email-validator` refuses a newline, a quote, a brace and
+  even an RFC-legal quoted local part **before** `authenticate_user` runs, so the request is
+  answered 422 and emits nothing at all. Every adversarial address probed against the installed
+  validator was rejected.
+  So the attempted email that does reach a line cannot carry a JSON metacharacter, and the
+  premise this entry and spec 0005's *Line shape* both argued from — that a denial line carries
+  attacker-supplied free text — is weaker than stated. **AC-13 is met by two independent
+  mechanisms**, and the formatter-level assertion remains the load-bearing one, because it is the
+  half that survives someone relaxing the schema. Spec deltas 5 records this.
 
 ## 2026-09-09 — the teacher-id context reset has no enforcer until slice 2
 - **What:** `RequestContextMiddleware` deliberately claims and resets `teacher_id_var` even though
@@ -75,8 +137,11 @@ cut (`/confess`), read first by any architecture or review session, dispositione
   authenticated teacher. Removing the reset leaves all 454 tests green. The detector arrives in
   slice 2 with the first logged denial that has **no** session (an auth branch): that line must
   carry no `teacher_id`, and it would carry a stale one.
-- **Disposition:** **open until slice 2**, where the assertion lands with the event that makes it
-  observable. Named here rather than left as a comment nobody greps.
+- **Disposition:** **closed, 2026-09-10 (slice 2).** The detector is
+  `tests/test_logging.py::test_an_unauthenticated_denial_carries_no_teacher_id_from_an_earlier_request`
+  — an authenticated request, then a failed login, asserting the second line carries no
+  `teacher_id` and not the first teacher's id anywhere. Watched failing on the plant this entry
+  describes: `teacher_id_var` dropped from the middleware's claim-and-reset entirely.
 
 ## 2026-09-09 — the no-numbers rule was breached by the commit that installed it
 - **What:** `4f742e9` deleted every count, percentage and baseline from the root `CLAUDE.md` and

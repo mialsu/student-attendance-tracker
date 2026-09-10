@@ -123,24 +123,40 @@ async def validate_registration_code(
     reg_code = await get_registration_code(db, code)
 
     if not reg_code:
-        raise BadRequestException("Invalid registration code")
+        # No `rule`: a code that does not exist breaks no invariant. It is a wrong guess,
+        # and it is logged so a run of them is visible.
+        raise BadRequestException("Invalid registration code", reason="code_unknown")
 
     # INV-6: used, revoked and expired are the three states a code never comes back from. This
     # is the one place that decides whether a code may be redeemed.
     if reg_code.used:
-        raise BadRequestException("Registration code already used")
+        raise BadRequestException(
+            "Registration code already used", rule="INV-6", reason="code_used"
+        )
 
     if reg_code.revoked:
-        raise BadRequestException("Registration code has been revoked")
+        raise BadRequestException(
+            "Registration code has been revoked", rule="INV-6", reason="code_revoked"
+        )
 
     if reg_code.expires_at <= datetime.now(timezone.utc):
-        raise BadRequestException("Registration code has expired")
+        raise BadRequestException(
+            "Registration code has expired", rule="INV-6", reason="code_expired"
+        )
 
     # INV-7: a code is redeemable by the one address it names, and by nobody else. There is no
     # universal code and no wildcard — a legacy code that named no address carries '', which
     # equals no address a signup can present, so it falls through to the refusal below.
     if reg_code.email_restriction != email:
-        raise BadRequestException("This registration code is not valid for your email")
+        # INV-7, not INV-6, and the distinction is operational rather than pedantic: this
+        # code is still LIVE for its rightful holder, where an INV-6 refusal means the code
+        # is dead. Neither the code nor the address is logged -- the code is a redeemable
+        # credential, and the client IP already on the line says who tried.
+        raise BadRequestException(
+            "This registration code is not valid for your email",
+            rule="INV-7",
+            reason="code_wrong_email",
+        )
 
     return reg_code
 

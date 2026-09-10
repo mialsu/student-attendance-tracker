@@ -365,3 +365,46 @@ the wrong place.
 **AC-13 is PARTIAL after slice 1**, not met: its forged-line half is asserted at the formatter
 because slice 1 logs no attacker-supplied free text. It becomes a real-route assertion in slice 2.
 See `api/REVIEW-DEBT.md`, 2026-09-09.
+
+**2026-09-10, slice 2.** Three more, and the first one corrects a premise this spec argued from.
+
+5. **The "attacker-supplied text" a denial line carries is far more constrained than *Line shape*
+   assumed.** That section justifies JSON by saying Decision 3 "puts attacker-supplied text (an
+   attempted email) into log lines". It does not, or not in the dangerous sense: `UserLogin.email`
+   is an `EmailStr`, and `email-validator` refuses a newline, a quote, a brace and even an
+   RFC-legal quoted local part **before** `authenticate_user` runs. Every adversarial address
+   probed against the installed validator was rejected, so the value that reaches the line cannot
+   carry a JSON metacharacter at all.
+
+   AC-13's literal criterion — a login attempt with an embedded newline in the email — therefore
+   holds at the real route, but by *validation* (422, and no line at all) rather than by
+   serialization. Both are now asserted. **The choice of JSON is unchanged and the formatter-level
+   assertion stays the load-bearing one**, because it is the half that survives someone relaxing
+   the schema; the route-level one depends on a decision another file could reverse. What changes
+   is the reasoning, so a later session does not go looking for free text on a line and conclude
+   the escaping is untested.
+
+   **AC-13 is met after slice 2**, by two independent mechanisms.
+
+6. **A refusal labels itself; the handler does not infer.** *Where the calls live* says explicit
+   calls go only where the handler cannot see the information, and names three sites — which left
+   the registration-code and inactive-Class denials to the handler without saying how it would
+   know *which rule* refused. It cannot: both raise `BadRequestException`, which is raised at
+   fourteen sites in `app/`. So the exception gained keyword-only `rule` and `reason`, set at the
+   raise site, and the handler logs only a refusal that carries them.
+
+   The opt-in half is the point rather than a convenience. Two of those fourteen sites interpolate
+   a **Student's name** into the message, so a handler that logged every `BadRequestException` —
+   or that logged `detail` — would break ADR-0007 with every other test still green. Asserted:
+   `test_a_refusal_whose_message_contains_a_student_name_emits_nothing`.
+
+7. **`authenticate_user`'s lines carry no `status`.** Slice 1's handler-emitted lines do, because
+   a handler legitimately knows the response. A service asserting what its refusal will become
+   over HTTP is the coupling the handler exists to avoid, so the three login lines carry
+   `event`, `reason`, `attempted_email` and the request context, and nothing about the response.
+
+   Also worth stating, since AC-2's wording invites the other reading: **"all three HTTP responses
+   stay byte-identical" means none of the three moved**, not that all three are the same. Two of
+   them *are* mutually byte-identical — unknown-email and wrong-password, which is the enumeration
+   defence and the reason the log is the only place the distinction can live. The inactive-account
+   branch keeps its own distinct message, as it did before this slice. Both facts are asserted.
