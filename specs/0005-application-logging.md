@@ -535,9 +535,17 @@ its method are in `api/REVIEW-DEBT.md`, 2026-09-10.
     the app knows which *rule* refused an authenticated Teacher". Established by running it,
     not by reading the order: status 400, one line, `rule=INV-5`, `reason=cross_class_merge`.
 
-    **Not fixed here, and the reason is a boundary rather than effort.** The fix is to check
-    the duplicate's ownership before comparing Classes, which turns that 400 into a 403 — an
-    observable response change no acceptance criterion asks for, on the authorization path
-    spec 0003 consolidated. So it is confessed in `api/REVIEW-DEBT.md` (2026-09-10) and pinned
-    by `test_another_teachers_student_as_the_duplicate_is_logged_as_inv_5_not_inv_1`, which
-    fails the day someone reorders the checks and points at the decision.
+    **Shipped confessed in `28a0373`, then FIXED the same day on the Owner's decision.** The
+    fix is to check the duplicate's ownership before comparing Classes, which turns that 400
+    into a 403 — an observable response change no acceptance criterion asks for, on the
+    authorization path spec 0003 consolidated, so the build did not take it unilaterally
+    (PRINCIPLES #8). Asked and answered: reorder. `verify_class_ownership` now runs first,
+    both new tests were watched failing at 400, and the three same-teacher cross-Class tests
+    never moved — which is what shows INV-5 still refuses exactly what it is for.
+
+    **AC-21 is unchanged in wording and narrower in fact:** "a merge refused for crossing a
+    Class boundary" now describes only merges within one Teacher's own Classes, because the
+    other shape is refused earlier by `INV-1`. It also strengthens a claim this spec makes in
+    *Out of Scope* — "every INV-1 refusal is the `ForbiddenException` branch and is logged by
+    AC-1" — by one site that previously escaped it. Details in `api/REVIEW-DEBT.md`,
+    2026-09-10.

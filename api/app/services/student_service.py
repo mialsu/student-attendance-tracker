@@ -560,20 +560,32 @@ async def merge_students(
     if not duplicate_student:
         raise NotFoundError("Duplicate student not found")
 
+    # INV-1 before INV-5, and the ORDER is load-bearing rather than tidy. The duplicate arrives
+    # in the request body, not the path, so this is the only thing standing between a Teacher
+    # and another Teacher's Student. While it sat below the comparison, a merge reaching into
+    # another Teacher's Class was refused by the Class comparison first -- the refusal held and
+    # nothing moved, but it answered 400 and the log named `INV-5` for a violation that was
+    # INV-1's. Reordered 2026-09-10 by the Owner's decision, after spec 0005 slice 4's review
+    # found it; the log line is the reason it was visible at all.
+    #
+    # The denied-side test is the merge-duplicate case in `tests/test_authorization.py`, and
+    # `verify_class_ownership` is still the single site in `app/` that compares a teacher_id
+    # (spec 0003; drift-extra check 4 keeps it that way).
+    await class_service.verify_class_ownership(db, duplicate_student.class_id, teacher)
+
     # Verify both students are in the same class
     if target_student.class_id != duplicate_student.class_id:
         # INV-5's one enforcement site, and the refusal labels itself so that it reaches the
         # log (spec 0005, AC-21). It was the one silent refusal on the wrong side of US-1's
         # narrowing: an invariant violation going unrecorded while a login typo was recorded.
-        # The message names neither Student, and `detail` is never logged from any exception.
+        # Reaching this line now means both Classes are the Teacher's own, so INV-5 is
+        # genuinely what refuses. The message names neither Student, and `detail` is never
+        # logged from any exception.
         raise BadRequestException(
             "Cannot merge students from different classes",
             rule="INV-5",
             reason="cross_class_merge",
         )
-
-    # Verify ownership of duplicate student's class (should be same, but explicit check)
-    await class_service.verify_class_ownership(db, duplicate_student.class_id, teacher)
 
     # Transfer all attendance records from duplicate to target
     # Use SQLAlchemy update statement for efficient bulk update

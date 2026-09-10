@@ -6,7 +6,7 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 
 <!-- Newest first. -->
 
-## 2026-09-10 — a cross-teacher merge is refused as INV-5 when the violation is INV-1's
+## 2026-09-10 — a cross-teacher merge was refused as INV-5 when the violation was INV-1's (FIXED same day)
 - **What:** spec 0005 slice 4 labelled `merge_students`' same-Class refusal `rule="INV-5"` so it
   reaches the log (AC-21). That comparison runs **before**
   `class_service.verify_class_ownership` is called on the *duplicate's* Class, so a teacher
@@ -25,18 +25,25 @@ cut (`/confess`), read first by any architecture or review session, dispositione
   `tests/test_logging_events.py::test_another_teachers_student_as_the_duplicate_is_logged_as_inv_5_not_inv_1`
   now pins the current behaviour, so a reorder fails it deliberately rather than silently
   changing what the log says.
-- **Why it was not fixed here:** the fix is to move `verify_class_ownership` above the Class
-  comparison, which turns that 400 into a 403. That is an observable response change on the
-  authorization path spec 0003 consolidated, and no acceptance criterion in spec 0005 asks for
-  it — AC-21 asks only that a cross-Class refusal be logged. A logging slice changing an
-  authorization response code is the Owner's call, not a build decision taken in passing
-  (PRINCIPLES #8). The client does not branch on this status (`client/src/api/students.ts`
-  posts and lets the error surface generically), so the cost of the reorder is low; the
-  decision is still not mine.
-- **Disposition:** **open, and it is a decision for the Owner** — reorder the two checks so the
-  line says `INV-1`, or accept that `rule=INV-5` on this route means "the two Students were not
-  in one Class, for whichever reason". Recorded in spec 0005's delta 13 and in `INVARIANTS.md`'s
-  INV-5 row.
+- **Why it was not fixed in the slice-4 commit (`28a0373`):** the fix moves
+  `verify_class_ownership` above the Class comparison, which turns that 400 into a 403 — an
+  observable response change on the authorization path spec 0003 consolidated, and no
+  acceptance criterion in spec 0005 asks for it. AC-21 asks only that a cross-Class refusal be
+  logged. A logging slice changing an authorization response code is the Owner's call, not a
+  build decision taken in passing (PRINCIPLES #8), so it shipped confessed and pinned.
+- **Fixed 2026-09-10, on the Owner's decision, immediately after that commit.** The ownership
+  check now runs first, so this request answers **403** and the line names `INV-1`. Watched
+  failing first, both halves at 400: the response side in
+  `tests/test_authorization.py::test_other_teacher_cannot_supply_her_own_student_as_a_merge_duplicate`
+  (the merge's second surface — the duplicate arrives in the BODY, where the existing denial
+  test only covered the target in the path), and the log side in
+  `tests/test_logging_events.py::test_another_teachers_student_as_the_duplicate_is_refused_as_inv_1`.
+  The three same-teacher cross-Class tests were unaffected, which is what confirms INV-5 still
+  refuses what it is for. INV-1's denial-test count in `INVARIANTS.md` went 18 -> 19.
+- **Disposition:** **closed, 2026-09-10** — reordered, not accepted. Kept in the ledger rather
+  than deleted because the finding is the useful part: the log line is what made a two-week-old
+  mislabel visible, which is the argument for spec 0005 that no acceptance criterion states.
+  Recorded in spec 0005's delta 13 and in `INVARIANTS.md`'s INV-5 and INV-1 rows.
 
 ## 2026-09-10 — the two irreversible-act statements sit on a write path no ratchet watches
 - **What:** slice 4 added one `SELECT count(*)` to the student-delete path

@@ -855,11 +855,10 @@ async def test_a_cross_class_merge_is_refused_and_the_line_names_inv_5(
     2026-09-10). Both Classes belong to the same teacher here, so ownership passes and INV-5
     is genuinely what refuses.
 
-    It is **not** the only shape that reaches this label, and the test below pins the other
-    one: `merge_students` compares the two Classes BEFORE it checks ownership of the
-    duplicate's Class, so a merge reaching for another teacher's Student lands here too. That
-    is confessed in `api/REVIEW-DEBT.md` (2026-09-10) rather than fixed, because reordering the
-    checks changes a response code and belongs to the Owner.
+    This label means what the criterion says and nothing wider, which took a fix: the Class
+    comparison used to run before the duplicate's ownership check, so a merge reaching into
+    another teacher's Class was refused here too and logged as INV-5. The test below is the
+    other side of that -- same request shape, `INV-1`, 403.
 
     `objects(lines, 1)` is also the assertion that no act line was written: the merge did not
     happen, so the denial is the only line the request may produce.
@@ -913,26 +912,20 @@ async def test_the_cross_class_refusal_names_neither_student(
 
 
 @pytest.mark.asyncio
-async def test_another_teachers_student_as_the_duplicate_is_logged_as_inv_5_not_inv_1(
+async def test_another_teachers_student_as_the_duplicate_is_refused_as_inv_1(
     client, auth_headers, other_teacher_headers, test_class
 ):
-    """The mislabel, pinned rather than asserted away. Established by running it, not reasoned.
+    """A merge reaching for another teacher's Student is an INV-1 refusal, and says so.
 
-    A teacher reaching for another teacher's Student as the merge source is an `INV-1`
-    violation -- "only a Teacher associated with a Class may read or change it, its Students,
-    or its Attendance records". The refusal itself is intact: the merge does not happen, and
-    nothing moves. But `merge_students` compares the two Classes before calling
-    `verify_class_ownership` on the duplicate's Class, so the line says `rule="INV-5"` and no
-    `INV-1` line is written at all.
+    Found by slice 4's review and settled by the Owner the same day. `merge_students` used to
+    compare the two Classes BEFORE checking ownership of the duplicate's Class, so this request
+    was refused with 400 and logged as `rule="INV-5"` -- the refusal held and nothing moved, but
+    the record named a rule that was not the one violated, against US-1's "only the app knows
+    which *rule* refused an authenticated Teacher".
 
-    That is a defect in the RECORD, not in the enforcement, and it works against US-1 -- "only
-    the app knows which rule refused an authenticated Teacher" -- because the rule it names is
-    the wrong one. Fixing it means moving an authorization check, which turns this 400 into a
-    403; no acceptance criterion asks for that, so it is confessed in `api/REVIEW-DEBT.md`
-    (2026-09-10) and left to the Owner.
-
-    This test exists so the day someone reorders those checks, it fails and points at the
-    decision instead of letting the log quietly start telling a different story.
+    The ownership check now runs first. A same-teacher cross-Class merge is still INV-5 (the
+    test above); reaching into another teacher's Class is INV-1, at 403, through the one
+    enforcement site spec 0003 consolidated.
     """
     her_class = await _make_class(client, other_teacher_headers, "Hänen kurssi")
     her_student = await _make_student(
@@ -947,9 +940,10 @@ async def test_another_teachers_student_as_the_duplicate_is_logged_as_inv_5_not_
             headers=auth_headers,
         )
 
-    assert response.status_code == 400
+    assert response.status_code == 403
     line = objects(lines, 1)[0]
 
-    assert line["rule"] == "INV-5"
-    assert line["reason"] == "cross_class_merge"
+    assert line["rule"] == "INV-1"
+    assert line["status"] == 403
+    assert "reason" not in line
     assert_names_absent(line, "Helena", "Salo", "Aino", "Mäkinen")
