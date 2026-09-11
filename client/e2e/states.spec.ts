@@ -121,6 +121,12 @@ const STATES: SweptState[] = [
     // fixed-position panel at 320px, where a dialog overflows more readily than a page does.
     // Reached through the dashed card rather than the header button on purpose — that is the
     // affordance slice 5 added, so this is also the only place the walk exercises it.
+    // `exact` is what makes that last sentence true. Playwright's string form of `name` matches a
+    // case-insensitive SUBSTRING, so without it the header's "Lisää uusi kurssi" matches as well:
+    // two candidates once the cards render (a strict-mode violation), one before they do. This
+    // state therefore passed by clicking the header button on every run where the click resolved
+    // first, and failed only under the load of the full `npm run check`. `auth.spec.ts` carries
+    // the same flag on 'Kirjaudu' for the same reason.
     name: '/dashboard — luo uusi kurssi',
     arrange: async (page) => {
       await signedIn(page);
@@ -128,7 +134,7 @@ const STATES: SweptState[] = [
     },
     reach: async (page) => {
       await page.goto('/dashboard');
-      await page.getByRole('button', { name: 'Uusi kurssi' }).click();
+      await page.getByRole('button', { name: 'Uusi kurssi', exact: true }).click();
       await expect(page.getByRole('dialog', { name: 'Luo uusi kurssi' })).toBeVisible();
       // The panel animates in, and axe must not sample it mid-transition — the same
       // nondeterminism the drawer state documents above.
