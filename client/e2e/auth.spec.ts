@@ -64,6 +64,56 @@ test.describe('/auth', () => {
     await expect(page).toHaveURL(/\/auth$/);
   });
 
+  /*
+   * The split-screen, spec 0006 slice 4. These two live in the browser and cannot live anywhere
+   * else: the aside's whole behaviour is a media query, and jsdom applies none — the same reason
+   * `DESIGN.md`'s A11Y-3 row gives for why the walk caught two nameless controls that the jsdom
+   * sweep and jsx-a11y both read as fine.
+   *
+   * Each project runs one viewport (`playwright.config.ts:58`), either side of `shell` (940px), so
+   * the pair below is the same assertion asked twice rather than a resize dance inside one test.
+   */
+  test('the aside is the panel above shell and the lede alone below it', async ({ page }) => {
+    await page.goto('/auth');
+
+    const aside = page.getByRole('complementary');
+    const lede = aside.getByText('Kaikki kurssisi samassa näkymässä', { exact: false });
+
+    // The one sentence US-2 turns on survives to 320px. This is the Owner's call of 2026-09-11
+    // against the prototype, which hides the aside outright below 940px and leaves a phone with
+    // nothing on screen saying what the app is.
+    await expect(lede).toBeVisible();
+
+    const wide = page.viewportSize()!.width >= 940;
+
+    // The three function rows and the display line are the desktop half of the aside.
+    const functions = aside.getByRole('listitem');
+    if (wide) {
+      await expect(functions).toHaveCount(3);
+      await expect(aside.getByText('Läsnäolojen kirjaus kursseille.')).toBeVisible();
+    } else {
+      await expect(functions).toHaveCount(0);
+      await expect(aside.getByText('Läsnäolojen kirjaus kursseille.')).toBeHidden();
+    }
+  });
+
+  test('the registration hint states the code rules, and names no role', async ({ page }) => {
+    await page.goto('/auth');
+    await page.getByRole('button', { name: 'Ei tiliä? Rekisteröidy' }).click();
+
+    const code = page.getByLabel('Rekisteröintikoodi', { exact: true });
+    await expect(code).toBeVisible();
+
+    // `aria-describedby`, so the rules reach a screen reader on the field rather than only a
+    // sighted reader below it.
+    await expect(code).toHaveAccessibleDescription(/Kertakäyttöinen, voimassa 24 tuntia/);
+
+    // ADR-0003 deleted the superadmin role, so the prototype's "Saat koodin koulusi
+    // pääkäyttäjältä" describes something this app does not have. Asserted as an absence because
+    // the next person to copy a string out of prototype/index.html will reach for that line.
+    await expect(page.getByText(/pääkäyttäj/i)).toHaveCount(0);
+  });
+
   test('a mock registered in a test outranks the /api guard', async ({ page }) => {
     // Not a product assertion — it pins the ordering the whole fixture file depends on. If
     // Playwright ever matched routes oldest-first, every mock here would be shadowed by the 501

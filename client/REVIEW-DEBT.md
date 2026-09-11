@@ -6,6 +6,43 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 
 <!-- Newest first. -->
 
+## 2026-09-11 — a gradient is gated at its endpoints, which holds only while it has two
+- **What:** slice 4's auth aside paints `linear-gradient(150deg, hsl(var(--primary)),
+  hsl(var(--auth-aside-to)))` under `--primary-foreground` text.
+  `src/__tests__/tokens-contrast.test.ts` now asserts the end stop in both themes, which is a real
+  gate — it was watched red at 3.28:1 against the prototype's own third stop. But the argument
+  that makes two assertions cover the whole panel is **monotonicity**: every channel increases
+  from start to end (R 78→123, G 67→83, B 223→233), so no pixel behind the text is lighter than
+  the endpoint. A third stop breaks that argument silently.
+- **Where:** `tailwind.config.ts` (`backgroundImage.auth-aside`), `src/index.css`
+  (`--auth-aside-to`, both blocks), `src/__tests__/tokens-contrast.test.ts`.
+- **What green tests do NOT prove here:** that the gradient still has only two stops. Nothing
+  parses `backgroundImage`; the test reads the two tokens it is named. And the browser cannot
+  cover for it — axe returns `color-contrast` as *incomplete* over any gradient, and
+  `e2e/assertions.ts:111` keeps only `violations`, so an unmeasured middle stop sweeps clean at
+  both viewports. This is the same shape as the badge that sat at 3.25:1 where only axe could see
+  it, with the polarity reversed: here axe is the blind one.
+- **Disposition:** open, and cheap to close if it ever matters — a test that reads the gradient
+  string out of the Tailwind config and fails on any stop it cannot resolve to a token. Not
+  written now because there is exactly one gradient in the app and inventing a parser for it
+  would be machinery ahead of the problem. `DESIGN.md` §6 carries the rule in prose meanwhile:
+  a stop in an app gradient is a token, or it is unmeasured.
+
+## 2026-09-11 — the aside's copy is verified for its claims, not for its language
+- **What:** slice 4 asserts that the registration-code hint carries the code's real rules and that
+  the word `pääkäyttäjä` appears nowhere (`e2e/auth.spec.ts`). Both were watched red. Neither is
+  a check that the Finnish is *good* Finnish, and AC8 — "the auth aside contains no sales copy;
+  all UI strings remain Finnish" — is tagged `/verify-live` for exactly that reason.
+- **Where:** `src/pages/Auth.tsx` (`FUNCTIONS`, `LEDE`, the hint), `e2e/auth.spec.ts`.
+- **What green tests do NOT prove here:** that "Kertakäyttöinen, voimassa 24 tuntia ja sidottu
+  yhteen sähköpostiosoitteeseen." reads naturally to the teacher, that the three function labels
+  describe what she thinks those screens do, or that the lede is the sentence worth keeping when
+  it is the *only* thing a phone shows. A11Y-9 (no control announces itself in the wrong language)
+  remains `[review-only]` and is untouched by this slice.
+- **Disposition:** open until the Owner's live pass. Deliberately deferred per his decision of
+  2026-09-11 — *"I will review live when we get the full UI thing ready"* — so no AC verdict is
+  filled for slice 4 either.
+
 ## 2026-09-11 — no gate checks contrast in a hover, focus or active state
 - **What:** slice 3 shipped a real below-AA hover state and only found it by accident. The brand
   link carried `hover:opacity-80` (inherited from `AppLogo`, where it was safe on 16px

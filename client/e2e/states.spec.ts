@@ -60,6 +60,25 @@ const STATES: SweptState[] = [
     },
   },
   {
+    /*
+     * Added by spec 0006 slice 4, and it is a state `DESIGN.md` §3 always implied without the
+     * sweep ever entering it: signup is the same surface with three more controls, one of them
+     * carrying the registration-code hint this slice rewrote. The file header's argument applies
+     * exactly — "a journey visits the states it happens to cross" — and no journey here signs up.
+     *
+     * At 320px it is also the tallest, widest form the app has, which makes it the `A11Y-7`
+     * measurement that actually bites on this surface.
+     */
+    name: '/auth — rekisteröityminen',
+    arrange: async () => {},
+    reach: async (page) => {
+      await page.goto('/auth');
+      await page.getByRole('button', { name: 'Ei tiliä? Rekisteröidy' }).click();
+      await expect(page.getByRole('heading', { name: 'Rekisteröidy' })).toBeVisible();
+      await expect(page.getByLabel('Rekisteröintikoodi', { exact: true })).toBeVisible();
+    },
+  },
+  {
     name: '/dashboard — loading',
     arrange: async (page) => {
       await signedIn(page);

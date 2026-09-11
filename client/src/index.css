@@ -146,6 +146,25 @@ All colors MUST be HSL.
     --accent: 243 90% 96%;
     --accent-foreground: 244 71% 57%;
 
+    /* The auth aside's gradient END. Its start is `--primary`, reused rather than re-declared, so
+       the panel cannot drift away from the app's own indigo.
+
+       FOURTH departure from the prototype, same reason as the three above: `prototype/index.html`
+       runs this gradient to a third stop, `#b06cf0`, and white on that measures 3.28:1 — below AA
+       for every size the aside uses except its 34px heading. The prototype also thinned its small
+       text to opacity .85, which took the 13px feature sub-labels to 2.86:1. Both are gone: the
+       third stop is deleted and the aside paints solid `--primary-foreground` throughout.
+
+       What survives is the prototype's own 55% stop, unchanged, at 4.92:1.
+
+       No gate could have caught the old version, which is why the stop is a token at all.
+       `tokens-contrast.test.ts` needs two solid colours and cannot express a gradient; axe returns
+       `color-contrast` as *incomplete* over one, and `e2e/assertions.ts:111` reads only
+       `violations`. Declaring the endpoint here puts it back inside that test's reach — and the two
+       endpoints are enough, because every channel moves monotonically between them (R 78→123,
+       G 67→83, B 223→233), so the end stop is the lightest pixel behind any text. */
+    --auth-aside-to: 256 77% 62%;
+
     /* Secondary */
     --secondary: 226 37% 93%;
     --secondary-foreground: 232 33% 14%;
@@ -199,6 +218,13 @@ All colors MUST be HSL.
     --primary-foreground: 240 40% 12%;
     --accent: 240 27% 19%;
     --accent-foreground: 244 100% 76%;
+
+    /* The auth aside's gradient end, dark's counterpart. It travels the same hue distance from
+       `--primary` (244 → 256) and the same 5 points of lightness, so the panel reads as the same
+       object in a theme nobody can reach yet. Dark inverts which end is the risk — the text is
+       near-black `--primary-foreground` — so the LIGHTEST stop is the safe one here and the
+       gradient's start is the tight end. Both are asserted. */
+    --auth-aside-to: 256 100% 81%;
 
     /* Secondary */
     --secondary: 234 27% 21%;

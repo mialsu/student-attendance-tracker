@@ -46,6 +46,12 @@ export default {
         '18': '4.5rem',
         '22': '5.5rem',
       },
+      backgroundImage: {
+        // The auth aside, spec 0006 slice 4. Both endpoints are tokens so that
+        // `src/__tests__/tokens-contrast.test.ts` can gate them — a gradient written inline in
+        // JSX would be invisible to every gate this repo owns. See `--auth-aside-to` in index.css.
+        'auth-aside': 'linear-gradient(150deg, hsl(var(--primary)), hsl(var(--auth-aside-to)))',
+      },
       boxShadow: {
         'subtle': '0 1px 2px 0 rgb(0 0 0 / 0.04)',
         'sm': '0 2px 8px 0 rgb(0 0 0 / 0.08)',

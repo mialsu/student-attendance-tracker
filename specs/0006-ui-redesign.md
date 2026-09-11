@@ -318,6 +318,36 @@ unrecorded is the defect.)*
   already there above it. The first draft declared it 320-only and skipped it at 1280, which the
   drift gate correctly rejected: a skipped test and a silenced one are indistinguishable to it.
   Sweeping both is also simply stronger.
+- **2026-09-11 — slice 4 keeps the aside's lede below 940px, where the prototype hides the aside
+  outright.** Decided by the Owner against `prototype/index.html:457`. The prototype's media query
+  takes the whole panel away at narrow widths, which leaves a phone with nothing on screen saying
+  what the app is — so **US-2 and AC8 would have been desktop-only criteria** without anyone
+  writing that down. The compromise costs three lines: the lede survives as muted text above the
+  form, the display line and the three function rows do not. `e2e/auth.spec.ts` asserts both
+  shapes, one viewport each, because jsdom applies no media query.
+- **2026-09-11 — slice 4 is the FOURTH measured departure from the prototype's palette, and the
+  first one no gate could have caught.** The aside's gradient runs to `#b06cf0`, where white text
+  measures **3.28:1**; the prototype also thins its small print to opacity .85, which took the
+  13px feature sub-labels to **2.86:1**. Three of the aside's four text sizes were below AA. The
+  third stop is deleted, the opacity is gone, and the surviving endpoint is the prototype's own
+  55% stop at 4.92:1. The reason this is a spec delta rather than a bug fix: nothing in the repo
+  was capable of noticing. `tokens-contrast.test.ts` needs two solid colours, axe reports contrast
+  over a gradient as *incomplete*, and `e2e/assertions.ts:111` keeps only `violations`. The fix is
+  therefore structural — the stop is a **token** (`--auth-aside-to`) and the pair is asserted in
+  both themes, watched red at 3.28:1 first.
+- **2026-09-11 — slice 4 rewrote a prototype string that described a role this app deleted.** The
+  registration-code hint read *"Saat koodin koulusi pääkäyttäjältä."* ADR-0003 removed the
+  superadmin role; codes are issued from the command line by whoever has database access, so there
+  is no pääkäyttäjä to ask. Replaced with the three facts the code actually carries — single-use
+  and 24 hours (INV-6, `registration_code_service.py:18`), one email address (INV-7, `:142`) —
+  wired to the field with `aria-describedby`. The prototype's `XXXX-XXXX-XXXX` placeholder was
+  **not** adopted either: the code is 16 URL-safe characters with no dashes (`:30`). The aside's
+  own copy carried a smaller version of the same defect, *"oppilaskohtaisesti"*, against a
+  glossary whose word is **opiskelija** (`client/CONTEXT.md:30`).
+- **2026-09-11 — the auth aside carries no brand, where the prototype gives it one.** The
+  prototype's auth screen has no top bar, so its aside has to introduce the app. The real screen
+  keeps `PublicNav`, which already shows the wordmark — a second one on the same page is the "two
+  words for one thing" the drift gate exists to catch. The aside opens on its display line instead.
 
 ## Further Notes
 

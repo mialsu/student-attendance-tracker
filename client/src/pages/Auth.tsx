@@ -4,10 +4,26 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import PublicNav from '@/components/PublicNav';
-import { Eye, EyeOff } from 'lucide-react';
+import { BarChart3, CheckCircle2, Eye, EyeOff, UserPlus } from 'lucide-react';
+
+/**
+ * What the aside says, and why it is a list of functions rather than a pitch.
+ *
+ * US-2 asks the login screen to "plainly describe what the app does, so that it feels like a
+ * personal utility and not a sales pitch", and AC8 makes "no sales copy" a criterion. These three
+ * are the app's three functions, named with the same words the rest of the UI uses — the glossary
+ * in `client/CONTEXT.md`, not a synonym for it.
+ */
+const FUNCTIONS = [
+  { icon: UserPlus, title: 'Läsnäolon kirjaus', detail: 'Nimellä, 1–50 kerralla' },
+  { icon: CheckCircle2, title: 'Suoritusmerkinnät', detail: 'Kurssisuoritus opiskelijakohtaisesti' },
+  { icon: BarChart3, title: 'Tilastot', detail: 'Päivä- ja kuukausitasolla' },
+] as const;
+
+/** The one sentence that survives to 320px. Below `shell` it is the whole aside. */
+const LEDE = 'Kaikki kurssisi samassa näkymässä: läsnäolot, suoritusmerkinnät ja tilastot.';
 
 const Auth = () => {
   const [isLogin, setIsLogin] = useState(true);
@@ -95,23 +111,87 @@ const Auth = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="flex min-h-screen flex-col bg-background">
       <PublicNav />
-      <div className="flex items-center justify-center px-4 py-12">
-        <Card className="w-full max-w-md">
-        <CardHeader>
-          <CardTitle>{isLogin ? 'Kirjaudu sisään' : 'Rekisteröidy'}</CardTitle>
-          <CardDescription>
-            {isLogin ? 'Syötä kirjautumistietosi' : 'Luo uusi käyttäjätili'}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
+
+      <div className="grid flex-1 shell:grid-cols-2">
+        {/*
+          One element, two shapes, rather than two elements swapping under `hidden`.
+
+          Below `shell` (940px, src/lib/breakpoints.ts) the Owner's call was that the lede survives
+          and the rest does not: a phone gets the sentence as muted text above the form, so US-2 is
+          served at both widths, and it costs three lines instead of a full-height panel the form
+          would sit below. The prototype hides the aside outright at this width, which left AC8's
+          copy unreadable on a phone (`prototype/index.html:457`).
+
+          Keeping ONE node for the lede is deliberate: rendering it twice behind `hidden shell:block`
+          and `shell:hidden` would put the same string in the DOM twice, which is the duplicate-text
+          trap slice 3 hit in `e2e/auth.spec.ts`. Here the element never moves; only its skin does.
+
+          `bg-auth-aside` is the gradient, defined in tailwind.config.ts from two tokens so that
+          tokens-contrast.test.ts can gate it. Text is `--primary-foreground` at full opacity — the
+          prototype's opacity:.85 on the small print measured 2.86:1 and is gone.
+        */}
+        <aside
+          className="
+            px-4 pb-2 pt-6 text-muted-foreground
+            shell:flex shell:flex-col shell:justify-center shell:gap-10
+            shell:bg-auth-aside shell:px-12 shell:py-16 shell:text-primary-foreground
+          "
+        >
+          {/*
+            A <p>, not a heading, and that is not laziness. The document's one <h1> is the form's
+            "Kirjaudu sisään" — what a screen-reader user navigating by heading wants on a login
+            page. The aside precedes it in DOM order, so a heading here would be an h2 above the
+            h1. Display type is what this is; display type is what it is marked as.
+          */}
+          <p className="hidden shell:block shell:max-w-[15ch] shell:text-4xl shell:font-bold shell:leading-tight">
+            Läsnäolojen kirjaus kursseille.
+          </p>
+
+          <p className="shell:max-w-[42ch] shell:text-lg shell:leading-relaxed">{LEDE}</p>
+
+          <ul className="hidden shell:flex shell:flex-col shell:gap-5">
+            {FUNCTIONS.map(({ icon: Icon, title, detail }) => (
+              <li key={title} className="flex items-start gap-3">
+                <span
+                  aria-hidden="true"
+                  className="grid size-9 shrink-0 place-items-center rounded-md bg-primary-foreground/20"
+                >
+                  <Icon className="size-[18px]" />
+                </span>
+                <span>
+                  {/*
+                    Two lines, one list item. Slice 3's finding: accessible names concatenate with
+                    no separator, so "Suoritusmerkinnät" + "Kurssisuoritus…" would announce as one
+                    run-together word. A block <b> and a block <span> put a line box between them,
+                    which is what the name computation reads as a space.
+                  */}
+                  <b className="block font-semibold">{title}</b>
+                  <span className="block text-sm shell:text-primary-foreground">{detail}</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </aside>
+
+        <main className="grid place-items-center px-4 py-8 shell:py-12">
+          <form onSubmit={handleSubmit} className="w-full max-w-md space-y-4">
+            <div className="space-y-1">
+              <h1 className="text-2xl font-semibold leading-none tracking-tight">
+                {isLogin ? 'Kirjaudu sisään' : 'Rekisteröidy'}
+              </h1>
+              <p className="text-sm text-muted-foreground">
+                {isLogin ? 'Syötä kirjautumistietosi' : 'Luo uusi käyttäjätili'}
+              </p>
+            </div>
+
             <div className="space-y-2">
               <Label htmlFor="email">Sähköposti</Label>
               <Input
                 id="email"
                 type="email"
+                autoComplete="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
@@ -126,6 +206,7 @@ const Auth = () => {
                 <Input
                   id="password"
                   type={showPassword ? "text" : "password"}
+                  autoComplete={isLogin ? 'current-password' : 'new-password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
@@ -149,6 +230,7 @@ const Auth = () => {
                     <Input
                       id="confirmPassword"
                       type={showConfirmPassword ? "text" : "password"}
+                      autoComplete="new-password"
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
                       required
@@ -172,11 +254,25 @@ const Auth = () => {
                   <Input
                     id="registrationCode"
                     type="text"
+                    autoComplete="off"
                     value={registrationCode}
                     onChange={(e) => setRegistrationCode(e.target.value)}
                     placeholder="Syötä 16-merkkinen koodi"
+                    aria-describedby="registrationCodeHint"
                     required
                   />
+                  {/*
+                    The prototype's hint here read "Saat koodin koulusi pääkäyttäjältä." — a role
+                    ADR-0003 deleted. There is no pääkäyttäjä: codes are issued from the command
+                    line by whoever has database access, which is why the admin endpoints are gone.
+                    Replaced with three facts a teacher can act on, each from the code rather than
+                    from the prototype: single-use and 24 hours are INV-6
+                    (`registration_code_service.py:18`), one address is INV-7 (`:142`) and is the
+                    refusal she is most likely to hit by typing a different address.
+                  */}
+                  <p id="registrationCodeHint" className="text-sm text-muted-foreground">
+                    Kertakäyttöinen, voimassa 24 tuntia ja sidottu yhteen sähköpostiosoitteeseen.
+                  </p>
                 </div>
               </>
             )}
@@ -192,8 +288,7 @@ const Auth = () => {
               {isLogin ? 'Ei tiliä? Rekisteröidy' : 'Takaisin kirjautumiseen'}
             </Button>
           </form>
-        </CardContent>
-      </Card>
+        </main>
       </div>
     </div>
   );

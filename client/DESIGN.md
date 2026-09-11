@@ -57,7 +57,7 @@ One teacher, one Kurssi, in production since November 2025. Every surface below 
 
 | Surface | Serves | Slice | Status |
 |---|---|---|---|
-| `/auth` | getting the one teacher in, and nobody else — signup needs a 16-char registration code issued from the CLI | — | built |
+| `/auth` | getting the one teacher in, and nobody else — signup needs a 16-char registration code issued from the CLI. A split-screen since slice 4: an indigo aside naming the app's three functions, and the form | 4 | built |
 | `/dashboard` | "the Kurssi she owns, and a way to make another" | — | built |
 | `/class/:id` → *Kirjaa läsnäolo* | the core loop: record who turned up, 1–50 at a time, with name autocomplete | — | built |
 | `/class/:id` → *Läsnäolot* | the tally per Student, the course-credit tick, and correcting mistakes (rename, merge, delete) | — | built |
@@ -132,7 +132,8 @@ accessibility check available here is also the width decision.
 | *Läsnäolot* | "Ei opiskelijoita vielä" (desktop) / "Ei läsnäoloja kirjattu vielä tälle kurssille" (narrow); searching yields "Ei hakutuloksia haulla …" | Card header stays, body becomes a spinner | "Opiskelijoiden lataaminen epäonnistui" + the retry | rows, tally, and the *Suoritus* tick |
 | *Tilastot* | "Ei läsnäoloja näytettäväksi" + "Kirjaa opiskelijoiden läsnäoloja nähdäksesi tilastot." | "Ladataan tilastoja…" | "Tilastojen lataaminen epäonnistui" + the retry | the daily and monthly aggregates |
 | `/settings` | n/a | button disables | toast with the API's `detail` | toast |
-| `/auth` | n/a | button disables | toast: "Väärä sähköposti tai salasana" / "Rekisteröinti epäonnistui" | redirect to the dashboard |
+| `/auth` — kirjautuminen | n/a | button disables | toast: "Väärä sähköposti tai salasana" | redirect to the dashboard |
+| `/auth` — rekisteröityminen | n/a | button disables | toast: "Rekisteröinti epäonnistui"; the two client-side refusals are inline — "Sähköpostin tulee olla oikeassa muodossa", "Salasanat eivät täsmää" | redirect to the dashboard |
 | `/class/:id` | n/a | full-surface spinner | redirect to `/dashboard`, silently | the three tabs |
 | 404 | n/a | n/a | n/a | English copy, untokenized colours |
 | the shell's course list | "Ei kursseja" | one `SidebarMenuSkeleton` row | "Kursseja ei voitu ladata" — muted, and deliberately **not** `role="alert"` | the Kurssi list, each row a link with its Student count |
@@ -213,7 +214,15 @@ to *everyone*, and `UserMenu`'s header trigger would have reproduced the bug exa
   `/class/:id`, `/settings`
 - **`DataTable`** (`src/components/ui/data-table.tsx`) — the desktop table: columns, row actions,
   expansion, pagination — used by: *Läsnäolot*
-- **`PublicNav`** — the signed-out header — used by: `/auth`
+- **`PublicNav`** — the signed-out header — used by: `/auth`, and only `/auth`. It stays above the
+  split-screen rather than being dropped for a full-bleed panel the way the prototype draws it,
+  which is why the aside carries **no brand of its own**: the wordmark is already on the page, and
+  a second one would be the "two words for one thing" the drift gate exists to catch.
+- **the auth aside** (`src/pages/Auth.tsx`) — one element, two shapes. Above `shell` it is the
+  indigo gradient panel: a display line, the lede, and the three functions. Below `shell` the
+  gradient, the display line and the functions all go and the **lede stays**, as muted text above
+  the form. The lede is a single DOM node in both shapes — not two behind `hidden` — because the
+  same string twice is the duplicate-text trap slice 3 hit in `e2e/auth.spec.ts`.
 - **`AttendanceTracking` / `StudentLogs` / `ClassStatistics`** — the three tabs of `/class/:id`
 
 `StudentLogs` was **1100 lines** and rendered two complete implementations of one surface — a
@@ -246,7 +255,7 @@ runs in `npm run check` and as a job `deploy` needs. One row moved the other way
 | A11Y-2a | Focus **order** follows reading order | `test:e2e/core-loop.spec.ts` — the forward tab sequence taken once, then asserted: name after date, quantity after name, submit last. A press *count* cannot do this job, because Tab wraps at the end of the document | `[test]` |
 | A11Y-2b | Focus is always **visible** | nothing. ADR-0005 rejected a screenshot baseline for it — genuinely stronger, and it buys committed PNGs and their churn in front of every `git status`. Split from A11Y-2a on 2026-09-07 rather than left `[live]`, because one row cannot carry two enforcers | `[review-only]` |
 | A11Y-3 | Every control has an accessible name, and no `<img>` is unlabelled | `lint:gate:a11y` (jsx-a11y, ratchet at 0) + `test:surfaces.a11y.test.tsx` (axe, six states, jsdom) + `test:e2e/states.spec.ts` (axe, every state in `e2e/states.spec.ts`'s table, real browser). The third one is the only one that could catch what it caught: `AppLogo` and `UserMenu` both hid their only text with `hidden sm:inline`, so below 640px each was a nameless control on every signed-in surface. jsx-a11y reads the span in the JSX; jsdom applies no media query | `[lint]` |
-| A11Y-4 | Text clears 4.5:1, and a boundary that identifies a control clears 3:1 | `test:tokens-contrast.test.ts` — thirteen token pairs computed from `src/index.css`, not from intent, in both `:root` and `.dark` — **and** `test:e2e/states.spec.ts`, axe with `color-contrast` enabled over every rendered state in `e2e/states.spec.ts`'s table. The second half is not a duplicate: the token test proves the palette and cannot express an alpha composite. Three of those thirteen pairs were added on 2026-09-10 by making the badge solid and by asserting `--input` against `--card` as well as the page, which is why only the 404 is still exempt | `[test]` |
+| A11Y-4 | Text clears 4.5:1, and a boundary that identifies a control clears 3:1 | `test:tokens-contrast.test.ts` — thirteen token pairs computed from `src/index.css`, not from intent, in both `:root` and `.dark` — **and** `test:e2e/states.spec.ts`, axe with `color-contrast` enabled over every rendered state in `e2e/states.spec.ts`'s table. The second half is not a duplicate: the token test proves the palette and cannot express an alpha composite. Three of those thirteen pairs were added on 2026-09-10 by making the badge solid and by asserting `--input` against `--card` as well as the page, which is why only the 404 is still exempt. Slice 4 added the first **gradient** pair: the auth aside runs `--primary` → `--auth-aside-to` under `--primary-foreground` text, and gating the two endpoints gates the span because every channel moves monotonically between them. The prototype's own third stop measured **3.28:1** there and no gate could see it — axe returns `color-contrast` as *incomplete* over a gradient and `e2e/assertions.ts:111` reads only `violations` | `[test]` |
 | A11Y-5 | Nothing conveys meaning by colour alone | nothing — a human has to look. The *Suoritus* badge carries its word, which is why it passes today | `[review-only]` |
 | A11Y-6 | `prefers-reduced-motion` is respected | nothing. `animate-fade-in`, `transition-smooth` and `active:scale-[0.98]` all ignore it | `[review-only]` |
 | A11Y-7 | Content reflows at 320px with no two-directional scrolling (WCAG 1.4.10) | `test:e2e/states.spec.ts` — `documentElement.scrollWidth <= clientWidth` in every state of `e2e/states.spec.ts`'s table at 320px, measured after `document.fonts.ready` so the widths are Fira Sans's and not system-ui's — Fira **stays** under spec 0006, so these measurements were not re-opened by the reskin. It **passes on all of them**, the three error states and the drawer included, and it caught one real failure on the way in: the *Tilastot* charts forced the page to 760px. An inner container that scrolls is deliberate and allowed; the document scrolling is not | `[test]` |
@@ -299,6 +308,13 @@ The honest list, because §5's tags make the rest of this document look more enf
   and confessed in `REVIEW-DEBT.md`. The palette change could not touch it: that file bypasses the
   token system altogether, so it needs tokenizing *and* translating. Not a gate failing to catch
   something — the gate caught it.
+- **A gradient with a stop in the middle.** Slice 4 brought the auth aside inside the token test
+  by reducing its gradient to two endpoints and asserting both — sound only because every channel
+  moves monotonically between them, so the ends bracket every pixel. Add a third stop to
+  `bg-auth-aside` and that stops being true: `tokens-contrast.test.ts` reads the two tokens it is
+  told about, axe reports contrast over a gradient as *incomplete*, and `assertions.ts:111` keeps
+  only `violations`. **Nothing would go red.** The rule, since no gate states it: a stop in an
+  app gradient is a token, or it is unmeasured.
 - **Whether axe is measuring the screen or the animation.** It caught the walk out once, on the
   first run: `/settings`' tab trigger reported 4.43:1 against 4.5, at 320px and not at 1280px,
   because `animate-fade-in` was still running and axe composites what is painted. The walk now

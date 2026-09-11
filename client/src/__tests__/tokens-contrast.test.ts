@@ -89,6 +89,23 @@ const PAIRS: Pair[] = [
   // Card, not on the page, and `--card` is lighter than `--background` in the light theme. Solving
   // `--input` against `background` alone would have left the commoner case unasserted.
   { fg: 'input', bg: 'card', need: UI, where: 'a form field inside a Card — the commoner case' },
+
+  // Added by spec 0006 slice 4, and it is the first pair here that gates a GRADIENT. The auth
+  // aside paints `linear-gradient(150deg, hsl(var(--primary)), hsl(var(--auth-aside-to)))` with
+  // `--primary-foreground` text, and the file header above is explicit that this test cannot see
+  // "text over an image or a gradient". It can see this one, because the gradient was reduced to
+  // two token endpoints between which every channel moves monotonically — so no pixel behind the
+  // aside's text is lighter than `--auth-aside-to` (light theme) or darker than `--primary`
+  // (dark, where the text colour inverts). Gate the endpoints and the span is gated.
+  //
+  // The pair below is the one that failed as the prototype drew it: 3.28:1 at its third stop,
+  // invisible to every gate this repo owns. See the token's comment in index.css.
+  {
+    fg: 'primary-foreground',
+    bg: 'auth-aside-to',
+    need: TEXT,
+    where: "the auth aside's gradient end — the lightest pixel behind its text (Auth.tsx)",
+  },
 ];
 
 /**
