@@ -33,10 +33,18 @@ cut (`/confess`), read first by any architecture or review session, dispositione
   difference validates the new file in a throwaway `nginx:alpine` on `attendance-prod-network`,
   recreates the container, re-checks the checksum, and health-checks the public endpoint through
   the new proxy. An unchanged file does nothing, so the common deploy keeps its current behaviour.
-- **What is still unproven:** the new step has **not run on the VM**. Its logic was exercised
-  locally and its shell passes `bash -n` and `shellcheck`, which is the same standing the deploy
-  job itself has — the first real execution is its own verification. Watch the next deploy's
-  `nginx config` group.
+- **Half proven on the VM, 2026-09-11.** The `61feba3` deploy ran the new step and reported
+  `nginx.conf unchanged (sha256 227d07c7...) - nothing to do`. That proves the detector reads a
+  checksum from both sides, that host and container now agree, and that an unchanged file costs no
+  restart.
+- **The other half is still unproven, and it is the half with the moving parts:** the `else`
+  branch — validating in a throwaway `nginx:alpine` on the hardcoded `attendance-prod-network`,
+  `--force-recreate`, the post-recreate checksum re-check, and the second health check through the
+  new proxy. None of it has executed, because a deploy only reaches it when `nginx.conf` changes.
+  This commit changes `nginx.conf` (a comment) for exactly that reason, so the deploy carrying
+  this entry is the path's first exercise. If that deploy's `nginx config` group does not print
+  `✔ nginx recreated and reading <sha>` followed by `✔ healthy through the new proxy`, this entry
+  is what to read first.
 - **Disposition:** the mechanism is fixed and confessed. Open only on "the next deploy is its own
   proof", and on the question of whether any past nginx change was silently lost.
 

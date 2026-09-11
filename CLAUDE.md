@@ -978,9 +978,30 @@ carried the name. Anything that told you to branch off `develop` was wrong.
 
 - `main` — the only long-lived branch, and the only one that deploys. Every push to it that
   passes its gates goes to production (see *CI/CD* above).
-- **Topic branch off `main`, merged back into `main`.** The merge keeps both parents — no squash,
-  no rebase — so `main` is deliberately non-linear and `git log --first-parent main` reads as the
-  list of landed changes while plain `git log main` reads as every commit that got them there.
+- **Topic branch off `main`, SQUASH-merged into `main`.** One commit per landed change, so
+  `main` is linear and `git log --oneline main` is the list of what shipped. The Owner chose this
+  on 2026-09-11: a thirteen-commit slice landing as thirteen commits makes that log unreadable for
+  exactly the case it is for.
+
+  **This paragraph said the opposite until then** — "the merge keeps both parents, no squash, no
+  rebase" — while every PR was in fact squashed. A documented rule the tooling overrides is worse
+  than no rule, since each session reads it and believes it.
+
+  Two consequences that follow, and the first is the one that bites:
+
+  - **The PR title becomes the commit subject, permanently.** It is what `git log --oneline`
+    shows forever, so name a PR the way you would name a commit. GitHub defaults the title to
+    the branch name, which is how `61feba3` ended up reading "Docs/ac16 db recreation (#9)"
+    instead of naming the nginx fix it carries. Compare `d25ec29` and `9e588b3`, which were
+    titled deliberately.
+  - **Cite the squash commit or the PR number, never a pre-merge SHA.** A topic branch's commits
+    are not ancestors of `main` and never become reachable from it. `REVIEW-DEBT.md`, the ADRs
+    and this file all cite SHAs — that is why the four-repo merge used `git subtree` rather than
+    a rewrite — so the citation has to be the thing that survives.
+
+  Nothing is lost to the squash: GitHub concatenates every commit message into the squash body in
+  full. `d25ec29` carries all thirteen, 550 lines of them. `git show` and `git log --grep` reach
+  them; only `git log --oneline` hides them, which is the point.
 - Prefixes in use: `feature/`, `fix/`, `chore/`, `docs/`, `ci/`, `proto/`. The authoritative
   list is `git branch -a`, not this line — it is a habit, not a rule, and nothing enforces it.
 
