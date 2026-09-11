@@ -17,6 +17,19 @@ a step so the *Suoritus* badge does not depend on what sits behind it. The badge
 an alpha composite, which moved it from the browser walk's exemption list into the token test.
 **Dark mode was declined** — `.dark` is re-mapped in step and stays unreachable (§6).
 
+**The frame is a persistent sidebar — spec 0006 slice 3, 2026-09-11.** The header is gone on every
+width: the brand and the account menu moved into the sidebar, the breadcrumbs to the top of the
+main region, and below 940px the whole sidebar becomes an off-canvas drawer. §1, §2 and §4 are
+rewritten below rather than appended to. Two things the build taught, both now in §6: a
+`hover:opacity-80` carried over from `AppLogo` took 11.2px muted text to **4.28:1**, and the shell
+made `main` a flex item, which broke `A11Y-7` in three states until `min-w-0` let it shrink again.
+
+**A note on the numbers in §5 and §6.** They used to be spelled out — "seventeen states", "ten
+pairs" — and on 2026-09-11 two of them disagreed inside one section ("thirteen token pairs" in the
+`A11Y-4` row against "ten pairs" four lines below it). `CLAUDE.md`'s *Why this file quotes no test
+counts* is the rule that applies: **name the command, not the count.** Done here for the swept
+states, which this slice changed in five places at once.
+
 **The scope source is not a brief.** This project predates Stage 0 and has no `PRODUCT-BRIEF.md`,
 so §1 reconciles against `CONTEXT.md` plus the feature set actually in production, and §3's
 empty/refused/error answers came from the code and from the Owner rather than being carried over
@@ -52,6 +65,7 @@ One teacher, one Kurssi, in production since November 2025. Every surface below 
 | `/settings` | change email, change password | — | built |
 | `*` → 404 | the wrong address | — | built, and see below |
 | `/` | not a surface — renders `null` and redirects by session (`Index.tsx`) | — | built |
+| the shell | not a route: the frame every signed-in surface renders inside — brand, the Kurssi list, settings, the account menu. A drawer below 940px | 0006/3 | built |
 
 - **Surfaces serving nothing:** the 404 is real but was never finished to the standard of the rest.
   It is the **only** file in the app written in English ("Oops! Page not found", "Return to Home")
@@ -62,7 +76,9 @@ One teacher, one Kurssi, in production since November 2025. Every surface below 
 - **Capabilities with no surface — five, and the last one matters most:**
   1. **No way to rename or delete a Kurssi.** `useUpdateClass` and `useDeleteClass` exist at
      `src/hooks/useClasses.ts:31,44` and no component calls either. Dead client code and a gap in
-     the same breath.
+     the same breath. **The sidebar makes this more visible, not less** (slice 3): the course list
+     is now on screen at all times with no affordance to manage what it lists. The Owner adopted
+     the sidebar knowing that; it is its own spec, and archiving is explicitly out of 0006's scope.
   2. `POST /classes/{id}/students` has no caller. A Student comes into being only as a side effect
      of logging attendance, which matches `CONTEXT.md`'s per-Class row model and is fine — but it
      means there is no way to add a Student who has not yet attended.
@@ -80,6 +96,13 @@ One teacher, one Kurssi, in production since November 2025. Every surface below 
   → the Kurssi → *Kirjaa läsnäolo* → type a name, autocomplete offers previous Students by
   frequency → set a quantity 1–50 → the toast confirms and the field clears. Ends early when: the
   name is blank, or the API refuses, and the toast carries the reason.
+- **Switch Kurssi (new, slice 3 — US-6):** from any signed-in surface, the sidebar's course list →
+  the Kurssi. No trip back to the dashboard. Below 940px the same list is one tap further away,
+  behind *Avaa valikko*, and the drawer closes itself on the way out so the surface it opened is
+  not left underneath it. Where you are is marked with `aria-current="page"` — the Kurssi in the
+  sidebar, the tab in the breadcrumbs, which is why the breadcrumbs are no longer hidden on a
+  phone. Ends early when: the course list failed to load, and the sidebar says so instead of
+  showing an empty list (§3).
 - **Catch up from paper:** the same flow with a quantity above 1 — 1–50 records sharing one
   timestamp, which is why bulk entry exists.
 - **Correct a mistake:** *Läsnäolot* → find the Student (search is debounced 500ms) → rename in
@@ -87,8 +110,12 @@ One teacher, one Kurssi, in production since November 2025. Every surface below 
   the new name already exists in this Kurssi, and the dialog offers a merge instead.
 - **Decide a credit:** *Läsnäolot* → read the tally → tick *Suoritus* by hand. The teacher decides;
   around 14–15 attendances is her rule of thumb and **nothing in the app enforces or displays it**.
-- **Get in / get out:** `/auth` → dashboard, and the user menu → logout. Signup additionally needs
-  a registration code. Ends early when: the code is used, revoked, expired, or not for that email.
+- **Get in / get out:** `/auth` → dashboard, and the account chip at the foot of the sidebar →
+  logout. Signup additionally needs a registration code. Ends early when: the code is used,
+  revoked, expired, or not for that email.
+  **The prototype would have broken this half.** Its sidebar chip opens Settings and carries no
+  logout at all (`prototype/index.html:556`), so following the visual source of truth literally
+  would have deleted the only way out of the app. The chip keeps the dropdown the header owned.
 
 ---
 
@@ -108,6 +135,7 @@ accessibility check available here is also the width decision.
 | `/auth` | n/a | button disables | toast: "Väärä sähköposti tai salasana" / "Rekisteröinti epäonnistui" | redirect to the dashboard |
 | `/class/:id` | n/a | full-surface spinner | redirect to `/dashboard`, silently | the three tabs |
 | 404 | n/a | n/a | n/a | English copy, untokenized colours |
+| the shell's course list | "Ei kursseja" | one `SidebarMenuSkeleton` row | "Kursseja ei voitu ladata" — muted, and deliberately **not** `role="alert"` | the Kurssi list, each row a link with its Student count |
 
 **The hole is CLOSED — 2026-09-10, spec 0006 slice 1.** For the record of what it was: none of the
 three read surfaces consulted its query's `error`. `StudentLogs.tsx`, `TeacherDashboard.tsx` and
@@ -141,6 +169,14 @@ and only then the error. That is the library's default and it is left alone deli
 transient blip self-heals inside those seven seconds and she never sees a failure at all. If the
 delay is ever judged too long, `retry` is the dial and it is a product decision, not a bug.
 
+**The shell's three states are short on purpose, and one of them is a decision.** The failure line
+says *"Kursseja ei voitu ladata"* rather than reusing the `… lataaminen epäonnistui` sentence the
+surface behind it is already showing, and it carries no `role="alert"`. Two reasons: one failure
+should be announced once, not twice, and a second live region would make `getByRole('alert')`
+ambiguous in the walk's three `— refused` states, which assert against exactly one. What it does
+**not** do is fall through to "Ei kursseja" — that is the quiet form of the defect slice 1 closed,
+and `AppShell.test.tsx` asserts the empty sentence is absent, which is the half that holds it.
+
 **Loading is the one state design owns outright** — no product decision sits behind it. Decided
 here, and each of these is a change the current code does not yet make:
 
@@ -157,10 +193,22 @@ here, and each of these is a change the current code does not yet make:
 
 ## 4. Components
 
-- **`TeacherLayout`** — the signed-in frame: header, breadcrumbs, main region — used by: dashboard,
-  `/class/:id`, `/settings`
-- **`AppHeader` / `AppLogo` / `UserMenu` / `Breadcrumbs`** — the parts of that frame — used by:
+- **`TeacherLayout`** — the signed-in frame: sidebar, then breadcrumbs and the main region beside
+  it — used by: dashboard, `/class/:id`, `/settings`
+- **`AppSidebar`** — brand, the Kurssi list with counts, settings, the account chip — used by:
   `TeacherLayout`
+- **`UserMenu`** — the account chip and its dropdown, and the only route to logging out — used by:
+  `AppSidebar`
+- **`Breadcrumbs`** — used by: `TeacherLayout`, at the top of the main region and at every width
+- **`ui/sidebar.tsx`** — shadcn's shell primitive, reused rather than rebuilt, with three
+  deliberate edits: no `sidebar:state` cookie, no `Cmd/Ctrl+B` (it slid the nav off-screen with no
+  way back), and an `sr-only` `SheetTitle` so the drawer is not an unnamed dialog
+
+**`AppHeader` and `AppLogo` are deleted, not kept unused** (slice 3). The prototype has no header
+at any width, so everything they carried has a new home, and `A11Y-3`'s row below no longer cites
+them. The `hidden sm:inline` defect they were the record of is worth keeping in mind rather than in
+a file: the drawer is 18rem wide at a 320px viewport, so a `sm:`-gated label inside it is invisible
+to *everyone*, and `UserMenu`'s header trigger would have reproduced the bug exactly.
 - **`ProtectedRoute`** — refuses a surface until the session is known — used by: dashboard,
   `/class/:id`, `/settings`
 - **`DataTable`** (`src/components/ui/data-table.tsx`) — the desktop table: columns, row actions,
@@ -197,16 +245,17 @@ runs in `npm run check` and as a job `deploy` needs. One row moved the other way
 | A11Y-1 | Every interactive element is reachable *and* operable with the keyboard alone | `test:e2e/core-loop.spec.ts` — the core loop with no mouse at both viewports: Tab reaches every control of the logging form, Escape dismisses the suggestions, Enter submits, and the POST body is asserted. Proven by `tabIndex={-1}` on the quantity field, watched red | `[test]` |
 | A11Y-2a | Focus **order** follows reading order | `test:e2e/core-loop.spec.ts` — the forward tab sequence taken once, then asserted: name after date, quantity after name, submit last. A press *count* cannot do this job, because Tab wraps at the end of the document | `[test]` |
 | A11Y-2b | Focus is always **visible** | nothing. ADR-0005 rejected a screenshot baseline for it — genuinely stronger, and it buys committed PNGs and their churn in front of every `git status`. Split from A11Y-2a on 2026-09-07 rather than left `[live]`, because one row cannot carry two enforcers | `[review-only]` |
-| A11Y-3 | Every control has an accessible name, and no `<img>` is unlabelled | `lint:gate:a11y` (jsx-a11y, ratchet at 0) + `test:surfaces.a11y.test.tsx` (axe, six states, jsdom) + `test:e2e/states.spec.ts` (axe, seventeen states, real browser). The third one is the only one that could catch what it caught: `AppLogo` and `UserMenu` both hid their only text with `hidden sm:inline`, so below 640px each was a nameless control on every signed-in surface. jsx-a11y reads the span in the JSX; jsdom applies no media query | `[lint]` |
-| A11Y-4 | Text clears 4.5:1, and a boundary that identifies a control clears 3:1 | `test:tokens-contrast.test.ts` — thirteen token pairs computed from `src/index.css`, not from intent, in both `:root` and `.dark` — **and** `test:e2e/states.spec.ts`, axe with `color-contrast` enabled over seventeen rendered states. The second half is not a duplicate: the token test proves the palette and cannot express an alpha composite. Three of those thirteen pairs were added on 2026-09-10 by making the badge solid and by asserting `--input` against `--card` as well as the page, which is why only the 404 is still exempt | `[test]` |
+| A11Y-3 | Every control has an accessible name, and no `<img>` is unlabelled | `lint:gate:a11y` (jsx-a11y, ratchet at 0) + `test:surfaces.a11y.test.tsx` (axe, six states, jsdom) + `test:e2e/states.spec.ts` (axe, every state in `e2e/states.spec.ts`'s table, real browser). The third one is the only one that could catch what it caught: `AppLogo` and `UserMenu` both hid their only text with `hidden sm:inline`, so below 640px each was a nameless control on every signed-in surface. jsx-a11y reads the span in the JSX; jsdom applies no media query | `[lint]` |
+| A11Y-4 | Text clears 4.5:1, and a boundary that identifies a control clears 3:1 | `test:tokens-contrast.test.ts` — thirteen token pairs computed from `src/index.css`, not from intent, in both `:root` and `.dark` — **and** `test:e2e/states.spec.ts`, axe with `color-contrast` enabled over every rendered state in `e2e/states.spec.ts`'s table. The second half is not a duplicate: the token test proves the palette and cannot express an alpha composite. Three of those thirteen pairs were added on 2026-09-10 by making the badge solid and by asserting `--input` against `--card` as well as the page, which is why only the 404 is still exempt | `[test]` |
 | A11Y-5 | Nothing conveys meaning by colour alone | nothing — a human has to look. The *Suoritus* badge carries its word, which is why it passes today | `[review-only]` |
 | A11Y-6 | `prefers-reduced-motion` is respected | nothing. `animate-fade-in`, `transition-smooth` and `active:scale-[0.98]` all ignore it | `[review-only]` |
-| A11Y-7 | Content reflows at 320px with no two-directional scrolling (WCAG 1.4.10) | `test:e2e/states.spec.ts` — `documentElement.scrollWidth <= clientWidth` in every one of the seventeen states at 320px, measured after `document.fonts.ready` so the widths are Fira Sans's and not system-ui's — Fira **stays** under spec 0006, so these measurements were not re-opened by the reskin. It **passes on all seventeen**, the three error states included, and it caught one real failure on the way in: the *Tilastot* charts forced the page to 760px. An inner container that scrolls is deliberate and allowed; the document scrolling is not | `[test]` |
+| A11Y-7 | Content reflows at 320px with no two-directional scrolling (WCAG 1.4.10) | `test:e2e/states.spec.ts` — `documentElement.scrollWidth <= clientWidth` in every state of `e2e/states.spec.ts`'s table at 320px, measured after `document.fonts.ready` so the widths are Fira Sans's and not system-ui's — Fira **stays** under spec 0006, so these measurements were not re-opened by the reskin. It **passes on all of them**, the three error states and the drawer included, and it caught one real failure on the way in: the *Tilastot* charts forced the page to 760px. An inner container that scrolls is deliberate and allowed; the document scrolling is not | `[test]` |
 | A11Y-8 | Text stays readable and nothing is cut off at 200% zoom (WCAG 1.4.4) | nothing | `[review-only]` |
 | A11Y-9 | No control announces itself in the wrong language | nothing automated — axe reads a name's presence, never its language | `[review-only]` |
 
-Contrast, measured from the real tokens by `src/__tests__/tokens-contrast.test.ts` — ten pairs in
-each theme, and **every one clears** since variant A's palette landed. That test's `KNOWN_FAILING`
+Contrast, measured from the real tokens by `src/__tests__/tokens-contrast.test.ts` in each theme,
+and **every pair clears** since variant A's palette landed. (This sentence said "ten pairs" while
+the `A11Y-4` row above said thirteen; run the test for the number.) That test's `KNOWN_FAILING`
 list is empty for the first time.
 
 | Foreground on background | Light | Dark |
@@ -236,7 +285,7 @@ The honest list, because §5's tags make the rest of this document look more enf
 - **Whether the one table is actually usable at 320px.** Still the sharpest thing no gate here
   catches, and **narrower than it was this morning**. `A11Y-7` moved to `[test]` when the browser
   walk landed, so the layout claim is now measured rather than asserted: the page does not scroll
-  sideways in any of the seventeen states at 320px, with the register's own box scrolling inside
+  sideways in any swept state at 320px, with the register's own box scrolling inside
   itself by design. What that does *not* touch is whether a sideways-scrolling register is
   pleasant to read on a phone — a measured reflow and a usable one are different claims, and no
   gate can tell them apart. **Walk it on a real phone before trusting this decision.** (The entry
@@ -256,6 +305,29 @@ The honest list, because §5's tags make the rest of this document look more enf
   waits for every finite animation. A CSS transition begun *after* an assertion would still be
   missed, and `A11Y-6` having no enforcer is a second reason to give it one: an app that honoured
   `prefers-reduced-motion` would have had no animation to wait for.
+- **Which element the pointer is resting on, and therefore whose `:hover` gets measured.** Slice 3
+  found the second form of the row above, and this one was a **real defect rather than an
+  artifact**. The drawer slides in from the left underneath a stationary mouse that had just
+  clicked the trigger at the top-left of main, so the pointer came to rest on the drawer's brand
+  link — and axe measured its hover state: `hover:opacity-80` over `AppLogo`'s inherited styling
+  took 11.2px `--muted-foreground` from 6.95:1 to **4.28:1**. The tell was the ratio *drifting*
+  between runs (4.28, 4.34, 4.41) while `getComputedStyle` read the settled colour, because the
+  hover transition was still easing. Both halves are fixed — the brand tints its background
+  instead of dimming, and the sweep parks the pointer — but the general case stands: **no gate
+  checks contrast in a hover, focus or active state**, and `tokens-contrast.test.ts` cannot, since
+  those are composites rather than token pairs.
+- **Whether a dialog has an accessible name.** The drawer shipped nameless in the first draft and
+  the walk swept it **clean**: axe's `aria-dialog-name` is tagged `best-practice`, and
+  `e2e/assertions.ts` runs only `wcag2a`, `wcag2aa`, `wcag21a` and `wcag21aa`. Closed for this one
+  dialog by `AppShell.test.tsx`, which asserts the name directly and was watched failing without
+  it; not closed as a *class*, because the next dialog added to this app will be just as invisible
+  to the tag set. Widening the tags would be the real fix and would open a baseline nobody has
+  measured.
+- **Whether the main region can shrink.** Making the shell a flex row broke `A11Y-7` in three
+  states at once: a flex item's `min-width` defaults to `auto`, so `main` could not go below the
+  register's `min-w-[34rem]` and the page measured 809px at a 320px viewport. The walk caught it,
+  and `min-w-0` fixed it — but nothing states the rule, so the next layout change is free to
+  reintroduce it and will only be caught if the offending content happens to be in a swept state.
 - **Screen-reader quality, as opposed to the presence of names.** Seven `sr-only` strings in
   `src/components/ui/**` announce in English — "Close", "More pages" — in an otherwise Finnish app,
   and two of them are on components in daily use. App code contains **no** `sr-only` text at all.

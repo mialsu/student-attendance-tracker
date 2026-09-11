@@ -296,6 +296,29 @@ unrecorded is the defect.)*
   2.61:1 on every button in production. Replacing it is the Owner's call; the record should not
   imply nobody picked it.
 
+- **2026-09-11 — slice 3 crosses into the backend, which *Out of Scope* forbade.** The Owner asked
+  for the sidebar's course count to be a **Student** count and for it to ride the class request
+  rather than a second one, which "Any backend, API, schema, or endpoint change. This is frontend
+  presentation only." rules out. Decided by the Owner against that line, so the line is wrong now
+  rather than the code: `ClassResponse` gains an optional `student_count`, additive beside
+  `attendance_count`. What the change actually cost is smaller than a new endpoint and *negative*
+  in query count — `GET /api/classes` was an unmeasured N+1 (one `COUNT` per class in a Python
+  loop, 7 statements for 5 classes), so folding both counts into the class query took it to 2,
+  flat at 1, 5 and 20 classes. `tests/test_query_budget.py` now holds that ceiling; it was the
+  only list endpoint the ratchet never watched.
+- **2026-09-11 — `surfaces.a11y.test.tsx` is NOT extended to the shell, against *What this feature
+  adds to the suite*.** The browser walk axes the shell in every signed-in state at both
+  viewports, with `color-contrast` on, in a real browser; a jsdom pass over the same markup would
+  be a strictly weaker second implementation of one check, which is the anti-pattern this project
+  spends a section on. What jsdom *can* uniquely prove went into `AppShell.test.tsx` instead —
+  open/close, the drawer's accessible name, `aria-current` on the right item, and the failed
+  course list not claiming "no courses". Each was watched failing before it was trusted.
+- **2026-09-11 — the sweep gained a state whose desktop form is the same state.** *Valikko — the
+  navigation, however the width serves it* opens the drawer below 940px and finds the sidebar
+  already there above it. The first draft declared it 320-only and skipped it at 1280, which the
+  drift gate correctly rejected: a skipped test and a silenced one are indistinguishable to it.
+  Sweeping both is also simply stronger.
+
 ## Further Notes
 
 - `prototype/index.html` and `prototype/DESIGN_SYSTEM.md` are the visual reference; §8 of the

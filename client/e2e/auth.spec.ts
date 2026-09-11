@@ -45,7 +45,10 @@ test.describe('/auth', () => {
 
     await expect(page).toHaveURL(/\/dashboard$/);
     await expect(page.getByRole('heading', { name: 'Kurssit' })).toBeVisible();
-    await expect(page.getByText('Matematiikka MAA5')).toBeVisible();
+    // Scoped to `main` since slice 3: the sidebar lists the same Kurssi on every signed-in
+    // surface, so a bare `getByText` now resolves to two elements and trips strict mode. The
+    // assertion still means what it meant — the Kurssi reached the dashboard, not just the nav.
+    await expect(page.getByRole('main').getByText('Matematiikka MAA5')).toBeVisible();
   });
 
   test('a wrong password says so and stays on the form', async ({ page }) => {

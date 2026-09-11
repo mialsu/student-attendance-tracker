@@ -6,6 +6,48 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 
 <!-- Newest first. -->
 
+## 2026-09-11 — no gate checks contrast in a hover, focus or active state
+- **What:** slice 3 shipped a real below-AA hover state and only found it by accident. The brand
+  link carried `hover:opacity-80` (inherited from `AppLogo`, where it was safe on 16px
+  `--foreground` text at 9.12:1); over 11.2px `--muted-foreground` it took 6.95:1 to **4.28:1**.
+  It surfaced because the drawer slides in beneath a stationary pointer, so axe happened to
+  measure the hover state.
+- **Where:** fixed at `src/components/layouts/AppSidebar.tsx` (tints the background instead), and
+  the sweep now parks the pointer at `e2e/states.spec.ts`'s shell state.
+- **What green tests do NOT prove here:** `tokens-contrast.test.ts` compares *token pairs* and
+  cannot express a composite, and the walk only ever sees the resting state now that the pointer
+  is parked — deliberately, since measuring whichever element the layout puts under the cursor is
+  nondeterministic. So every `:hover`, `:focus-visible` and `:active` colour in the app is
+  unchecked. `--ring` is asserted against `--background` as a pair, which is not the same claim.
+- **Disposition:** open. The cheap version is a token-level rule (never dim text below AA; dim
+  backgrounds instead) with review as its enforcer; the real version needs axe driven over
+  forced pseudo-states, which Playwright can do via CDP and nothing here does yet.
+
+## 2026-09-11 — the walk cannot see an unnamed dialog
+- **What:** the off-canvas drawer shipped nameless in slice 3's first draft and the browser walk
+  swept it **clean**. axe's `aria-dialog-name` is tagged `cat.aria, best-practice`, and the walk
+  runs only `wcag2a`, `wcag2aa`, `wcag21a`, `wcag21aa`.
+- **Where:** `e2e/assertions.ts:51` (the tag set); fixed for this dialog by the `sr-only`
+  `SheetTitle` in `src/components/ui/sidebar.tsx` and asserted by
+  `src/components/__tests__/AppShell.test.tsx`.
+- **What green tests do NOT prove here:** the *class* is still open — the next dialog added to this
+  app is equally invisible to the tag set, and the app already has several (create-class,
+  delete-confirm, merge). Only the drawer's name is asserted.
+- **Disposition:** open. Adding `best-practice` to the walk's tags is the structural fix and opens
+  a baseline nobody has measured; do it as its own change, not inside a feature slice.
+
+## 2026-09-11 — nothing states that the main region must be able to shrink
+- **What:** making the shell a flex row broke `A11Y-7` in three states at once. A flex item's
+  `min-width` defaults to `auto`, so `main` could not shrink below the register's `min-w-[34rem]`
+  and the document measured 809px at a 320px viewport.
+- **Where:** `src/components/layouts/TeacherLayout.tsx` — `min-w-0` on `SidebarInset` and on the
+  inner container.
+- **What green tests do NOT prove here:** the walk caught this one because the register happens to
+  be in a swept state. The rule itself is written nowhere and has no enforcer, so the next layout
+  change can reintroduce it and will only be caught if the widest content is under a swept state.
+- **Disposition:** accepted for now — the walk is a real enforcer for the states it holds, and
+  `DESIGN.md` §6 records the gap. A lint rule for this does not exist.
+
 ## 2026-09-07 — the browser walk proves the screen, not the integration
 - **What:** `e2e/` mocks `/api/*` at the browser boundary, so nothing in the walk exercises the real
   API, the database, or the two together from a browser. Forty green tests say the screens behave

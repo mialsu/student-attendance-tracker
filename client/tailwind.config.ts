@@ -1,5 +1,7 @@
 import type { Config } from "tailwindcss";
+import defaultTheme from "tailwindcss/defaultTheme";
 import tailwindcssAnimate from "tailwindcss-animate";
+import { SHELL_BREAKPOINT_PX } from "./src/lib/breakpoints";
 
 export default {
   darkMode: ["class"],
@@ -18,6 +20,13 @@ export default {
       screens: {
         "2xl": "1400px",
       },
+    },
+    screens: {
+      ...defaultTheme.screens,
+      // The app shell's own breakpoint. Not `md`: see src/lib/breakpoints.ts for the 544px
+      // register column that sets it. `use-mobile.tsx` reads the same constant, so the CSS
+      // breakpoint and the JS one cannot disagree.
+      shell: `${SHELL_BREAKPOINT_PX}px`,
     },
     extend: {
       fontFamily: {

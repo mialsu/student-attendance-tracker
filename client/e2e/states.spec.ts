@@ -248,13 +248,53 @@ const STATES: SweptState[] = [
     },
   },
   {
+    // `oneKurssi` is new here as of slice 3 and is not padding: the sidebar lists the teacher's
+    // courses on EVERY signed-in surface, so /settings now fetches the class list too. Without
+    // the mock, `fixtures.ts`'s guard 501s it and fails the test at teardown — which is the guard
+    // doing its job, and the reason this line is here rather than the shell silently erroring.
     name: '/settings',
     arrange: async (page) => {
       await signedIn(page);
+      await oneKurssi(page);
     },
     reach: async (page) => {
       await page.goto('/settings');
       await expect(page.getByRole('heading', { name: 'Asetukset' })).toBeVisible();
+    },
+  },
+  {
+    // The shell's own state. Below 940px the navigation is an off-canvas Radix dialog over a
+    // scrim — which nothing swept before, and which is where a trapped scroll or an unreadable
+    // overlay would hide; above it the sidebar is simply on screen. Both are the state "the
+    // navigation is visible", so this sweeps at both viewports rather than skipping one: a
+    // `test.skip` here would also have tripped the drift gate's escape-hatch check, correctly,
+    // since a skipped test and a silenced one look identical to it.
+    name: 'Valikko — the navigation, however the width serves it',
+    arrange: async (page) => {
+      await signedIn(page);
+      await oneKurssi(page);
+    },
+    reach: async (page) => {
+      await page.goto('/dashboard');
+      // The trigger exists only while the shell is collapsed, so its presence IS the width
+      // question — no viewport branch needed. The assertion below is unconditional either way.
+      const open = page.getByRole('button', { name: 'Avaa valikko' });
+      if (await open.count()) {
+        await open.click();
+        // Wait for the slide to finish before anything measures. `toHaveCSS` polls the real
+        // computed style, so this is not the timer ADR-0005 forbids.
+        await expect(page.getByRole('dialog')).toHaveCSS('opacity', '1');
+        // Park the pointer out of the way, and this line earned its place. The drawer slides in
+        // from the left *underneath a stationary mouse*, which had just clicked the trigger at
+        // the top-left of main — so the pointer ended up resting on the drawer's brand link and
+        // axe sampled its :hover state. That found a real defect (a `hover:opacity-80` dimming
+        // 11.2px muted text to 4.28:1, now fixed in AppSidebar), but as a swept state it is
+        // wrong twice over: it measures hover on whichever element the layout happens to put
+        // under the cursor, and the ratio it reports drifts with the transition, which is
+        // exactly the nondeterminism `retries: 0` claims this walk does not have.
+        await page.mouse.move(0, 639);
+      }
+      await expect(page.getByRole('link', { name: /Matematiikka MAA5/ })).toBeVisible();
     },
   },
   {
