@@ -632,24 +632,6 @@ const StudentLogs = ({ classId }: StudentLogsProps) => {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
-        {/* Legacy students: shown only when the cutoff is actually holding someone back,
-            or while they are revealed. Nothing renders until a student's first attendance
-            is over five years old. */}
-        {(showLegacy || legacyHidden > 0) && (
-          <div className="flex items-center justify-between gap-2 rounded-md border border-dashed px-3 py-2">
-            <p className="text-sm text-muted-foreground">
-              {showLegacy
-                ? 'Vanhat opiskelijat näkyvissä'
-                : legacyHidden === 1
-                  ? '1 vanha opiskelija piilotettu'
-                  : `${legacyHidden} vanhaa opiskelijaa piilotettu`}
-            </p>
-            <Button variant="outline" size="sm" onClick={handleToggleLegacy}>
-              {showLegacy ? 'Piilota' : 'Näytä'}
-            </Button>
-          </div>
-        )}
-
         {/* Search Bar */}
         <div className="flex gap-2">
           <div className="relative flex-1">
@@ -674,6 +656,29 @@ const StudentLogs = ({ classId }: StudentLogsProps) => {
           )}
         </div>
 
+        {/* Legacy students: shown only when the cutoff is actually holding someone back,
+            or while they are revealed. Nothing renders until a student's first attendance
+            is over five years old.
+
+            It sits directly above the table now, after the search rather than before it: it is
+            a note explaining which rows are missing, so it belongs beside the rows and not at
+            the top of the card where it read as the surface's headline. The dashed border stays
+            — it is what marks the group as held back rather than merely filtered. */}
+        {(showLegacy || legacyHidden > 0) && (
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-dashed bg-muted/30 px-3 py-2">
+            <p className="text-sm text-muted-foreground">
+              {showLegacy
+                ? 'Vanhat opiskelijat näkyvissä'
+                : legacyHidden === 1
+                  ? '1 vanha opiskelija piilotettu'
+                  : `${legacyHidden} vanhaa opiskelijaa piilotettu`}
+            </p>
+            <Button variant="outline" size="sm" onClick={handleToggleLegacy}>
+              {showLegacy ? 'Piilota' : 'Näytä'}
+            </Button>
+          </div>
+        )}
+
         {/* One table at every width. It scrolls sideways inside its own container rather
             than forking into a second implementation — see DESIGN.md §4. */}
         <DataTable
@@ -697,7 +702,7 @@ const StudentLogs = ({ classId }: StudentLogsProps) => {
 
         {/* Results Summary */}
         {total > 0 && (
-          <p className="text-sm text-muted-foreground text-center pt-2">
+          <p className="pt-2 text-sm text-muted-foreground">
             {searchInput ? (
               <>
                 Löytyi {total} opiskelija{total !== 1 ? 'a' : ''} haulla "{debouncedSearch}"

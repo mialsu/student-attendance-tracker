@@ -8,7 +8,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { useCreateAttendance } from '@/hooks/useAttendance';
 import { useStudentAutocomplete } from '@/hooks/useStudents';
 import { useDebounce } from '@/hooks/useDebounce';
-import { UserPlus, Check, Calendar as CalendarIcon } from 'lucide-react';
+import { UserPlus, Check, Info, Calendar as CalendarIcon } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
@@ -189,7 +189,9 @@ const AttendanceTracking = ({ classId }: AttendanceTrackingProps) => {
   };
 
   return (
-    <Card>
+    // Capped, as the prototype caps it: a form this short does not want the whole desktop
+    // width, and the submit belongs near the field it submits.
+    <Card className="max-w-[760px]">
       <CardHeader>
         <CardTitle>Kirjaa opiskelijan läsnäolo</CardTitle>
         <CardDescription>
@@ -228,7 +230,8 @@ const AttendanceTracking = ({ classId }: AttendanceTrackingProps) => {
             </Popover>
           </div>
 
-          <div className="grid md:grid-cols-2 gap-6">
+          {/* The name field earns the space; the quantity is three characters wide. */}
+          <div className="grid gap-6 md:grid-cols-[1fr_160px]">
             {/* Student Name with Autocomplete */}
             <div className="space-y-3">
               <Label htmlFor="studentName">Opiskelijan nimi</Label>
@@ -390,11 +393,13 @@ const AttendanceTracking = ({ classId }: AttendanceTrackingProps) => {
           </Button>
         </form>
 
-        <div className="mt-6 p-4 bg-muted/50 rounded-lg">
+        <div className="mt-6 flex gap-3 rounded-lg border border-border bg-muted/40 p-4">
+          <Info className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
           <p className="text-sm text-muted-foreground">
-            <strong>Ohje:</strong> Ala kirjoittaa opiskelijan nimeä nähdäksesi ehdotuksia.
-            Voit myös kirjoittaa uuden nimen manuaalisesti. Määrä-kentällä voit kirjata
-            useita läsnäoloja kerralla (esim. korjaukset tai aiemmat tunnit).
+            <strong className="font-semibold text-foreground">Ohje:</strong> Ala kirjoittaa
+            opiskelijan nimeä nähdäksesi ehdotuksia. Voit myös kirjoittaa uuden nimen
+            manuaalisesti. Määrä-kentällä voit kirjata useita läsnäoloja kerralla (esim.
+            korjaukset tai aiemmat tunnit).
           </p>
         </div>
       </CardContent>

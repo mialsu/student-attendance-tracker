@@ -6,6 +6,26 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 
 <!-- Newest first. -->
 
+## 2026-09-11 — a full-page screenshot of *Tilastot* shows an empty chart, and the chart is fine
+- **What:** slice 6's restyle was checked by screenshot, and every `fullPage: true` shot of the
+  statistics tab came back with axes, gridlines and labels drawn but **no bars** — at both
+  viewports, and still empty after waiting 2.2s for Recharts' grow-from-zero animation.
+- **Where:** any Playwright `page.screenshot({ fullPage: true })` over `ClassStatistics`.
+- **Why it is not a defect:** measured instead of assumed. The DOM holds four
+  `.recharts-bar-rectangle` paths, the first `128 × 235.6` at `x=402`, `fill` computing to
+  `rgb(78, 67, 223)`. An **element** screenshot of `.recharts-surface` draws all four bars in
+  indigo at the fixture's 13 / 14 / 15 / 1. A full-page capture resizes the viewport, which makes
+  `ResponsiveContainer` re-measure and Recharts restart its animation from zero, and the shot
+  catches that.
+- **What green tests do NOT prove here:** that any bar is ever *painted*. The walk asserts axe and
+  reflow over this state and both read the DOM and CSS, so a chart that drew nothing at all would
+  pass every gate in this repo. Nothing renders-and-looks at it.
+- **Disposition:** open, and it is a **trap for slice 8**: `/verify-live` will screenshot this
+  surface, and the honest reading of an empty plot is "take an element shot" rather than "file a
+  bug". Closing it properly means either a visual check a human makes or
+  `isAnimationActive={false}` under test, which changes production code to suit a camera and so
+  wants the Owner's call.
+
 ## 2026-09-11 — the chart toggle's grouping role is judgement, not a gate
 - **What:** the day/month toggle is a Radix `ToggleGroup type="single"`, whose root is
   `role="group"` while its items are `role="radio"`. `ClassStatistics.tsx` overrides the root to

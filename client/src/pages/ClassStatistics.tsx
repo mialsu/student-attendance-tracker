@@ -120,36 +120,38 @@ const ClassStatistics = ({ classId }: ClassStatisticsProps) => {
 
   return (
     <div className="space-y-8">
-      {/* Summary Cards */}
-      <div className="grid gap-4 md:grid-cols-4">
+      {/* Four totals. `auto-fit`/`minmax` rather than a fixed `md:grid-cols-4`, so they
+          reflow one-by-one instead of jumping four-to-one at the md breakpoint —
+          the prototype's stat grid does the same. */}
+      <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(180px,1fr))]">
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
+            <CardTitle className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Yhteensä läsnäoloja
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.total_records}</div>
+            <div className="text-3xl font-bold tabular-nums text-heading">{stats.total_records}</div>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
+            <CardTitle className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Opiskelijoita
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.total_students}</div>
+            <div className="text-3xl font-bold tabular-nums text-heading">{stats.total_students}</div>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
+            <CardTitle className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Ensimmäinen läsnäolo
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
+            <div className="text-xl font-semibold tabular-nums text-heading">
               {stats.first_date
                 ? format(new Date(stats.first_date), 'P', { locale: fi })
                 : '-'}
@@ -158,12 +160,12 @@ const ClassStatistics = ({ classId }: ClassStatisticsProps) => {
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
+            <CardTitle className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Viimeisin läsnäolo
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
+            <div className="text-xl font-semibold tabular-nums text-heading">
               {stats.last_date
                 ? format(new Date(stats.last_date), 'P', { locale: fi })
                 : '-'}
