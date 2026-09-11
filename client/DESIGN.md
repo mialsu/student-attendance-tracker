@@ -27,8 +27,13 @@ made `main` a flex item, which broke `A11Y-7` in three states until `min-w-0` le
 **A note on the numbers in §5 and §6.** They used to be spelled out — "seventeen states", "ten
 pairs" — and on 2026-09-11 two of them disagreed inside one section ("thirteen token pairs" in the
 `A11Y-4` row against "ten pairs" four lines below it). `CLAUDE.md`'s *Why this file quotes no test
-counts* is the rule that applies: **name the command, not the count.** Done here for the swept
-states, which this slice changed in five places at once.
+counts* is the rule that applies: **name the command, not the count.**
+
+**The conversion is finished as of slice 4**, and finishing it was not tidiness. Slice 3 converted
+the swept-state counts and left `A11Y-4`'s "thirteen token pairs" standing beside a sentence that
+already said to run the test — a disclosed contradiction rather than a resolved one. Slice 4 then
+added a fourteenth pair, so the stale number became a *wrong* number the same day it was left
+alone. That is the whole argument for the rule, demonstrated at a cost of one commit.
 
 **The scope source is not a brief.** This project predates Stage 0 and has no `PRODUCT-BRIEF.md`,
 so §1 reconciles against `CONTEXT.md` plus the feature set actually in production, and §3's
@@ -255,7 +260,7 @@ runs in `npm run check` and as a job `deploy` needs. One row moved the other way
 | A11Y-2a | Focus **order** follows reading order | `test:e2e/core-loop.spec.ts` — the forward tab sequence taken once, then asserted: name after date, quantity after name, submit last. A press *count* cannot do this job, because Tab wraps at the end of the document | `[test]` |
 | A11Y-2b | Focus is always **visible** | nothing. ADR-0005 rejected a screenshot baseline for it — genuinely stronger, and it buys committed PNGs and their churn in front of every `git status`. Split from A11Y-2a on 2026-09-07 rather than left `[live]`, because one row cannot carry two enforcers | `[review-only]` |
 | A11Y-3 | Every control has an accessible name, and no `<img>` is unlabelled | `lint:gate:a11y` (jsx-a11y, ratchet at 0) + `test:surfaces.a11y.test.tsx` (axe, six states, jsdom) + `test:e2e/states.spec.ts` (axe, every state in `e2e/states.spec.ts`'s table, real browser). The third one is the only one that could catch what it caught: `AppLogo` and `UserMenu` both hid their only text with `hidden sm:inline`, so below 640px each was a nameless control on every signed-in surface. jsx-a11y reads the span in the JSX; jsdom applies no media query | `[lint]` |
-| A11Y-4 | Text clears 4.5:1, and a boundary that identifies a control clears 3:1 | `test:tokens-contrast.test.ts` — thirteen token pairs computed from `src/index.css`, not from intent, in both `:root` and `.dark` — **and** `test:e2e/states.spec.ts`, axe with `color-contrast` enabled over every rendered state in `e2e/states.spec.ts`'s table. The second half is not a duplicate: the token test proves the palette and cannot express an alpha composite. Three of those thirteen pairs were added on 2026-09-10 by making the badge solid and by asserting `--input` against `--card` as well as the page, which is why only the 404 is still exempt. Slice 4 added the first **gradient** pair: the auth aside runs `--primary` → `--auth-aside-to` under `--primary-foreground` text, and gating the two endpoints gates the span because every channel moves monotonically between them. The prototype's own third stop measured **3.28:1** there and no gate could see it — axe returns `color-contrast` as *incomplete* over a gradient and `e2e/assertions.ts:111` reads only `violations` | `[test]` |
+| A11Y-4 | Text clears 4.5:1, and a boundary that identifies a control clears 3:1 | `test:tokens-contrast.test.ts` — every pair in its `PAIRS` table computed from `src/index.css`, not from intent, in both `:root` and `.dark`; run it for the count — **and** `test:e2e/states.spec.ts`, axe with `color-contrast` enabled over every rendered state in `e2e/states.spec.ts`'s table. The second half is not a duplicate: the token test proves the palette and cannot express an alpha composite. Three pairs were added on 2026-09-10 by making the badge solid and by asserting `--input` against `--card` as well as the page, which is why only the 404 is still exempt. Slice 4 added the first **gradient** pair: the auth aside runs `--primary` → `--auth-aside-to` under `--primary-foreground` text, and gating the two endpoints gates the span because every channel moves monotonically between them. The prototype's own third stop measured **3.28:1** there and no gate could see it — axe returns `color-contrast` as *incomplete* over a gradient and `e2e/assertions.ts:111` reads only `violations` | `[test]` |
 | A11Y-5 | Nothing conveys meaning by colour alone | nothing — a human has to look. The *Suoritus* badge carries its word, which is why it passes today | `[review-only]` |
 | A11Y-6 | `prefers-reduced-motion` is respected | nothing. `animate-fade-in`, `transition-smooth` and `active:scale-[0.98]` all ignore it | `[review-only]` |
 | A11Y-7 | Content reflows at 320px with no two-directional scrolling (WCAG 1.4.10) | `test:e2e/states.spec.ts` — `documentElement.scrollWidth <= clientWidth` in every state of `e2e/states.spec.ts`'s table at 320px, measured after `document.fonts.ready` so the widths are Fira Sans's and not system-ui's — Fira **stays** under spec 0006, so these measurements were not re-opened by the reskin. It **passes on all of them**, the three error states and the drawer included, and it caught one real failure on the way in: the *Tilastot* charts forced the page to 760px. An inner container that scrolls is deliberate and allowed; the document scrolling is not | `[test]` |
@@ -263,9 +268,9 @@ runs in `npm run check` and as a job `deploy` needs. One row moved the other way
 | A11Y-9 | No control announces itself in the wrong language | nothing automated — axe reads a name's presence, never its language | `[review-only]` |
 
 Contrast, measured from the real tokens by `src/__tests__/tokens-contrast.test.ts` in each theme,
-and **every pair clears** since variant A's palette landed. (This sentence said "ten pairs" while
-the `A11Y-4` row above said thirteen; run the test for the number.) That test's `KNOWN_FAILING`
-list is empty for the first time.
+and **every pair clears** since variant A's palette landed. That test's `KNOWN_FAILING` list is
+empty for the first time. (This sentence used to carry its own count and disagree with the
+`A11Y-4` row; both now name the test instead — see the note at the top of this file.)
 
 | Foreground on background | Light | Dark |
 |---|---|---|
