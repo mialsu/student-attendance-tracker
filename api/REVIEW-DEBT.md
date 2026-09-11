@@ -54,9 +54,29 @@ cut (`/confess`), read first by any architecture or review session, dispositione
   cannot log in. That is a product trade — the Owner decides, and `/audit`'s 2026-09-02 threat
   model (the attacker is a logged-in teacher probing other teachers' rows) did not rank
   unauthenticated enumeration.
-- **Disposition:** **open, for the Owner.** Either unify the message and let the teacher find out
-  by contacting the school, or accept it and record why. Spec 0005 delta 17 carries the same
-  finding from the criterion's side.
+- **Disposition:** **closed, 2026-09-11 — the Owner chose to unify the message.** The inactive
+  branch now raises `Invalid email or password`, byte-identical to the other two, and the branch
+  is proven by the log's `reason=inactive_account` rather than by its response text. A
+  deactivated teacher loses her only hint and has to contact the school, which is what the old
+  message told her to do anyway.
+- **Four sites moved. The estimate was wrong twice, both times from a truncated `grep`** — first
+  at two, then at three. One code site: `app/services/auth_service.py`, the message plus the
+  comment above it, which claimed two of three branches shared a response. **Three** tests were
+  locking the old message in, and only the first was known when the work started:
+  - `tests/test_logging_events.py` — asserted the body verbatim; now asserts that the inactive
+    and unknown-email responses are byte-identical to each other
+  - `tests/test_service_auth.py::test_authenticate_inactive_user` — `"inactive" in
+    str(exc.value)`, at the service level; now reads the log line
+  - `tests/test_auth.py::TestLogin::test_login_inactive_user` — `"inactive" in detail`, at the
+    route level; now asserts the unified body. **This one was found by the full suite, not by
+    reading**, which is the argument for running it rather than the changed files.
+- **Deliberately unchanged:** `app/dependencies.py:67` still answers `Account is inactive` and
+  `tests/test_dependencies.py:125` still asserts it. That path requires a **valid token**, so it
+  tells a stranger nothing and the message stays useful to the teacher holding the session.
+- **Watched fail both ways:** both tests went red on the change before they were rewritten, and
+  red again on a re-plant of the old message afterwards, restored in a `finally`. Spec 0005
+  delta 18 carries the same closure from the criterion's side; **AC-2's wording is now true as
+  written**.
 
 
 ## 2026-09-10 — INV-9's gate cannot see through a `**kwargs` expansion, and its allowlist must be widened by hand

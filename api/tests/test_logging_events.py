@@ -145,18 +145,34 @@ async def test_unknown_email_and_wrong_password_are_one_response_and_two_reasons
 
 
 @pytest.mark.asyncio
-async def test_an_inactive_account_is_the_third_distinguishable_branch(client, inactive_user):
-    """AC-2, the third branch. Its response is unchanged by this slice, which is the other half
-    of "byte-identical": no branch's bytes moved, whatever the log now says about it."""
-    with capture_logs() as lines:
-        response = await client.post(
+async def test_an_inactive_account_is_distinguishable_only_in_the_log(client, inactive_user):
+    """AC-2, the third branch -- and the one whose response changed on 2026-09-11.
+
+    It used to answer `Account is inactive. Please contact support.`, which told an
+    unauthenticated caller that the address was registered, and did so BEFORE the password was
+    checked. All three branches now share one response, so AC-2's "all three HTTP responses stay
+    byte-identical" is true as written for the first time (delta 18). The distinction survives
+    where the spec always intended it to: in the log, and nowhere a stranger can read it.
+    """
+    with capture_logs() as inactive_lines:
+        inactive = await client.post(
             "/api/auth/login",
             json={"email": inactive_user.email, "password": "testpassword123"},
         )
 
-    assert response.status_code == 401
-    assert response.json()["detail"] == "Account is inactive. Please contact support."
-    assert objects(lines, 1)[0]["reason"] == "inactive_account"
+    with capture_logs() as unknown_lines:
+        unknown = await client.post(
+            "/api/auth/login",
+            json={"email": "nobody@example.com", "password": "testpassword123"},
+        )
+
+    # A deactivated address is indistinguishable from one that was never registered.
+    assert inactive.status_code == unknown.status_code == 401
+    assert inactive.content == unknown.content
+
+    # The log still tells them apart.
+    assert objects(inactive_lines, 1)[0]["reason"] == "inactive_account"
+    assert objects(unknown_lines, 1)[0]["reason"] == "unknown_email"
 
 
 @pytest.mark.asyncio

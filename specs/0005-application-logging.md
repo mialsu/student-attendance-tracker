@@ -339,6 +339,9 @@ pass. "All three HTTP responses stay byte-identical" is false: the inactive-acco
 the tests have encoded that difference since slice 2. What the criterion means, and what was
 proven, is that no branch's response was *changed* by the logging work. The different message is
 also a user-enumeration leak, which is a finding of its own — `api/REVIEW-DEBT.md`, 2026-09-10.
+**Closed 2026-09-11:** the Owner chose to unify the message rather than reword the criterion, so
+AC-2 now reads true as written — delta 18. The verdict in the table records what was measured on
+2026-09-10 and is deliberately left as it was.
 
 ² **AC-14 passes and the pass has a sharp edge**: `LOG_LEVEL=WARNING` silently switches off the
 irreversible-act record while leaving denials on, so US-5's "a record that a merge or a delete
@@ -722,3 +725,30 @@ its method are in `api/REVIEW-DEBT.md`, 2026-09-10.
     enumeration this app declines to answer"). Not spec 0005's to fix — it is an auth-path
     decision with a usability side — so it is confessed in `api/REVIEW-DEBT.md` (2026-09-10) and
     raised to the Owner.
+
+**2026-09-11, after the verify pass.** One, and it closes a finding rather than recording a
+divergence.
+
+18. **The inactive-account message is unified, so AC-2's wording is now true as written.** Delta
+    17 recorded that "all three HTTP responses stay byte-identical" was false and always had
+    been. The Owner's call was to close the leak rather than reword the criterion:
+    `authenticate_user`'s inactive branch now returns `Invalid email or password`, identical to
+    the unknown-email and wrong-password branches, and the three stay tellable apart in the log
+    by `reason` alone — which is the property this spec's reasoning needed all along ("the
+    distinction has to live in the log because it exists nowhere else").
+
+    **Delta 17 stands unedited.** It was true when it was measured and the criterion was
+    genuinely unfalsifiable then. This delta is the correction, not a rewrite of the record.
+
+    **Three tests were locking the old message in, and only one of them was known.**
+    `tests/test_logging_events.py` asserted the response body verbatim;
+    `tests/test_service_auth.py::test_authenticate_inactive_user` asserted
+    `"inactive" in str(exc.value)` at the service level; and
+    `tests/test_auth.py::TestLogin::test_login_inactive_user` asserted `"inactive" in detail` at
+    the route level. The third was found by the **full suite**, after two successive estimates
+    (two sites, then three) had both come from a `grep` whose output was cut short. All three now
+    read the log, so the only place the branches differ is the one a stranger cannot reach.
+
+    `app/dependencies.py`'s own `Account is inactive` is left alone on purpose: it answers a
+    request that already carried a valid token, so it discloses nothing an attacker did not
+    already have.

@@ -60,8 +60,8 @@ async def authenticate_user(db: AsyncSession, email: str, password: str) -> User
         AuthenticationError: If credentials are invalid or user is inactive
     """
     # The three refusals below log EXPLICITLY, where every other denial in this app is logged
-    # once by `app/api/handlers.py`. This is the one place a handler cannot do the job: two of
-    # the three deliberately return a byte-identical response, so by the time the exception
+    # once by `app/api/handlers.py`. This is the one place a handler cannot do the job: all
+    # three deliberately return one byte-identical response, so by the time the exception
     # reaches a handler the distinction no longer exists. Telling a stranger whether an address
     # is registered is the enumeration this app declines to answer -- which leaves the log as
     # the only place that distinction can live at all.
@@ -78,7 +78,7 @@ async def authenticate_user(db: AsyncSession, email: str, password: str) -> User
 
     if not user.active:
         log_event(logging.WARNING, "denial", reason="inactive_account", attempted_email=email)
-        raise AuthenticationError("Account is inactive. Please contact support.")
+        raise AuthenticationError("Invalid email or password")
 
     if not verify_password(password, user.password_hash):
         log_event(logging.WARNING, "denial", reason="wrong_password", attempted_email=email)
