@@ -6,23 +6,34 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 
 <!-- Newest first. -->
 
-## 2026-09-11 — nothing gates the `db` log bound, or the nginx request-id forwarding
-- **What:** AC-16 and AC-12 are `live:` criteria by design, so their proof is a deploy-time
-  exercise and **no gate watches either config**. Delete the `logging` block from `db`, or drop
-  `proxy_set_header X-Request-ID` from a location, and every gate stays green: the python suite
-  never reads `deployment/`, the boundary gate reads imports, and the drift gate reads vocabulary.
-  The first symptom of the first would be a full disk on the CX21; of the second, a log line that
-  cannot be joined to anything, which nobody notices until they need it.
-- **What would catch it:** a check in `scripts/drift-extra.sh` asserting that a diff touching
-  either compose file leaves `db` with a `logging` block, and that every `proxy_pass` in
-  `nginx.conf` is accompanied by `proxy_set_header X-Request-ID`. Both are greps.
-- **Why not done here:** the spec assigns both criteria `live:`, and adding gates to
-  `drift-extra.sh` changes a script the pre-commit hook runs in **both** working trees, including
-  the UI-redesign worktree another session is using. That needs the Owner's go.
-- **Also unchecked:** `10m` and `3` now appear in four places — both compose files,
-  `deployment/README.md`'s Rotation section, and INV-9's row. Nothing compares them, so the
-  four can drift apart silently.
-- **Disposition:** open, for the Owner.
+## 2026-09-11 — the migration step recreates the database, and the deploy's own comment denies it
+- **What:** step 6 of `.github/workflows/backend.yml` says *"The database is never taken down: the
+  old `compose down` stopped postgres too, which turned every deploy into a database outage for no
+  reason"*, and recreates only `backend nginx jaeger`. That is true of step 6 and **false of the
+  deploy**. Step 5 runs `$COMPOSE run --rm backend alembic upgrade head` with **no `--no-deps`**,
+  so compose brings dependencies up to spec first — and when the `db` service's spec has changed,
+  that means recreating PostgreSQL.
+- **Observed in the 2026-09-11 deploy of `d25ec29`**, which is the first deploy to change the `db`
+  service (slice 6 added its `logging` block). The log, in order: `attendance-db-prod Recreate` →
+  `Recreated` → `Started` → `Waiting` → `Healthy` at 09:31:20–09:31:26, immediately before
+  `production-backend-run-38a8b0e01438 Creating`. **Roughly six seconds of database downtime**,
+  inside a deploy whose design says there is none.
+- **It only bites when the `db` service's spec changes**, which is rare — an unchanged spec means
+  `compose run` starts the dependency without recreating it. So most deploys really do leave
+  postgres alone, and the comment reads true for years at a time before it is wrong once.
+- **The upside, and it was an accident:** this is what satisfied **AC-16** on the VM. The bound
+  reached the running container through the migration step, not through step 6. Confirmed by the
+  Owner after the deploy — `up -d --no-deps db` reported `Running` rather than `Recreated`, and
+  `docker inspect` returned `map[max-file:3 max-size:10m]`.
+- **What this entry replaces.** It was first written as "the deploy does not apply the `db` log
+  bound, so AC-16 needs one manual command", reasoned from step 6's service list and a local
+  proof that log options need container recreation. Both halves of that were right and the
+  conclusion was wrong, because step 5 was never read. The local proof measured Docker's
+  behaviour and not this pipeline's.
+- **Disposition:** open, and the fix is the comment rather than the code. Step 6's claim should say
+  that step 5 brings dependencies to spec, so a `db` spec change costs a short restart. Changing
+  the code instead — adding `--no-deps` to step 5 — would stop the migration from being able to
+  reach a database that is not already up, which is worse.
 
 ## 2026-09-11 — slice 6's four criteria are proven as mechanisms locally, not yet on the VM
 - **What:** slice 6 is built (nginx forwards `X-Request-ID` from six proxied locations and logs
