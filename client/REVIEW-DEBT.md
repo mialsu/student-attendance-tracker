@@ -6,6 +6,36 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 
 <!-- Newest first. -->
 
+## 2026-09-11 — the chart toggle's grouping role is judgement, not a gate
+- **What:** the day/month toggle is a Radix `ToggleGroup type="single"`, whose root is
+  `role="group"` while its items are `role="radio"`. `ClassStatistics.tsx` overrides the root to
+  `role="radiogroup"` so a screen reader can announce "1 of 2" rather than two loose radios.
+- **Where:** `src/pages/ClassStatistics.tsx`, the `role="radiogroup"` prop on the `ToggleGroup`.
+- **What green tests do NOT prove here:** that the override is needed or kept. The line was
+  **deleted on purpose and the entire walk stayed green, axe included** — axe-core does not treat
+  `radiogroup` as a required context for `radio`, so `aria-required-parent` never fires. The only
+  thing holding the pairing is one assertion in `src/pages/__tests__/ClassStatistics.test.tsx`,
+  which checks the role rather than what a screen reader does with it. A future ToggleGroup
+  elsewhere in the app will have no such assertion and nothing will notice.
+- **Disposition:** open. The honest close is a screen-reader pass at `/verify-live` (slice 8),
+  which is also the only way to confirm the announcement actually improves. A cheaper partial is a
+  lint rule over `ToggleGroup type="single"` usages; there is exactly one today, so it would be a
+  rule with a single subject.
+
+## 2026-09-11 — the autocomplete's new Finnish copy has had no native reader
+- **What:** US-14 had no signal at all — "Ei ehdotuksia" said the list was empty, never that
+  submitting would create a student. The replacement reads "Ei osumia — nimellä **<nimi>** luodaan
+  uusi opiskelija."
+- **Where:** `src/components/AttendanceTracking.tsx`, the `role="status"` paragraph under the
+  name field.
+- **What green tests do NOT prove here:** the wording. The test matches `/luodaan uusi
+  opiskelija/i`, so it holds the *claim* and not the phrasing, and **the sentence is the agent's
+  own Finnish** — `DESIGN.md`'s own table records that copy voice has no skill owner in this
+  project and falls to the Owner, with `/code-review` as the backstop. The em dash and the
+  bolded name are both choices nobody reviewed.
+- **Disposition:** open, and cheap to close — the Owner reads one sentence. Flagged in the slice's
+  commit message as well so it is not found only by whoever greps this file.
+
 ## 2026-09-11 — the overlay reflow check sees dialogs, and nothing else that floats
 - **What:** slice 5 added `expectOverlayWithinViewport` (`e2e/assertions.ts`) after measuring that
   `expectNoHorizontalScroll` cannot see a fixed-position overlay at all — a deliberately widened

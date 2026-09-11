@@ -280,6 +280,26 @@ const STATES: SweptState[] = [
     },
   },
   {
+    // The other half of AC9's toggle. Worth its own swept state rather than a click inside the
+    // one above: the month view draws a different number of bars from a different dataset, and
+    // both `A11Y-7` at 320px and axe over the chart have to hold for each. The daily view is the
+    // default, so it is the state above.
+    name: 'Tilastot — the aggregates, by month',
+    arrange: async (page) => {
+      await signedIn(page);
+      await oneKurssi(page);
+      await register(page);
+      await statistics(page);
+    },
+    reach: async (page) => {
+      await page.goto(classUrl);
+      await page.getByRole('tab', { name: 'Tilastot' }).click();
+      await expect(page.getByText('Ladataan tilastoja...')).toBeHidden();
+      await page.getByRole('radio', { name: 'Kuukaudet' }).click();
+      await expect(page.getByText('Läsnäolot kuukausittain (kaavio)')).toBeVisible();
+    },
+  },
+  {
     name: 'Tilastot — refused',
     arrange: async (page) => {
       await signedIn(page);

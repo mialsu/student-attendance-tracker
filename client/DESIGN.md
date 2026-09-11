@@ -66,7 +66,7 @@ One teacher, one Kurssi, in production since November 2025. Every surface below 
 | `/dashboard` | "the Kurssi she owns, and a way to make another" — since slice 5 each course is a **link** carrying its Student and attendance counts, and a dashed card in the grid opens the create dialog | 0006/5 | built |
 | `/class/:id` → *Kirjaa läsnäolo* | the core loop: record who turned up, 1–50 at a time, with name autocomplete | — | built |
 | `/class/:id` → *Läsnäolot* | the tally per Student, the course-credit tick, and correcting mistakes (rename, merge, delete) | — | built |
-| `/class/:id` → *Tilastot* | daily and monthly aggregates | — | built |
+| `/class/:id` → *Tilastot* | four totals, the per-day table, and **one** bar chart carrying a day/month toggle | 0006/6 | built |
 | `/settings` | change email, change password | — | built |
 | `*` → 404 | the wrong address | — | built, and see below |
 | `/` | not a surface — renders `null` and redirects by session (`Index.tsx`) | — | built |
@@ -145,7 +145,7 @@ accessibility check available here is also the width decision.
 | `/dashboard` — luo uusi kurssi | n/a | the submit becomes "Luodaan..." and disables | toast, `detail` from the API or "Kurssin luominen epäonnistui"; a blank name is refused before the request with "Kurssin nimi on pakollinen" | toast "Kurssi luotu", the dialog closes, the fields clear |
 | *Kirjaa läsnäolo* | n/a — the form is always the form | the submit button becomes "Kirjataan…" and disables | toast, `detail` from the API or "Läsnäolon kirjaaminen epäonnistui" | toast, and the field clears |
 | *Läsnäolot* | "Ei opiskelijoita vielä" (desktop) / "Ei läsnäoloja kirjattu vielä tälle kurssille" (narrow); searching yields "Ei hakutuloksia haulla …" | Card header stays, body becomes a spinner | "Opiskelijoiden lataaminen epäonnistui" + the retry | rows, tally, and the *Suoritus* tick |
-| *Tilastot* | "Ei läsnäoloja näytettäväksi" + "Kirjaa opiskelijoiden läsnäoloja nähdäksesi tilastot." | "Ladataan tilastoja…" | "Tilastojen lataaminen epäonnistui" + the retry | the daily and monthly aggregates |
+| *Tilastot* | "Ei läsnäoloja näytettäväksi" + "Kirjaa opiskelijoiden läsnäoloja nähdäksesi tilastot." — the empty branch owns the whole surface, so there is no chart frame and no toggle to press | "Ladataan tilastoja…" | "Tilastojen lataaminen epäonnistui" + the retry | four totals, the per-day table, and one chart whose granularity the *Kaavion jakso* toggle sets — **Päivät** by default, **Kuukaudet** the other. Both granularities are swept, because each draws a different dataset and `A11Y-7` has to hold for both |
 | `/settings` | n/a | button disables | toast with the API's `detail` | toast |
 | `/auth` — kirjautuminen | n/a | button disables | toast: "Väärä sähköposti tai salasana" | redirect to the dashboard |
 | `/auth` — rekisteröityminen | n/a | button disables | toast: "Rekisteröinti epäonnistui"; the two client-side refusals are inline — "Sähköpostin tulee olla oikeassa muodossa", "Salasanat eivät täsmää" | redirect to the dashboard |
