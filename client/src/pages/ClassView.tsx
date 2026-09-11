@@ -33,7 +33,7 @@ const ClassView = () => {
 
   const breadcrumbs = useMemo(() => {
     const crumbs: BreadcrumbItem[] = [
-      { label: 'Dashboard', href: '/dashboard' },
+      { label: 'Kurssit', href: '/dashboard' },
     ];
 
     if (classData) {

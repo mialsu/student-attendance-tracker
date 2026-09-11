@@ -6,6 +6,39 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 
 <!-- Newest first. -->
 
+## 2026-09-11 — the overlay reflow check sees dialogs, and nothing else that floats
+- **What:** slice 5 added `expectOverlayWithinViewport` (`e2e/assertions.ts`) after measuring that
+  `expectNoHorizontalScroll` cannot see a fixed-position overlay at all — a deliberately widened
+  `DialogContent` rendered 520px wide at a 320px viewport, from x=-100 to x=420, while
+  `documentElement.scrollWidth` stayed exactly 320. The new check is scoped to `[role="dialog"]`.
+- **What green tests do NOT prove here:** that *nothing else* fixed or absolutely positioned
+  spills off screen. **Toasts are the live gap** — Radix renders them in a viewport container that
+  is `fixed`, they carry `role="status"` rather than `dialog`, and no swept state in
+  `e2e/states.spec.ts` has one open, so a toast too wide for 320px would pass every gate in this
+  repo. The same hole covers any future popover, dropdown or tooltip.
+- **Why scoped anyway:** a blanket "nothing may extend past the viewport" fires on elements that
+  are off-screen *by design*, and this app has one — the closed off-canvas drawer sits at
+  `left: -18rem`. Distinguishing deliberate from accidental needs a rule, and `role="dialog"` was
+  the honest one available: it is present only while an overlay is actually claiming the screen.
+- **Disposition:** open. Cheapest close is a swept state with a toast up (the logging form already
+  raises one on submit), which would extend the same check to `role="status"` containers without
+  inventing a new rule. Not done now because no slice has needed a toast state yet and inventing
+  one to test a gate is machinery ahead of the problem.
+
+## 2026-09-11 — the dashboard's counts are shown, and nothing proves they are the right two
+- **What:** the course card renders `student_count` and `attendance_count` straight from the class
+  list (`src/pages/TeacherDashboard.tsx`), and both `TeacherDashboard.test.tsx` and the walk feed
+  them from fixtures the test itself writes.
+- **What green tests do NOT prove here:** that the API's two fields mean what the card's two words
+  claim. A backend that swapped the two subqueries in `class_service.py` would show 35 opiskelijaa
+  and 12 läsnäoloa on a 12-student class, and every client test would stay green — they assert the
+  wiring, not the arithmetic. The API's own suite is where that lives, and this client has no
+  contract test against a running backend at all.
+- **Disposition:** accepted. The alternative is a contract test, which needs a live API in the
+  client's gate set — a large change to buy one assertion. The `/verify-live` pass at slice 8 is
+  where a human reads real numbers against a real class, and the seeded local stack already has
+  two Kurssit with known counts (12/35 and 3/6) for exactly that.
+
 ## 2026-09-11 — a gradient is gated at its endpoints, which holds only while it has two
 - **What:** slice 4's auth aside paints `linear-gradient(150deg, hsl(var(--primary)),
   hsl(var(--auth-aside-to)))` under `--primary-foreground` text.

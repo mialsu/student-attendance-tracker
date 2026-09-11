@@ -29,7 +29,11 @@ import {
   signedIn,
   statistics,
 } from './mocks';
-import { expectNoAxeViolations, expectNoHorizontalScroll } from './assertions';
+import {
+  expectNoAxeViolations,
+  expectNoHorizontalScroll,
+  expectOverlayWithinViewport,
+} from './assertions';
 import { expect, test } from './fixtures';
 import type { Page } from '@playwright/test';
 
@@ -109,6 +113,26 @@ const STATES: SweptState[] = [
     reach: async (page) => {
       await page.goto('/dashboard');
       await expect(page.getByText(KURSSI.name).first()).toBeVisible();
+    },
+  },
+  {
+    // A dialog is the state most worth sweeping and the one a component test cannot judge: axe
+    // reads the real focus trap and the real contrast over the overlay, and `A11Y-7` measures a
+    // fixed-position panel at 320px, where a dialog overflows more readily than a page does.
+    // Reached through the dashed card rather than the header button on purpose — that is the
+    // affordance slice 5 added, so this is also the only place the walk exercises it.
+    name: '/dashboard — luo uusi kurssi',
+    arrange: async (page) => {
+      await signedIn(page);
+      await oneKurssi(page);
+    },
+    reach: async (page) => {
+      await page.goto('/dashboard');
+      await page.getByRole('button', { name: 'Uusi kurssi' }).click();
+      await expect(page.getByRole('dialog', { name: 'Luo uusi kurssi' })).toBeVisible();
+      // The panel animates in, and axe must not sample it mid-transition — the same
+      // nondeterminism the drawer state documents above.
+      await expect(page.getByRole('dialog', { name: 'Luo uusi kurssi' })).toHaveCSS('opacity', '1');
     },
   },
   {
@@ -313,7 +337,15 @@ const STATES: SweptState[] = [
         // exactly the nondeterminism `retries: 0` claims this walk does not have.
         await page.mouse.move(0, 639);
       }
-      await expect(page.getByRole('link', { name: /Matematiikka MAA5/ })).toBeVisible();
+      // Scoped to the sidebar, and it has to be since slice 5: the dashboard's own course cards
+      // are links now too, so an unscoped match finds two on desktop and fails strictly. At 320px
+      // it happened to find one — Radix marks the page behind an open drawer `aria-hidden`, so
+      // the card was out of the accessibility tree — which is exactly the kind of accidental pass
+      // a scope makes impossible. `data-sidebar="sidebar"` is on both the desktop and the drawer
+      // branch of `ui/sidebar.tsx`, so one selector serves both viewports.
+      await expect(
+        page.locator('[data-sidebar="sidebar"]').getByRole('link', { name: /Matematiikka MAA5/ }),
+      ).toBeVisible();
     },
   },
   {
@@ -384,5 +416,8 @@ for (const swept of STATES) {
     const key = `${testInfo.project.name} · ${swept.name}`;
     await expectNoAxeViolations(page, key, KNOWN_VIOLATIONS[key]);
     await expectNoHorizontalScroll(page, key);
+    // A no-op for the states with no overlay open, and the only measurement that sees the two
+    // that do — the drawer and the create-course dialog. See the helper for what was measured.
+    await expectOverlayWithinViewport(page, key);
   });
 }

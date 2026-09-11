@@ -63,7 +63,7 @@ One teacher, one Kurssi, in production since November 2025. Every surface below 
 | Surface | Serves | Slice | Status |
 |---|---|---|---|
 | `/auth` | getting the one teacher in, and nobody else — signup needs a 16-char registration code issued from the CLI. A split-screen since slice 4: an indigo aside naming the app's three functions, and the form | 4 | built |
-| `/dashboard` | "the Kurssi she owns, and a way to make another" | — | built |
+| `/dashboard` | "the Kurssi she owns, and a way to make another" — since slice 5 each course is a **link** carrying its Student and attendance counts, and a dashed card in the grid opens the create dialog | 0006/5 | built |
 | `/class/:id` → *Kirjaa läsnäolo* | the core loop: record who turned up, 1–50 at a time, with name autocomplete | — | built |
 | `/class/:id` → *Läsnäolot* | the tally per Student, the course-credit tick, and correcting mistakes (rename, merge, delete) | — | built |
 | `/class/:id` → *Tilastot* | daily and monthly aggregates | — | built |
@@ -73,10 +73,19 @@ One teacher, one Kurssi, in production since November 2025. Every surface below 
 | the shell | not a route: the frame every signed-in surface renders inside — brand, the Kurssi list, settings, the account menu. A drawer below 940px | 0006/3 | built |
 
 - **Surfaces serving nothing:** the 404 is real but was never finished to the standard of the rest.
-  It is the **only** file in the app written in English ("Oops! Page not found", "Return to Home")
+  It is the only file in the app written in English ("Oops! Page not found", "Return to Home")
   and the only one that bypasses the token system (`bg-gray-100`, `text-gray-600`,
   `text-blue-500`). Everywhere else the discipline holds: one stray `text-green-600` in
   `StudentLogs.tsx`, and nothing else.
+
+  **That sentence said "the **only** file" until slice 5, and it was wrong.** The root breadcrumb
+  read **"Dashboard"** — English, on screen, on every signed-in surface, because all three callers
+  passed the same literal (`TeacherDashboard.tsx`, `Settings.tsx`, `ClassView.tsx`). It is
+  "Kurssit" now, at all three, fixed together rather than only on the surface slice 5 owns. Worth
+  keeping as a record of how the claim survived: the word was never in a *page*, so every read of
+  this file went looking for an English screen and found only the 404. `AppShell.test.tsx` had
+  even been passing `Kurssit` as its fixture since slice 3, which is as close to the answer as a
+  test can get without asserting it.
 
 - **Capabilities with no surface — five, and the last one matters most:**
   1. **No way to rename or delete a Kurssi.** `useUpdateClass` and `useDeleteClass` exist at
@@ -132,7 +141,8 @@ accessibility check available here is also the width decision.
 
 | Surface | Empty | Loading | Refused / error | Success |
 |---|---|---|---|---|
-| `/dashboard` | "Ei kursseja vielä. Luo ensimmäinen kurssisi yllä olevasta painikkeesta." | spinner in place of the list | "Kurssien lataaminen epäonnistui" + the retry | the Kurssi list, each card a link |
+| `/dashboard` | "Ei kursseja vielä" as the heading, "Luo ensimmäinen kurssisi yllä olevasta painikkeesta." under it — the shipped sentence, split, and still pointing at the header button rather than carrying a second one | spinner in place of the list | "Kurssien lataaminen epäonnistui" + the retry | the Kurssi list, each card a link naming its two counts, and a dashed card that opens the dialog |
+| `/dashboard` — luo uusi kurssi | n/a | the submit becomes "Luodaan..." and disables | toast, `detail` from the API or "Kurssin luominen epäonnistui"; a blank name is refused before the request with "Kurssin nimi on pakollinen" | toast "Kurssi luotu", the dialog closes, the fields clear |
 | *Kirjaa läsnäolo* | n/a — the form is always the form | the submit button becomes "Kirjataan…" and disables | toast, `detail` from the API or "Läsnäolon kirjaaminen epäonnistui" | toast, and the field clears |
 | *Läsnäolot* | "Ei opiskelijoita vielä" (desktop) / "Ei läsnäoloja kirjattu vielä tälle kurssille" (narrow); searching yields "Ei hakutuloksia haulla …" | Card header stays, body becomes a spinner | "Opiskelijoiden lataaminen epäonnistui" + the retry | rows, tally, and the *Suoritus* tick |
 | *Tilastot* | "Ei läsnäoloja näytettäväksi" + "Kirjaa opiskelijoiden läsnäoloja nähdäksesi tilastot." | "Ladataan tilastoja…" | "Tilastojen lataaminen epäonnistui" + the retry | the daily and monthly aggregates |
@@ -263,7 +273,7 @@ runs in `npm run check` and as a job `deploy` needs. One row moved the other way
 | A11Y-4 | Text clears 4.5:1, and a boundary that identifies a control clears 3:1 | `test:tokens-contrast.test.ts` — every pair in its `PAIRS` table computed from `src/index.css`, not from intent, in both `:root` and `.dark`; run it for the count — **and** `test:e2e/states.spec.ts`, axe with `color-contrast` enabled over every rendered state in `e2e/states.spec.ts`'s table. The second half is not a duplicate: the token test proves the palette and cannot express an alpha composite. Three pairs were added on 2026-09-10 by making the badge solid and by asserting `--input` against `--card` as well as the page, which is why only the 404 is still exempt. Slice 4 added the first **gradient** pair: the auth aside runs `--primary` → `--auth-aside-to` under `--primary-foreground` text, and gating the two endpoints gates the span because every channel moves monotonically between them. The prototype's own third stop measured **3.28:1** there and no gate could see it — axe returns `color-contrast` as *incomplete* over a gradient and `e2e/assertions.ts:111` reads only `violations` | `[test]` |
 | A11Y-5 | Nothing conveys meaning by colour alone | nothing — a human has to look. The *Suoritus* badge carries its word, which is why it passes today | `[review-only]` |
 | A11Y-6 | `prefers-reduced-motion` is respected | nothing. `animate-fade-in`, `transition-smooth` and `active:scale-[0.98]` all ignore it | `[review-only]` |
-| A11Y-7 | Content reflows at 320px with no two-directional scrolling (WCAG 1.4.10) | `test:e2e/states.spec.ts` — `documentElement.scrollWidth <= clientWidth` in every state of `e2e/states.spec.ts`'s table at 320px, measured after `document.fonts.ready` so the widths are Fira Sans's and not system-ui's — Fira **stays** under spec 0006, so these measurements were not re-opened by the reskin. It **passes on all of them**, the three error states and the drawer included, and it caught one real failure on the way in: the *Tilastot* charts forced the page to 760px. An inner container that scrolls is deliberate and allowed; the document scrolling is not | `[test]` |
+| A11Y-7 | Content reflows at 320px with no two-directional scrolling (WCAG 1.4.10) | `test:e2e/states.spec.ts` — `documentElement.scrollWidth <= clientWidth` in every state of `e2e/states.spec.ts`'s table at 320px, measured after `document.fonts.ready` so the widths are Fira Sans's and not system-ui's — Fira **stays** under spec 0006, so these measurements were not re-opened by the reskin. It **passes on all of them**, the three error states and the drawer included, and it caught one real failure on the way in: the *Tilastot* charts forced the page to 760px. An inner container that scrolls is deliberate and allowed; the document scrolling is not. **Second enforcer since slice 5: `expectOverlayWithinViewport`**, because the first one is structurally blind to every overlay — a `position: fixed` element is out of flow and adds nothing to document overflow. Measured, not argued: a `min-w-[34rem]` put on `DialogContent` on purpose rendered the create-course dialog **520px wide from x=-100 to x=420** at a 320px viewport, a third of it unreachable off each edge, while `documentElement.scrollWidth` stayed exactly **320** and the state swept clean. The new check measures the box of any open `[role="dialog"]` — the dialog and the drawer, the shell's whole navigation below 940px — and was watched red on that same break and green once it was reverted | `[test]` |
 | A11Y-8 | Text stays readable and nothing is cut off at 200% zoom (WCAG 1.4.4) | nothing | `[review-only]` |
 | A11Y-9 | No control announces itself in the wrong language | nothing automated — axe reads a name's presence, never its language | `[review-only]` |
 

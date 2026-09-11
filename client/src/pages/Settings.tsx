@@ -113,7 +113,7 @@ const Settings = () => {
 
   return (
     <TeacherLayout breadcrumbs={[
-      { label: 'Dashboard', href: '/dashboard' },
+      { label: 'Kurssit', href: '/dashboard' },
       { label: 'Asetukset' }
     ]}>
       <div className="max-w-3xl mx-auto">

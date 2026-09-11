@@ -348,6 +348,39 @@ unrecorded is the defect.)*
   prototype's auth screen has no top bar, so its aside has to introduce the app. The real screen
   keeps `PublicNav`, which already shows the wordmark — a second one on the same page is the "two
   words for one thing" the drift gate exists to catch. The aside opens on its display line instead.
+- **2026-09-11 — slice 5 found the dashboard's course cards were not keyboard-reachable at all,
+  and that is a fix, not a reskin.** Each card was a `<Card onClick>`, which renders a `div`: no
+  role, no tab stop, nothing announced. The one surface whose entire job is choosing a Kurssi was
+  mouse-only. `DESIGN.md` §3 had described this state as "the Kurssi list, each card a link" since
+  the inventory was written, so the contract was already right and only the markup disagreed — the
+  prototype is no help and errs the other way (`index.html:583` is a `<button>` that navigates).
+  Now a `Link`, with an explicit `aria-label` for the same name-concatenation defect
+  `AppShell.test.tsx` caught in the sidebar. Under *Out of Scope*'s "presentation only" this is a
+  **behaviour** change, taken deliberately: shipping a reskin over an unreachable control would
+  have restyled a defect.
+- **2026-09-11 — the root breadcrumb read "Dashboard", in English, on every signed-in surface.**
+  `DESIGN.md` §1 claimed the 404 was the only English in the app; the crumb had been contradicting
+  it from `TeacherDashboard.tsx`, `Settings.tsx` and `ClassView.tsx`, all passing the same literal.
+  Fixed at all three rather than only the one slice 5 owns — one wrong word shared by three callers
+  is one fault, and leaving two of them would have shipped "Kurssit" on the dashboard and
+  "Dashboard →" on the two surfaces that link back to it. AC8 covers it.
+- **2026-09-11 — slice 5 drops the prototype's dashboard sub-line, badge and per-course icons.**
+  The sub-line ("Kolme aktiivista kurssia · 63 oppilasta yhteensä") serves no user story, repeats
+  what the cards already say, and is wrong twice — `active`, which *Out of Scope* forbids, and
+  *oppilas* where the glossary says **opiskelija** (`opiskelij*` appears 35 times in `src/`,
+  `oppila*` zero). The "Aktiivinen"/"Arkistoitu" badge is the `Class.active` surface *Out of Scope*
+  already refused. The three per-course icons are mock data dressed as a schema field; one
+  `BookOpen`, as the sidebar already uses for the same rows. Recorded so no later slice reads the
+  prototype and re-adds them.
+- **2026-09-11 — slice 5 found `A11Y-7`'s enforcer blind to every overlay, and closed it.** Not a
+  spec change but a gate one, and it belongs here because the criterion it serves is AC6. A
+  `min-w-[34rem]` put on `DialogContent` on purpose rendered the create-course dialog **520px wide
+  from x=-100 to x=420** at a 320px viewport while `documentElement.scrollWidth` stayed exactly
+  **320** — `position: fixed` is out of flow and adds nothing to document overflow, so the state
+  swept clean with a third of the dialog unreachable. `expectOverlayWithinViewport` measures the
+  box of any open `[role="dialog"]` and runs on every swept state; watched red on that break,
+  green on revert. The drawer — the shell's whole navigation below 940px — was never covered
+  either, and now is.
 
 ## Further Notes
 

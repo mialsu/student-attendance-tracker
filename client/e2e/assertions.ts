@@ -170,6 +170,54 @@ export async function expectNoHorizontalScroll(page: Page, where: string): Promi
   expect(overflow, `${where}: the page itself scrolls sideways (A11Y-7, WCAG 1.4.10)`).toBeNull();
 }
 
+/**
+ * The half of `A11Y-7` that `expectNoHorizontalScroll` structurally cannot see.
+ *
+ * **Measured, on 2026-09-11, rather than reasoned about.** A `min-w-[34rem]` was put on
+ * `DialogContent` on purpose and the create-course dialog was opened at a 320px viewport. The
+ * dialog rendered **520px wide, from x=-100 to x=420** — a third of it unreachable off each edge —
+ * and `document.documentElement.scrollWidth` stayed exactly **320**. `position: fixed` takes an
+ * element out of flow, so it contributes nothing to the document's scrollable overflow, and the
+ * document-scroll check therefore passes on an overlay that has failed WCAG 1.4.10 outright.
+ *
+ * Every overlay in this app is affected: the create-course dialog, the delete confirmations, and
+ * the off-canvas drawer, which is the shell's entire navigation below 940px.
+ *
+ * Scoped to `[role="dialog"]` deliberately. A blanket "nothing may extend past the viewport" would
+ * fire on things that are off-screen *by design* — and the drawer is exactly that when closed.
+ * Radix gives both the dialog and the sheet `role="dialog"` only while they are open, so the role
+ * is the honest selector for "an overlay currently claiming the screen".
+ */
+
+export async function expectOverlayWithinViewport(page: Page, where: string): Promise<void> {
+  await fontsReady(page);
+  // Both overlays animate in. Measuring mid-transition would report a box that is briefly
+  // off-centre, which is the nondeterminism `retries: 0` claims this walk does not have.
+  await settleAnimations(page);
+
+  const spilling = await page.evaluate(() => {
+    const width = document.documentElement.clientWidth;
+    return [...document.querySelectorAll('[role="dialog"]')]
+      .map((el) => {
+        const box = el.getBoundingClientRect();
+        const cls = (el.getAttribute('class') ?? '').split(' ')[0] ?? '';
+        return {
+          el: `${el.tagName.toLowerCase()}${cls ? `.${cls}` : ''}`,
+          left: Math.round(box.left),
+          right: Math.round(box.right),
+          viewport: width,
+        };
+      })
+      .filter((box) => box.left < -1 || box.right > width + 1);
+  });
+
+  expect(
+    spilling,
+    `${where}: an open overlay extends past the viewport (A11Y-7, WCAG 1.4.10). The document ` +
+      `scroll check cannot see this — a fixed element adds nothing to document overflow`,
+  ).toEqual([]);
+}
+
 export function toast(page: Page, text: string): Locator {
   return page.getByText(text, { exact: true });
 }
