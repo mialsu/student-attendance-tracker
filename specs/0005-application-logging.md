@@ -752,3 +752,33 @@ divergence.
     `app/dependencies.py`'s own `Account is inactive` is left alone on purpose: it answers a
     request that already carried a valid token, so it discloses nothing an attacker did not
     already have.
+
+**2026-09-11, slice 6.** Two, both about the nginx half, and the first is a gap in this document
+rather than a change of mind.
+
+19. **Forwarding the header was not enough for AC-12; `log_format` had to change too.** *Request
+    id* above says nginx "gains one `proxy_set_header X-Request-ID $request_id` per proxied
+    location", and that is what makes the app's line carry nginx's id. But AC-12 asks for more
+    than that — it asks that "a production log line carries the same id as its **nginx access
+    line**", and nginx's `log_format main` did not include `$request_id`, so there was no id on
+    the access side to join to. The format now appends `request_id=$request_id`, put on the
+    end so that anything parsing those lines by position keeps working.
+
+    Six proxied locations carry the header: `/api/`, `/api/auth/`, `/docs`, `/redoc`,
+    `/openapi.json` and `/health`. `/health` gets it for attribution only — `access_log` is off
+    there, so it has no access line of its own to join to.
+
+20. **nginx replaces a client's `X-Request-ID`, which narrows what AC-9 claims in production.**
+    AC-9 says an incoming id "is honoured verbatim", and the app does honour it — but
+    `proxy_set_header X-Request-ID $request_id` overwrites whatever the caller sent, so through
+    nginx the id is always nginx's own. Measured, not assumed: a request carrying
+    `X-Request-ID: client-forged-value-12345` reached the upstream as
+    `f94ea8021b39330cfd06abd8a4ae48b0`, and that same value appeared on the access line.
+
+    So AC-9's "honoured verbatim" holds for the app, and is reachable only off the proxy: local
+    development, or anything hitting the container directly. That leaves two facts worth
+    keeping. A caller cannot poison the log or forge another request's id through the front
+    door, and `MAX_REQUEST_ID_LENGTH` defends the direct path rather than production traffic.
+    The middleware's comment calling the header "client-supplied text" is accurate for the
+    direct path and misleading for the proxied one.
+

@@ -6,6 +6,81 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 
 <!-- Newest first. -->
 
+## 2026-09-11 — nothing gates the `db` log bound, or the nginx request-id forwarding
+- **What:** AC-16 and AC-12 are `live:` criteria by design, so their proof is a deploy-time
+  exercise and **no gate watches either config**. Delete the `logging` block from `db`, or drop
+  `proxy_set_header X-Request-ID` from a location, and every gate stays green: the python suite
+  never reads `deployment/`, the boundary gate reads imports, and the drift gate reads vocabulary.
+  The first symptom of the first would be a full disk on the CX21; of the second, a log line that
+  cannot be joined to anything, which nobody notices until they need it.
+- **What would catch it:** a check in `scripts/drift-extra.sh` asserting that a diff touching
+  either compose file leaves `db` with a `logging` block, and that every `proxy_pass` in
+  `nginx.conf` is accompanied by `proxy_set_header X-Request-ID`. Both are greps.
+- **Why not done here:** the spec assigns both criteria `live:`, and adding gates to
+  `drift-extra.sh` changes a script the pre-commit hook runs in **both** working trees, including
+  the UI-redesign worktree another session is using. That needs the Owner's go.
+- **Also unchecked:** `10m` and `3` now appear in four places — both compose files,
+  `deployment/README.md`'s Rotation section, and INV-9's row. Nothing compares them, so the
+  four can drift apart silently.
+- **Disposition:** open, for the Owner.
+
+## 2026-09-11 — slice 6's four criteria are proven as mechanisms locally, not yet on the VM
+- **What:** slice 6 is built (nginx forwards `X-Request-ID` from six proxied locations and logs
+  `request_id=` on its access line; `db` has a `logging` block in both compose files; `logs.sh`
+  has a `--json` path). Each mechanism was exercised locally with real components:
+  - **AC-12** — real nginx with the production config and a stub upstream. Three probes; the id
+    the upstream received matched the id on nginx's access line every time. A client-supplied
+    `X-Request-ID` was replaced by nginx's own (spec delta 20).
+  - **AC-16** — `docker compose config` on both files resolves `db` to
+    `json-file / max-size 10m / max-file 3`.
+  - **AC-17** — the real `logs.sh`, run against a real `docker compose` project emitting three
+    lines from the app's own `JsonLineFormatter` mixed with seven non-JSON lines (postgres,
+    a real captured nginx access line, a uvicorn access line, a four-line traceback). All three
+    app lines came through, all seven noise lines were skipped, and each documented filter
+    returned the expected count.
+- **What the four criteria ask for and this does not cover:** none of it ran on the VM, against
+  the real backend, the real nginx or the real database. AC-16's wording is explicit ("confirmed
+  on the VM after deploy"). AC-11 needs `OTEL_EXPORTER_OTLP_ENDPOINT` set and a trace in Jaeger,
+  which no local exercise touched, so **AC-11 remains entirely unexercised** — a stub upstream
+  emits no spans.
+- **Consequence:** the verdicts stay **BLOCKED** until `/verify-live` runs after a deploy. A local
+  mechanism proof shows the config parses and behaves; production is a separate claim.
+- **Disposition:** open until the deploy. `/verify-live` owns closing them.
+
+## 2026-09-11 — only `db` gained a log bound; local's other services are still unbounded
+- **What:** AC-16 names the `db` service, so that is what slice 6 bounded in both compose files.
+  In `deployment/local/docker-compose.yml` the `backend` and `jaeger` services, and the
+  profile-gated `db-test`, still have **no** `logging` block, so their container logs grow without
+  limit on a developer machine. Production has all four bounded.
+- **Why not fixed here:** staying inside the slice's stated scope. The stakes differ by an order
+  of magnitude — a developer disk versus the CX21 that also holds the database.
+- **Disposition:** open, low priority. Three `logging` blocks copied from `db`, whenever someone
+  is in that file anyway.
+
+## 2026-09-11 — the `--json` jq guard was exercised through its body, with the condition swapped
+- **What:** `logs.sh --json` refuses with a clear message when `jq` is missing. `jq` is installed
+  on this machine and `docker` shares `/usr/bin` with it, so a `PATH` that hides one hides the
+  other. The branch was exercised by running a copy whose condition was changed to a command that
+  cannot exist — which proves the message and the `exit 1`, **not** that `command -v jq` is the
+  right test.
+- **Disposition:** accepted. The condition is a one-line idiom; the cost of a rig that removes
+  only `jq` exceeds what it would prove.
+
+## 2026-09-11 — `/api/` forwards `Connection: upgrade` with an empty `Upgrade` header
+- **What:** noticed while exercising AC-12, and **pre-existing** — not introduced by slice 6.
+  `deployment/production/nginx.conf`'s `/api/` location sets `proxy_set_header Connection
+  "upgrade"` unconditionally alongside `Upgrade $http_upgrade`. On an ordinary request
+  `$http_upgrade` is empty, so the upstream is told `Connection: upgrade` with nothing to upgrade
+  to. The stub upstream used for the probe hung on it until its keepalive timed out; FastAPI
+  behind uvicorn has served production this way for months without trouble, so the practical
+  impact looks nil.
+- **Why not fixed here:** out of slice 6's scope, and the safe form (an `http`-level `map` of
+  `$http_upgrade` to `$connection_upgrade`) changes a directive on the path every request takes.
+  That earns its own commit and its own live exercise.
+- **Disposition:** open, for the Owner. The `/api/auth/` location does **not** set these two
+  headers, so the two proxy paths already differ.
+
+
 ## 2026-09-10 — `LOG_LEVEL=WARNING` silently switches off the irreversible-act record
 - **What:** found by `/verify-live`, not by a test. The merge and student-delete lines are `INFO`;
   every denial and every error is `WARNING` or above. So setting `LOG_LEVEL=WARNING` keeps the
@@ -22,11 +97,15 @@ cut (`/confess`), read first by any architecture or review session, dispositione
   and not in either compose file — so the default `INFO` applies and both act lines are recorded.
   The hazard is that turning the log down is an obvious, innocuous-looking thing to do to a chatty
   service, and it costs exactly the record US-5 asked for.
-- **Disposition:** **open, and the cheap fix is a line of documentation rather than code** —
-  `deployment/README.md` and `.env.example` should say that `LOG_LEVEL` above `INFO` drops the
-  merge/delete record. Emitting the acts at `WARNING` instead is the other option and is worse: it
-  would file a successful, intended operation under the same level as a refusal. Slice 6 touches
-  `deployment/`, so it is the natural place to write the note.
+- **Disposition:** **closed, 2026-09-11 (slice 6), documented rather than changed in code.** The
+  Owner chose documentation. Emitting the acts at `WARNING` was the alternative and is worse,
+  since it files a successful intended operation at the level a refusal uses.
+- **Where the note landed, and the first attempt got this wrong.** It went into `api/.env.example`
+  and `deployment/README.md` first, which is what this entry asked for — but neither is read on
+  the VM. `/code-review`'s spec axis caught it: an operator raising the level edits
+  `deployment/production/.env.example` or the `backend.environment` block in
+  `deployment/production/docker-compose.yml`, and both now carry the warning too. The compose
+  block also records why `LOG_LEVEL` is not passed through at all.
 
 ## 2026-09-10 — the inactive-account login message tells a stranger the address is registered
 - **What:** found by `/verify-live` while measuring AC-2. `authenticate_user` returns three
