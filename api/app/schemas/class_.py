@@ -36,5 +36,10 @@ class ClassResponse(ClassBase):
     created_at: datetime
     updated_at: datetime | None
     attendance_count: int | None = None
+    # Added 2026-09-11 for spec 0006's sidebar, which names each Kurssi with how many Students
+    # it holds. Additive and optional, like attendance_count beside it: an older client that
+    # does not read it is unaffected. Both counts come from one query -- see
+    # class_service.count_class_rows.
+    student_count: int | None = None
 
     model_config = {"from_attributes": True}

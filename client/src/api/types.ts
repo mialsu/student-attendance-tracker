@@ -16,6 +16,8 @@ export interface Class {
   created_at: string;
   updated_at: string | null;
   attendance_count?: number;
+  /** Students in this Kurssi. Carried by the class list itself, so the sidebar costs no request. */
+  student_count?: number;
 }
 
 // Student entity types
