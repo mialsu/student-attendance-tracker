@@ -39,6 +39,18 @@ python-dotenv>=1.0.0
 # opentelemetry-instrumentation-asyncpg is deliberately ABSENT. SQLAlchemy's instrumentation
 # hooks before_cursor_execute; asyncpg's patches Connection.execute. Under SQLAlchemy-async-over-
 # asyncpg both fire for one statement, giving two nested spans per query and doubling the volume.
+# opentelemetry-api is listed EXPLICITLY, not left transitive: spec 0005's log formatter imports
+# `opentelemetry.trace` directly to read the current trace id, so a line that used to arrive as
+# somebody else's dependency is now a direct one. Pinned to the same version as the sdk, which is
+# how the API and SDK are released.
+#
+# The exemption on the line below: drift-check's check 3 wants a NEW ADR file in the same diff
+# for any added manifest name. Nothing is being added to the environment here -- the package is
+# already installed and already imported directly by app/core/telemetry.py -- and the decision the
+# check asks for is already written, in ADR-0007, which records that trace_id needs no new
+# dependency and that opentelemetry-instrumentation-logging was investigated and rejected. A second
+# ADR written to satisfy a gate is the pseudo-artifact ANTI-PATTERNS.md names.
+opentelemetry-api==1.44.0  # drift-ok: made explicit, not added; decided in ADR-0007
 opentelemetry-sdk==1.44.0
 opentelemetry-exporter-otlp-proto-http==1.44.0
 opentelemetry-instrumentation-fastapi==0.65b0

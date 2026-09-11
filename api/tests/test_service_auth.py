@@ -9,6 +9,7 @@ from app.schemas.auth import Token
 from app.services import auth_service
 from app.core.exceptions import AuthenticationError, DuplicateError
 from app.core.security import hash_password, verify_password
+from tests.logging_helpers import capture_logs, one_object
 
 
 @pytest.mark.asyncio
@@ -95,13 +96,20 @@ class TestAuthenticateUser:
     async def test_authenticate_inactive_user(
         self, db: AsyncSession, inactive_user: User
     ):
-        """Test authentication with inactive user."""
-        with pytest.raises(AuthenticationError) as exc:
-            await auth_service.authenticate_user(
-                db, inactive_user.email, "testpassword123"
-            )
+        """Test authentication with inactive user.
 
-        assert "inactive" in str(exc.value).lower()
+        The message is the same as every other refusal, deliberately (2026-09-11): an inactive
+        account must not be tellable from an unknown address without presenting a credential.
+        So the branch is proven by the log line, which is the only place it is legible.
+        """
+        with capture_logs() as lines:
+            with pytest.raises(AuthenticationError) as exc:
+                await auth_service.authenticate_user(
+                    db, inactive_user.email, "testpassword123"
+                )
+
+        assert "invalid email or password" in str(exc.value).lower()
+        assert one_object(lines)["reason"] == "inactive_account"
 
 
 @pytest.mark.asyncio

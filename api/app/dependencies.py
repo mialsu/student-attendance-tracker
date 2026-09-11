@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import UnauthorizedException
+from app.core.logging import teacher_id_var
 from app.core.security import decode_token
 from app.database import get_db
 from app.models.user import User
@@ -64,6 +65,15 @@ async def get_current_user(
     # Check if user is active
     if not user.active:
         raise UnauthorizedException(detail="Account is inactive")
+
+    # The one place the request context learns WHO is acting. Set here rather than in the
+    # middleware because this is where authentication actually resolves -- the middleware runs
+    # before any token has been decoded. Everything downstream, the exception handler included,
+    # reads it from the context variable, so no service signature grows a parameter for it.
+    #
+    # Nothing resets this: the request-context middleware owns the reset for every variable, and
+    # a dependency has no `finally` that outlives the request.
+    teacher_id_var.set(str(user.id))
 
     return user
 

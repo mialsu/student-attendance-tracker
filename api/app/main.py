@@ -7,10 +7,19 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import get_redoc_html, get_swagger_ui_html
 from fastapi.openapi.utils import get_openapi
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from app.api.handlers import http_exception_log_handler
 from app.config import settings
+from app.core.logging import configure_logging
 from app.core.telemetry import setup_telemetry
 from app.database import engine
+from app.middleware.context import RequestContextMiddleware
+
+# Attach the JSON handler before anything can log. Idempotent, and it reads LOG_LEVEL from the
+# environment with a default, so an unset variable is the normal case rather than a failure --
+# `tests/conftest.py` imports this module, so this runs in every pytest session too.
+configure_logging()
 
 # Create FastAPI app with docs disabled (we'll add them back with auth)
 app = FastAPI(
@@ -72,6 +81,17 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Request context. `add_middleware` INSERTS at the front of the user middleware list, so the
+# last one added is the outermost -- this one wraps CORS, and every response therefore carries a
+# request id in its context, preflight included.
+app.add_middleware(RequestContextMiddleware)
+
+# Denial logging. Registered for Starlette's HTTPException rather than FastAPI's: FastAPI's
+# subclasses it, so one registration covers both, and this is the class FastAPI itself registers
+# its default handler against. That default is what this one delegates to, which is what keeps
+# every refusal's response bytes unchanged.
+app.add_exception_handler(StarletteHTTPException, http_exception_log_handler)
 
 
 @app.get("/")

@@ -6,6 +6,448 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 
 <!-- Newest first. -->
 
+## 2026-09-11 — nothing gates the `db` log bound, or the nginx request-id forwarding
+- **What:** AC-16 and AC-12 are `live:` criteria by design, so their proof is a deploy-time
+  exercise and **no gate watches either config**. Delete the `logging` block from `db`, or drop
+  `proxy_set_header X-Request-ID` from a location, and every gate stays green: the python suite
+  never reads `deployment/`, the boundary gate reads imports, and the drift gate reads vocabulary.
+  The first symptom of the first would be a full disk on the CX21; of the second, a log line that
+  cannot be joined to anything, which nobody notices until they need it.
+- **What would catch it:** a check in `scripts/drift-extra.sh` asserting that a diff touching
+  either compose file leaves `db` with a `logging` block, and that every `proxy_pass` in
+  `nginx.conf` is accompanied by `proxy_set_header X-Request-ID`. Both are greps.
+- **Why not done here:** the spec assigns both criteria `live:`, and adding gates to
+  `drift-extra.sh` changes a script the pre-commit hook runs in **both** working trees, including
+  the UI-redesign worktree another session is using. That needs the Owner's go.
+- **Also unchecked:** `10m` and `3` now appear in four places — both compose files,
+  `deployment/README.md`'s Rotation section, and INV-9's row. Nothing compares them, so the
+  four can drift apart silently.
+- **Disposition:** open, for the Owner.
+
+## 2026-09-11 — slice 6's four criteria are proven as mechanisms locally, not yet on the VM
+- **What:** slice 6 is built (nginx forwards `X-Request-ID` from six proxied locations and logs
+  `request_id=` on its access line; `db` has a `logging` block in both compose files; `logs.sh`
+  has a `--json` path). Each mechanism was exercised locally with real components:
+  - **AC-12** — real nginx with the production config and a stub upstream. Three probes; the id
+    the upstream received matched the id on nginx's access line every time. A client-supplied
+    `X-Request-ID` was replaced by nginx's own (spec delta 20).
+  - **AC-16** — `docker compose config` on both files resolves `db` to
+    `json-file / max-size 10m / max-file 3`.
+  - **AC-17** — the real `logs.sh`, run against a real `docker compose` project emitting three
+    lines from the app's own `JsonLineFormatter` mixed with seven non-JSON lines (postgres,
+    a real captured nginx access line, a uvicorn access line, a four-line traceback). All three
+    app lines came through, all seven noise lines were skipped, and each documented filter
+    returned the expected count.
+- **What the four criteria ask for and this does not cover:** none of it ran on the VM, against
+  the real backend, the real nginx or the real database. AC-16's wording is explicit ("confirmed
+  on the VM after deploy"). AC-11 needs `OTEL_EXPORTER_OTLP_ENDPOINT` set and a trace in Jaeger,
+  which no local exercise touched, so **AC-11 remains entirely unexercised** — a stub upstream
+  emits no spans.
+- **Consequence:** the verdicts stay **BLOCKED** until `/verify-live` runs after a deploy. A local
+  mechanism proof shows the config parses and behaves; production is a separate claim.
+- **Disposition:** open until the deploy. `/verify-live` owns closing them.
+
+## 2026-09-11 — only `db` gained a log bound; local's other services are still unbounded
+- **What:** AC-16 names the `db` service, so that is what slice 6 bounded in both compose files.
+  In `deployment/local/docker-compose.yml` the `backend` and `jaeger` services, and the
+  profile-gated `db-test`, still have **no** `logging` block, so their container logs grow without
+  limit on a developer machine. Production has all four bounded.
+- **Why not fixed here:** staying inside the slice's stated scope. The stakes differ by an order
+  of magnitude — a developer disk versus the CX21 that also holds the database.
+- **Disposition:** open, low priority. Three `logging` blocks copied from `db`, whenever someone
+  is in that file anyway.
+
+## 2026-09-11 — the `--json` jq guard was exercised through its body, with the condition swapped
+- **What:** `logs.sh --json` refuses with a clear message when `jq` is missing. `jq` is installed
+  on this machine and `docker` shares `/usr/bin` with it, so a `PATH` that hides one hides the
+  other. The branch was exercised by running a copy whose condition was changed to a command that
+  cannot exist — which proves the message and the `exit 1`, **not** that `command -v jq` is the
+  right test.
+- **Disposition:** accepted. The condition is a one-line idiom; the cost of a rig that removes
+  only `jq` exceeds what it would prove.
+
+## 2026-09-11 — `/api/` forwards `Connection: upgrade` with an empty `Upgrade` header
+- **What:** noticed while exercising AC-12, and **pre-existing** — not introduced by slice 6.
+  `deployment/production/nginx.conf`'s `/api/` location sets `proxy_set_header Connection
+  "upgrade"` unconditionally alongside `Upgrade $http_upgrade`. On an ordinary request
+  `$http_upgrade` is empty, so the upstream is told `Connection: upgrade` with nothing to upgrade
+  to. The stub upstream used for the probe hung on it until its keepalive timed out; FastAPI
+  behind uvicorn has served production this way for months without trouble, so the practical
+  impact looks nil.
+- **Why not fixed here:** out of slice 6's scope, and the safe form (an `http`-level `map` of
+  `$http_upgrade` to `$connection_upgrade`) changes a directive on the path every request takes.
+  That earns its own commit and its own live exercise.
+- **Disposition:** open, for the Owner. The `/api/auth/` location does **not** set these two
+  headers, so the two proxy paths already differ.
+
+
+## 2026-09-10 — `LOG_LEVEL=WARNING` silently switches off the irreversible-act record
+- **What:** found by `/verify-live`, not by a test. The merge and student-delete lines are `INFO`;
+  every denial and every error is `WARNING` or above. So setting `LOG_LEVEL=WARNING` keeps the
+  refusal record flowing while **the audit trail for destructive acts disappears**, and nothing
+  says so. Measured: at `WARNING` a delete returned 204 with no line at all, while a login denial
+  in the same run logged normally.
+- **Where:** `app/core/logging.py` — `resolve_level()` reads `LOG_LEVEL` from the environment with
+  `DEFAULT_LEVEL = logging.INFO`; the act lines are emitted at `logging.INFO` from
+  `student_service.merge_students` and `delete_student`.
+- **What green tests/gates did NOT prove:** `tests/test_logging.py` asserts `LOG_LEVEL` changes the
+  level, which is AC-14 and is correct. No test asks what is *lost* at each level, because the
+  criterion was written about the mechanism rather than about the consequence.
+- **Why this is not a bug today:** production sets no `LOG_LEVEL` — not in `deployment/production/`
+  and not in either compose file — so the default `INFO` applies and both act lines are recorded.
+  The hazard is that turning the log down is an obvious, innocuous-looking thing to do to a chatty
+  service, and it costs exactly the record US-5 asked for.
+- **Disposition:** **closed, 2026-09-11 (slice 6), documented rather than changed in code.** The
+  Owner chose documentation. Emitting the acts at `WARNING` was the alternative and is worse,
+  since it files a successful intended operation at the level a refusal uses.
+- **Where the note landed, and the first attempt got this wrong.** It went into `api/.env.example`
+  and `deployment/README.md` first, which is what this entry asked for — but neither is read on
+  the VM. `/code-review`'s spec axis caught it: an operator raising the level edits
+  `deployment/production/.env.example` or the `backend.environment` block in
+  `deployment/production/docker-compose.yml`, and both now carry the warning too. The compose
+  block also records why `LOG_LEVEL` is not passed through at all.
+
+## 2026-09-10 — the inactive-account login message tells a stranger the address is registered
+- **What:** found by `/verify-live` while measuring AC-2. `authenticate_user` returns three
+  messages for three branches, and the third is distinguishable from outside:
+  - unknown email -> `{"detail":"Invalid email or password"}`
+  - wrong password -> `{"detail":"Invalid email or password"}`  (byte-identical, by design)
+  - **inactive account** -> `{"detail":"Account is inactive. Please contact support."}`
+
+  The inactive check runs **before** `verify_password`, so an unauthenticated caller learns that an
+  address exists and is deactivated **without presenting a credential**. That is user enumeration,
+  and it contradicts spec 0005's own stated rationale for the other two being identical: "telling a
+  stranger whether an address is registered is the enumeration this app declines to answer".
+- **Where:** `app/services/auth_service.py` — `authenticate_user`, the `if not user.active` branch
+  above the password check.
+- **What green tests/gates did NOT prove:** `tests/test_logging_events.py::test_an_inactive_account_is_the_third_distinguishable_branch`
+  asserts this exact message, so the suite *locks the leak in*. It was written to prove the branch
+  is distinguishable in the log, and the response assertion came along with it.
+- **Scale, honestly:** this app has **one** production teacher and signup requires a
+  single-use, 24-hour, email-restricted registration code (INV-6, INV-7), so there is no
+  self-service population to enumerate. nginx rate-limits the auth path at 5 r/m. The finding is
+  real and its exploitability here is close to nil — which is why it is a ledger entry rather than
+  a fix jammed into a logging slice.
+- **Why it was not fixed here:** returning `Invalid email or password` for an inactive account
+  removes the leak and also removes the only hint a real deactivated teacher gets about why she
+  cannot log in. That is a product trade — the Owner decides, and `/audit`'s 2026-09-02 threat
+  model (the attacker is a logged-in teacher probing other teachers' rows) did not rank
+  unauthenticated enumeration.
+- **Disposition:** **closed, 2026-09-11 — the Owner chose to unify the message.** The inactive
+  branch now raises `Invalid email or password`, byte-identical to the other two, and the branch
+  is proven by the log's `reason=inactive_account` rather than by its response text. A
+  deactivated teacher loses her only hint and has to contact the school, which is what the old
+  message told her to do anyway.
+- **Four sites moved. The estimate was wrong twice, both times from a truncated `grep`** — first
+  at two, then at three. One code site: `app/services/auth_service.py`, the message plus the
+  comment above it, which claimed two of three branches shared a response. **Three** tests were
+  locking the old message in, and only the first was known when the work started:
+  - `tests/test_logging_events.py` — asserted the body verbatim; now asserts that the inactive
+    and unknown-email responses are byte-identical to each other
+  - `tests/test_service_auth.py::test_authenticate_inactive_user` — `"inactive" in
+    str(exc.value)`, at the service level; now reads the log line
+  - `tests/test_auth.py::TestLogin::test_login_inactive_user` — `"inactive" in detail`, at the
+    route level; now asserts the unified body. **This one was found by the full suite, not by
+    reading**, which is the argument for running it rather than the changed files.
+- **Deliberately unchanged:** `app/dependencies.py:67` still answers `Account is inactive` and
+  `tests/test_dependencies.py:125` still asserts it. That path requires a **valid token**, so it
+  tells a stranger nothing and the message stays useful to the teacher holding the session.
+- **Watched fail both ways:** both tests went red on the change before they were rewritten, and
+  red again on a re-plant of the old message afterwards, restored in a `finally`. Spec 0005
+  delta 18 carries the same closure from the criterion's side; **AC-2's wording is now true as
+  written**.
+
+
+## 2026-09-10 — INV-9's gate cannot see through a `**kwargs` expansion, and its allowlist must be widened by hand
+- **What:** `scripts/log_lint.py` checks logger-call keywords against `ALLOWED_KEYWORDS` and
+  literal `event`/`rule`/`reason` values against three known sets. Two things it cannot do:
+  - **`**fields` is invisible.** `app/api/handlers.py` builds a `fields` dict and expands it into
+    `log_event(logging.WARNING, "denial", **fields)`. The keywords are not in the call's syntax,
+    so `ast` cannot name them and the gate skips the expansion entirely. Today that dict is built
+    three lines above from `reason`, `rule` and `status` — so it is safe by inspection, not by
+    gate. The same blind spot covers `rule=INV_1`, a module constant rather than a literal.
+  - **A widening is indistinguishable from a leak.** Adding a legitimate new field means editing
+    the allowlist, and nothing checks that the editor argued for it. The gate converts a silent
+    leak into a deliberate one, which is the whole gain, but it is not proof.
+- **What green tests/gates did NOT prove:** the runtime sweep in `tests/test_logging_inv9.py`
+  catches a name that actually reaches a line on one of the seven routes it drives, including
+  through `**fields`. So the two enforcers overlap rather than nest: the gate sees syntax the
+  test cannot reach, the test sees values the gate cannot resolve. Neither alone is INV-9.
+- **Why it was not fixed here:** resolving `**fields` means following a local dict through the
+  function, which is a small dataflow analysis. Spec 0005 delta 11 already argues the cheaper
+  direction — call sites should pass literals, so the gate can read them — and `handlers.py` is
+  the one site that does not.
+- **Disposition:** **open, low priority.** The honest fix is to make `handlers.py` pass its
+  fields explicitly rather than to teach the gate dataflow. Worth doing the next time that
+  handler is touched for another reason.
+
+
+## 2026-09-10 — a cross-teacher merge was refused as INV-5 when the violation was INV-1's (FIXED same day)
+- **What:** spec 0005 slice 4 labelled `merge_students`' same-Class refusal `rule="INV-5"` so it
+  reaches the log (AC-21). That comparison runs **before**
+  `class_service.verify_class_ownership` is called on the *duplicate's* Class, so a teacher
+  reaching for **another teacher's** Student as the merge source is refused by the Class
+  comparison and logged as an `INV-5` violation. No `INV-1` line is written for it at all.
+- **Where:** `app/services/student_service.py` — `merge_students`, the same-Class comparison and
+  the `verify_class_ownership` call five lines below it.
+- **The enforcement is intact; the record is wrong.** Measured rather than reasoned about: the
+  request returns **400**, the merge does not happen, nothing moves, and exactly one line comes
+  out carrying `rule=INV-5`, `reason=cross_class_merge`. INV-1 still refuses the same request
+  through the *target's* ownership check whenever the target is another teacher's
+  (`tests/test_authorization.py::test_other_teacher_cannot_merge_another_teachers_students`
+  covers that side). What is broken is which rule the log names for the duplicate side.
+- **What green tests/gates did NOT prove:** nothing covered the duplicate-side denial before
+  this slice — the refusal was silent, so there was no attribution to get wrong.
+  `tests/test_logging_events.py::test_another_teachers_student_as_the_duplicate_is_logged_as_inv_5_not_inv_1`
+  now pins the current behaviour, so a reorder fails it deliberately rather than silently
+  changing what the log says.
+- **Why it was not fixed in the slice-4 commit (`28a0373`):** the fix moves
+  `verify_class_ownership` above the Class comparison, which turns that 400 into a 403 — an
+  observable response change on the authorization path spec 0003 consolidated, and no
+  acceptance criterion in spec 0005 asks for it. AC-21 asks only that a cross-Class refusal be
+  logged. A logging slice changing an authorization response code is the Owner's call, not a
+  build decision taken in passing (PRINCIPLES #8), so it shipped confessed and pinned.
+- **Fixed 2026-09-10, on the Owner's decision, immediately after that commit.** The ownership
+  check now runs first, so this request answers **403** and the line names `INV-1`. Watched
+  failing first, both halves at 400: the response side in
+  `tests/test_authorization.py::test_other_teacher_cannot_supply_her_own_student_as_a_merge_duplicate`
+  (the merge's second surface — the duplicate arrives in the BODY, where the existing denial
+  test only covered the target in the path), and the log side in
+  `tests/test_logging_events.py::test_another_teachers_student_as_the_duplicate_is_refused_as_inv_1`.
+  The three same-teacher cross-Class tests were unaffected, which is what confirms INV-5 still
+  refuses what it is for. INV-1's denial-test count in `INVARIANTS.md` went 18 -> 19.
+- **Disposition:** **closed, 2026-09-10** — reordered, not accepted. Kept in the ledger rather
+  than deleted because the finding is the useful part: the log line is what made a two-week-old
+  mislabel visible, which is the argument for spec 0005 that no acceptance criterion states.
+  Recorded in spec 0005's delta 13 and in `INVARIANTS.md`'s INV-5 and INV-1 rows.
+
+## 2026-09-10 — the two irreversible-act statements sit on a write path no ratchet watches
+- **What:** slice 4 added one `SELECT count(*)` to the student-delete path
+  (`count_attendance_for_student`, called before `db.delete` because the cascade destroys the
+  rows the count needs). The merge path added none — the bulk `UPDATE`'s `rowcount` was already
+  there and was being discarded.
+- **Where:** `app/services/student_service.py` — `delete_student`.
+- **What green tests/gates did NOT prove:** `tests/test_query_budget.py` holds statement
+  ceilings for **four read endpoints** — students list, autocomplete, attendance list,
+  attendance summary — and **none for any write path**. So this +1 is unmeasured by any gate,
+  and so is the next one somebody adds to a mutation. The N+1 loops that file was built for were
+  all on read paths, which is why the gap was never noticed.
+- **Why it was not fixed here:** a write-path budget needs a fixture shape the file does not
+  have — a mutation is not idempotent, so the count has to be taken against freshly built rows
+  per parametrisation rather than against the shared `populated_class`. That is its own change
+  and it would arrive untested by anything but itself.
+- **Disposition:** **open**, unpinned to a slice. Small and worth doing before the next feature
+  touches a mutation; it is not spec 0005's work.
+
+
+## 2026-09-10 — a Student's name can still reach the container log, by traceback
+- **What:** found by slice 3's live exercise against real uvicorn, not by a test. ADR-0007's rule
+  is scoped to **log lines**, and slice 3 honours it — the `ERROR` line carries
+  `exception=type(exc).__name__` and never `str(exc)`. But the traceback printed beside it is
+  SQLAlchemy's, and SQLAlchemy renders **bound parameters** into the exception it raises:
+
+  ```
+  sqlalchemy.exc.ProgrammingError: ... relation "attendance_records" does not exist
+  [SQL: SELECT ... WHERE students.class_id = $1::UUID ...]
+  [parameters: (UUID('68eb565b-...'), datetime.datetime(2021, 9, 11, ...))]
+  ```
+
+  That run bound no name. Five query sites do: `attendance_service.py:85`, `:278`, `:329` and
+  `student_service.py:176`, `:439` all bind a `LOWER(name) LIKE` pattern built from a
+  caller-supplied search term. A failing query at any of them prints a partial Student name to
+  stdout, in the same stream and the same rotation as the JSON lines.
+- **Where:** `app/database.py` constructs the engine without `hide_parameters`, which defaults to
+  `False`. **This one is not development-only** — that is the difference from the `echo` entry
+  below, and it was checked rather than assumed: `echo` is off in production because
+  `DEBUG: "false"`, but `hide_parameters` is unset everywhere, so exception rendering behaves the
+  same on the VM as locally.
+- **What green tests/gates did NOT prove:** nothing touches this. Spec 0005 lists "Reformatting
+  uvicorn's output" as out of scope and leaves the traceback path deliberately alone (US-14), so
+  no AC covers it and none should. The gap is not a violation of ADR-0007 — it is the distance
+  between what that ADR says (log **lines** carry ids) and what a reader will assume from it
+  (names never reach the log).
+- **Why it was not fixed here:** `hide_parameters=True` is a one-line change to the engine, and it
+  is not slice 3's to make. It trades away the bound values in every diagnostic traceback the app
+  will ever print — the thing that makes a production 500 debuggable — against a leak that needs a
+  failing query on one of five paths. That is a real trade with a real cost on both sides, so it
+  is the Owner's call, not a build decision taken in passing.
+- **The wording question this entry raised is DECIDED, 2026-09-10 (slice 5), by the Owner:**
+  `INV-9` is scoped to **lines this application emits**, matching ADR-0007's own scoping and how
+  that ADR already handles the seven `pg_dump` backups. `hide_parameters` stays `False`, so a
+  diagnostic traceback keeps its bound values and this gap stays real. The row was written that
+  way and names this entry.
+- **Disposition:** **open — the gap, not the question.** The invariant no longer overclaims, and
+  nothing else changed: a failing query on one of those five sites still prints a partial name to
+  stdout. Revisit if a name ever turns up in a pasted traceback, or if the diagnostic value of
+  bound parameters stops being worth it. Turning `hide_parameters` on is a one-line change to
+  `app/database.py` and would need its own test watched red.
+
+## 2026-09-10 — "every refused request" is 10 of 46 refusal sites, and one of the silent ones is an invariant
+- **What:** spec 0005's **US-1** asks for "every refused request recorded durably". The AC table
+  delivers four families — `INV-1` (AC-1), the three login branches (AC-2), registration codes
+  (AC-3) and an inactive Class (AC-4) — and slices 3 and 4 add errors and irreversible acts. The
+  difference between those and *every* refusal is **not declared** in the spec's *Out of Scope* or
+  *Non-Goals*, so a reader of US-1 will over-read what got built.
+- **Measured 2026-09-10**, by walking the AST of `app/` for `raise` of any refusal type: **46
+  refusal raise sites, 10 of which now produce a log line** — 6 labelled (`rule`/`reason`), 1 by
+  type (`class_service.py:237`, INV-1), and 3 by the explicit calls in `authenticate_user`.
+  **36 are silent.** Re-measure rather than trusting the figure — it was true at slice 2. The
+  method: parse each file under `app/` with `ast`, walk for `ast.Raise` whose `exc` is a call to
+  one of the eight refusal types in `app/core/exceptions.py`, and count how many carry a `reason`
+  keyword. Grep cannot do it: a multi-line labelled raise puts `rule=`/`reason=` on a different
+  line from `raise`, which scored five labelled sites as silent on the first attempt.
+- **The one that matters most:** `app/services/student_service.py:518` — a merge refused for
+  crossing a Class boundary. That is **INV-5's enforcement site**, so an invariant refusal goes
+  unrecorded while three login typos are recorded. Slice 4 logs a merge that *succeeds* (AC-7); it
+  does not log the merge that was refused.
+- **Also silent, and the group most likely to be wanted:** the 14 token-path refusals in
+  `app/dependencies.py` (8) and `app/api/auth.py`'s refresh handler (6). A caller presenting a
+  revoked, expired or forged token leaves no line at all — which is the shape of the thing US-1
+  says it wants visible after the fact. The remaining 12 `NotFoundError`s are the group least
+  likely to be worth a line.
+- **What green tests/gates did NOT prove:** nothing here is a broken test. Every AC slice 2 owns
+  passes. This is scope: the spec promised broadly in a user story and delivered narrowly in the
+  criteria, and only the criteria got built.
+- **Why it was not fixed here:** it is outside slice 2's ACs, and widening a slice to match a user
+  story nobody re-scoped is *silent scope-filling*. The Owner decides whether this becomes a
+  seventh slice, a narrowed US-1, or an explicit non-goal.
+- **Disposition:** **decided by the Owner, 2026-09-10 — and the decision is a line, not a list.**
+  *The app logs what nginx cannot interpret.* nginx records that someone was refused, from where,
+  and how often; only the app knows which rule refused an authenticated Teacher. So:
+  **`INV-5`'s cross-class merge refusal moves into slice 4** as spec 0005's new **AC-21** (it was
+  the one silent site on the wrong side of that line); the **14 token-path refusals** and the
+  **12 `NotFoundError`s** become explicit non-goals in the spec, with their reasons; and **US-1 is
+  reworded** from "every refused request" to every refusal the application itself decided.
+  This entry stays in the ledger as the measurement that forced the narrowing.
+
+  One thing checked while writing it up, because the first draft got it backwards: declaring the
+  `NotFoundError`s out of scope costs **no** `INV-1` signal. `verify_class_ownership` raises both,
+  but it reports a Class's absence *before* its ownership — deliberately, so a 404 never becomes a
+  403 — so every INV-1 refusal is the `ForbiddenException` branch that AC-1 already logs.
+
+## 2026-09-10 — the `reason` vocabulary on a denial line has no enforcer (CLOSED, slice 5)
+- **What:** spec 0005 slice 2 gives every denial line a `reason` — `unknown_email`,
+  `wrong_password`, `inactive_account`, `code_used`, `code_revoked`, `code_expired`,
+  `code_wrong_email`, `code_unknown`, `class_inactive` — and the `rule` beside it. Both are plain
+  strings passed at the raise site. **Nothing checks the vocabulary.**
+
+  **Updated 2026-09-10, slice 4:** the gap now covers a third field and two more values.
+  `reason="cross_class_merge"` and `rule="INV-5"` joined the list, and the `event` name itself
+  became a vocabulary rather than a constant — `denial`, `error`, and slice 4's two act tokens
+  `merge` and `student_delete` (spec 0005 delta 11). Whatever slice 5 builds must close over
+  `event` as well as `reason` and `rule`, or this entry outlives it and should say so. A later denial written as
+  `reason="inactive-class"` or `rule="INV3"` would log happily, and the grep a reader relies on
+  (`rule=INV-6` to count real INV-6 refusals) would quietly miss it.
+- **Where:** `app/core/exceptions.py` (`BadRequestException.rule` / `.reason`),
+  `app/services/registration_code_service.py`, `app/services/attendance_service.py:153`,
+  `app/services/auth_service.py` — the three login branches.
+- **What green tests/gates did NOT prove:** the tests assert the exact strings the code emits
+  today, so they lock in the *current* nine and notice nothing about a tenth. This is *a standard
+  with no enforcer* (ANTI-PATTERNS), arriving as a string literal rather than as prose.
+- **Why it was not fixed here:** the fix worth having is a closed vocabulary — an enum, or a
+  drift-extra check that fails a `reason=` literal outside a known list — and slice 5 already
+  installs a drift check over logger call sites for `INV-9`. Two checks over the same lines,
+  written a week apart, is the seam to build once rather than twice.
+- **Disposition:** **closed, 2026-09-10 (slice 5)** — and it closed the way this entry asked
+  for, as one check rather than two. `scripts/log_lint.py` holds `KNOWN_EVENTS`,
+  `KNOWN_RULES` and `KNOWN_REASONS` beside INV-9's keyword allowlist: same call sites, same
+  pass, one place to widen. (It landed in `drift-extra.sh` itself and moved when review found
+  the shell version false-clean — spec 0005 delta 15.) Watched failing on three planted values — an unknown `reason`, `rule="INV3"`,
+  and an unknown `event` token — plus a negative control re-adding known values, which stayed
+  clean. The Owner added **AC-22** to spec 0005 for it, so the work is accounted for in the AC
+  table rather than smuggled in beside AC-6.
+- **What it still does not prove, and this is the successor gap:** the check resolves **string
+  literals only**. `rule=INV_1` in `app/api/handlers.py` and `**fields` are skipped, because a
+  value reached through a name cannot be resolved textually — the same reason spec 0005 delta 11
+  gives for writing `event` inline at the call site. Every *raise* site passes literals today, so
+  the vocabulary cannot grow unnoticed; a future call site passing a constant would slip past.
+  Widening the vocabulary is meant to be a deliberate edit to this script in the same commit.
+
+## 2026-09-09 — the log sink has no time-based erasure, and now there is something in it
+- **What:** spec 0005 slice 1 landed the first logger in `app/`, so denial lines now exist. Their
+  sink is Docker's `json-file` driver at `max-size: 10m`, `max-file: 3`, which rotates by **size
+  only** — the driver has no time-based option. "Erase after 90 days" is therefore not expressible
+  here at all, and at this app's volume (a handful of lines a week) a line written today
+  effectively never ages out. ADR-0007 accepted this rather than faking it; this entry is the
+  other half of that acceptance.
+- **Where:** `deployment/local/docker-compose.yml` and `deployment/production/docker-compose.yml`
+  carry the `logging` blocks; `app/core/logging.py` writes to stdout and owns nothing about
+  retention. The two ways out both cost more than they are worth today: move the sink (Loki, a
+  hosted backend — rejected in ADR-0006 on RAM and on keeping student-adjacent telemetry off
+  external services) or add host-side `logrotate`, whose configuration would live outside the
+  repo where no gate could prove it was in place.
+- **What green tests/gates did NOT prove:** nothing asserts a retention policy, because there is
+  no policy to assert. What *is* enforced is the thing that makes the absence tolerable — lines
+  carry ids, never Student names (ADR-0007). That rule becomes `INV-9` with two enforcers in
+  slice 5, and until then it holds by review only: the one call site slice 1 wired logs a rule id
+  and a status, and `route` comes from the context variable holding `scope["path"]`, which cannot
+  contain a query string. **The slice-5 enforcers are what turn this from a promise into a gate.**
+- **Disposition:** **accepted, with the mitigation named.** Revisit only if the event set grows
+  past denials, errors and irreversible acts — the fourth family (routine successful writes) was
+  declined during shaping precisely because volume is what would make size-based rotation start
+  discarding evidence.
+
+## 2026-09-09 — in development, SQLAlchemy's echo puts bound parameters on the same stdout
+- **What:** found by slice 1's live exercise, not by a test. `app/database.py` passes
+  `echo=settings.debug`, and `debug` defaults to **True**, so a locally-run API prints every
+  statement *and its bound parameters* to stdout — the same stream the new JSON lines go to. Those
+  parameters include Student names on the autocomplete, create and update paths.
+- **Where:** `app/database.py:14`. **Production is not affected and this was checked, not
+  assumed:** `deployment/production/docker-compose.yml:63` sets `DEBUG: "false"`, so `echo` is off
+  on the VM. `deployment/local/docker-compose.yml:69` sets `DEBUG: "true"`, deliberately.
+- **What green tests/gates did NOT prove:** anything about this. It is a different logger
+  (`sqlalchemy.engine.Engine`) from the one ADR-0007 governs, so INV-9's runtime enforcer in
+  slice 5 will capture the `app` logger and will not see it — correctly, but the reason needs to
+  be written down where slice 5 will look, or the enforcer reads as weaker than it is.
+- **Disposition:** **accepted for development, no action.** A developer running the API already
+  has the database. Named because "no Student name reaches stdout" is true of the app's own logger
+  and **not** of a dev process as a whole, and that distinction is exactly the kind a later
+  session would state too broadly.
+
+## 2026-09-09 — AC-13's forged-line half is proven at the formatter, not yet at a route
+- **What:** spec 0005's AC-13 reads: "a login attempt with an embedded newline in the email cannot
+  produce a second line". Slice 1 proves the mechanism (`json.dumps` escapes the newline, so one
+  record is one line) but asserts it on a `LogRecord` built in the test rather than on a real
+  login, because **slice 1 logs no attacker-supplied free text**: the only wired call site is the
+  `INV-1` handler, whose fields are a rule id and a status. An HTTP header cannot transport a raw
+  newline, so `X-Request-ID` — the one client-supplied value slice 1 does log — is not a route to
+  it either.
+- **Where:** `tests/test_logging.py::test_a_newline_in_a_logged_value_cannot_forge_a_second_line`.
+  The real-route half arrives in **slice 2**, when `authenticate_user` gains its call and the
+  attempted email reaches a line.
+- **What green tests/gates did NOT prove:** that the *production path* from a hostile email to a
+  log line is safe. The formatter is the only thing between them and it is proven; the path is not
+  yet built.
+- **Disposition:** **closed, 2026-09-10 (slice 2)** — and the mechanism is not the one this entry
+  predicted, which is worth more than the closure. The real-route assertion is
+  `test_a_newline_in_a_login_email_produces_no_second_line`, and it passes because
+  `UserLogin.email` is an `EmailStr`: `email-validator` refuses a newline, a quote, a brace and
+  even an RFC-legal quoted local part **before** `authenticate_user` runs, so the request is
+  answered 422 and emits nothing at all. Every adversarial address probed against the installed
+  validator was rejected.
+  So the attempted email that does reach a line cannot carry a JSON metacharacter, and the
+  premise this entry and spec 0005's *Line shape* both argued from — that a denial line carries
+  attacker-supplied free text — is weaker than stated. **AC-13 is met by two independent
+  mechanisms**, and the formatter-level assertion remains the load-bearing one, because it is the
+  half that survives someone relaxing the schema. Spec deltas 5 records this.
+
+## 2026-09-09 — the teacher-id context reset has no enforcer until slice 2
+- **What:** `RequestContextMiddleware` deliberately claims and resets `teacher_id_var` even though
+  `get_current_user` is what fills it. Without that reset, a teacher id set during one request
+  would still be set during the next request that never authenticated, and an anonymous denial
+  line would name whoever was refused before it. The reset is correct and was written on purpose.
+- **Where:** `app/middleware/context.py`, the `tokens` tuple and its `finally`.
+- **What green tests/gates did NOT prove:** **this one.** No test in slice 1 can observe the leak,
+  because the only event slice 1 logs is an `INV-1` denial, which by construction always has an
+  authenticated teacher. Removing the reset leaves all 454 tests green. The detector arrives in
+  slice 2 with the first logged denial that has **no** session (an auth branch): that line must
+  carry no `teacher_id`, and it would carry a stale one.
+- **Disposition:** **closed, 2026-09-10 (slice 2).** The detector is
+  `tests/test_logging.py::test_an_unauthenticated_denial_carries_no_teacher_id_from_an_earlier_request`
+  — an authenticated request, then a failed login, asserting the second line carries no
+  `teacher_id` and not the first teacher's id anywhere. Watched failing on the plant this entry
+  describes: `teacher_id_var` dropped from the middleware's claim-and-reset entirely.
+
 ## 2026-09-09 — the no-numbers rule was breached by the commit that installed it
 - **What:** `4f742e9` deleted every count, percentage and baseline from the root `CLAUDE.md` and
   wrote the rule into the file: *name the command or the file that answers the question, never the

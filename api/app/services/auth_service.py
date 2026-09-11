@@ -1,11 +1,13 @@
 """Authentication service - Business logic for user authentication."""
 
+import logging
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import AuthenticationError, DuplicateError, NotFoundError
+from app.core.logging import log_event
 from app.core.security import create_access_token, create_refresh_token, hash_password, verify_password
 from app.models.user import User
 from app.schemas.auth import Token
@@ -57,17 +59,31 @@ async def authenticate_user(db: AsyncSession, email: str, password: str) -> User
     Raises:
         AuthenticationError: If credentials are invalid or user is inactive
     """
+    # The three refusals below log EXPLICITLY, where every other denial in this app is logged
+    # once by `app/api/handlers.py`. This is the one place a handler cannot do the job: all
+    # three deliberately return one byte-identical response, so by the time the exception
+    # reaches a handler the distinction no longer exists. Telling a stranger whether an address
+    # is registered is the enumeration this app declines to answer -- which leaves the log as
+    # the only place that distinction can live at all.
+    #
+    # `attempted_email` says WHO tried, which is the whole value of the line. Spec 0005 and
+    # ADR-0007 both sanction it: an email is a Teacher's own credential attempt, never a
+    # Student's name. No status is passed -- the response is the handler's business, and the
+    # service has no standing to assert what it will be.
     user = await get_user_by_email(db, email)
-    
+
     if not user:
+        log_event(logging.WARNING, "denial", reason="unknown_email", attempted_email=email)
         raise AuthenticationError("Invalid email or password")
-    
+
     if not user.active:
-        raise AuthenticationError("Account is inactive. Please contact support.")
-    
-    if not verify_password(password, user.password_hash):
+        log_event(logging.WARNING, "denial", reason="inactive_account", attempted_email=email)
         raise AuthenticationError("Invalid email or password")
-    
+
+    if not verify_password(password, user.password_hash):
+        log_event(logging.WARNING, "denial", reason="wrong_password", attempted_email=email)
+        raise AuthenticationError("Invalid email or password")
+
     return user
 
 

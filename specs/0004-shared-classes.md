@@ -6,7 +6,8 @@ change to the authorization core. Expect more than one session.
 and a rejected set. **Verdict: not built.**
 **Invariants touched:** **INV-1** (widened — the definition of *associated with* moves; it must not
 weaken for a teacher who is associated with nothing). **INV-3** (not changed, but a new party can
-reach the `active` flag it guards). **INV-9** (new, proposed here). INV-2, INV-4 … INV-8 unaffected.
+reach the `active` flag it guards). **One new invariant, proposed here and deliberately
+UNNUMBERED** — see *The invariant number* below. INV-2, INV-4 … INV-8 unaffected.
 **Layers:** `api/` and `client/` both.
 **ADR required:** the schema decision (D1) is a one-way door and gets **ADR-0005** with its rejected
 alternatives, written when decided rather than reconstructed (PRINCIPLES #7).
@@ -92,6 +93,22 @@ Those two stay with the creator.
 26. As the Owner, I want this change to deploy without locking teachers out of the class view, so that a deploy window is not an outage.
 27. As the Owner, I want the words in the code, the invariant and the glossary to be the same word, so that the project does not carry two names for one relationship.
 
+## The invariant number
+
+**This spec's new invariant is deliberately unnumbered, and stays that way until it is built.**
+
+It said `INV-9` until 2026-09-10. So did `specs/0005-application-logging.md`, for a different rule
+— no Student name in a log line — and spec 0005 is being built now, with the row landing in its
+slice 5. Whichever wrote its row first would have silently falsified three lines of the other.
+The Owner settled it on 2026-09-10: **spec 0005 takes `INV-9`**, on the ground that a number
+belongs to the rule that will have an enforcer, and this spec has no date.
+
+The number is not reassigned here, because a number reserved by an unbuilt spec is exactly what
+collided — twice. ADR-0005 took the number this spec had already reserved for the
+`class_teachers` schema decision, which the root `CLAUDE.md` records. `INVARIANTS.md` is the
+registry: **a spec proposes an invariant, that file assigns its number.** When this spec is built,
+take the next free number then.
+
 ## Implementation Decisions
 
 **D1 — The relationship moves into a join table and `classes.teacher_id` is dropped.**
@@ -111,7 +128,8 @@ schema's primary truth.
 Migration safety was **not** a reason to prefer the additive shape and was explicitly discarded as
 one: production holds one teacher and one class, so the backfill is a single row.
 
-**D2 — The creator is a flag on the association, and a Class has exactly one (INV-9).** `is_creator`
+**D2 — The creator is a flag on the association, and a Class has exactly one (the new
+invariant).** `is_creator`
 is a boolean on the join row, enforced one-per-class by a partial unique index on `class_id where
 is_creator`. No role enum, no policy object. ADR-0003's bar is met by reading rather than by
 abstaining: three routes read this flag, so it is not the unread column that ADR deleted.
@@ -197,7 +215,8 @@ extends the actors over the existing tables instead of writing new route lists:
   proof that widening *associated* did not open the rule;
 - a **shared** teacher — every permitted route must succeed and the 3 withheld must refuse.
 
-This file is the enforcer `INVARIANTS.md` names for INV-1, and it becomes the enforcer for INV-9.
+This file is the enforcer `INVARIANTS.md` names for INV-1, and it becomes the enforcer for the
+new one-creator invariant.
 
 **Seam 2 — `tests/test_service_class.py`.** `verify_class_association` and the creator-only rule at
 the service seam. Prior art is 0003's `TestGetAttendanceStatisticsOwnership`, which pushed a refusal
@@ -252,7 +271,7 @@ this spec uses its own count and shows the working.
 | AC-4 | A shared teacher succeeds on all 14 permitted checked routes, on the class list, and on the new read-teachers route | `test:` | US-11 … US-17 | PENDING |
 | AC-5 | A shared teacher is refused on exactly three routes — delete class, share, unshare — and on no others | `test:` | US-7, US-8 | PENDING |
 | AC-6 | A shared class appears in the co-teacher's own list; an unassociated teacher's list leaks nothing, proven independently of the check by dropping the join condition | `test:` + a deliberate break | US-10, US-20 | PENDING |
-| AC-7 | A Class has exactly one creator: a second creator row is rejected by the database, not by application code (INV-9) | `constraint:` partial unique index + `test:` | US-22 | PENDING |
+| AC-7 | A Class has exactly one creator: a second creator row is rejected by the database, not by application code (the new invariant) | `constraint:` partial unique index + `test:` | US-22 | PENDING |
 | AC-8 | Creating a class creates its creator association in the same transaction | `test:` | US-25 | PENDING |
 | AC-9 | Sharing with an address that has no account refuses explicitly, names the address as unknown, and creates no association | `test:` | US-4 | PENDING |
 | AC-10 | Sharing twice is idempotent; sharing with your own address is refused; the creator cannot remove herself | `test:` | US-5, US-6, US-9 | PENDING |
@@ -284,7 +303,7 @@ delete the class. Serves AC-4, AC-5, AC-6, AC-9, AC-10, AC-14.
 ## Out of Scope
 
 - **Ownership transfer.** The creator cannot hand the class to someone else. Refusing self-removal
-  (AC-10) is the floor that keeps INV-9 true without it.
+  (AC-10) is the floor that keeps the one-creator invariant true without it.
 - **More than two teachers.** Nothing here caps the count and the schema does not care, but the
   feature is shaped, tested and verified for two.
 - **Attribution.** D11. No `recorded_by`, deliberately.
@@ -313,7 +332,8 @@ surface, not its routes.
 
 **OQ-2 — what happens to a Class whose creator's `User` row is deleted?** Today `classes.teacher_id`
 cascades, so deleting a user deletes her classes. Under D1 the association cascades instead, which
-would leave the class alive with no creator — INV-9 broken and the class reachable by nobody. **No
+would leave the class alive with no creator — the one-creator invariant broken and the class
+reachable by nobody. **No
 route reaches this**: there is no account-deletion endpoint or service anywhere in `app/`, and
 accounts are deactivated through `active`. So the choice is about a path only direct SQL can take —
 orphan and document, refuse the delete, or reassign — and it is the Owner's. ADR-0003 rejected a

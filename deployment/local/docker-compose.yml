@@ -21,6 +21,15 @@ services:
       retries: 5
     networks:
       - attendance-network
+    # Docker's json-file driver has no size limit by default. AC-16 asked for the db service,
+    # so db is what this bounds; backend, jaeger and the profile-gated db-test in this file are
+    # still unbounded, which api/REVIEW-DEBT.md records under 2026-09-11. The 10m x 3 matches
+    # production, where every service is capped.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   # PostgreSQL Test Database (for running tests with real database)
   db-test:

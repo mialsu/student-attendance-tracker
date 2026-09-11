@@ -151,9 +151,14 @@ async def create_attendance_record(
     class_obj = await class_service.verify_class_ownership(db, class_id, teacher)
 
     if not class_obj.active:
+        # INV-3's one enforcement site. The label is what puts the refusal in the log; the
+        # Student name in `attendance_data.student_name` deliberately does NOT go on the line
+        # (ADR-0007) -- the teacher id and route already say whose class was closed.
         raise BadRequestException(
             "Cannot add attendance to inactive class. "
-            "Please activate the class first."
+            "Please activate the class first.",
+            rule="INV-3",
+            reason="class_inactive",
         )
 
     # Get or create student ONCE (before bulk loop)
