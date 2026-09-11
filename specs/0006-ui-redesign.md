@@ -381,6 +381,44 @@ unrecorded is the defect.)*
   box of any open `[role="dialog"]` and runs on every swept state; watched red on that break,
   green on revert. The drawer — the shell's whole navigation below 940px — was never covered
   either, and now is.
+- **2026-09-11 — AC4 was not met, and the cause was structural.** US-13 asks for the suggestions to
+  be driven with arrow keys, Enter and Escape; only Escape worked. Measured in the browser before
+  any change: two ArrowDown presses left the active option at index 0, focus never left the input,
+  Enter left the field holding what had been typed, and the input carried no combobox semantics —
+  `role`, `aria-expanded`, `aria-controls` and `aria-activedescendant` each null. The list rendered
+  as a **sibling** of the input, so the `cmdk` `Command` around it never had focus and never saw a
+  key; the branch commented "let dropdown handle arrow navigation" handed off to nothing. cmdk's
+  value is client-side filtering and owning its own input, and this field does neither — it filters
+  server-side through a 300ms debounce and must submit a form — so cmdk leaves this surface for a
+  plain `role="listbox"` the field controls by `aria-activedescendant`. Like slice 5's cards, this
+  is a **behaviour** change under *Out of Scope*'s "presentation only", taken for the same reason.
+- **2026-09-11 — AC9's "day/month toggle" was decided by the Owner, because no artifact settled
+  it.** AC9 named a toggle, `DESIGN.md` §3 said only "daily and monthly aggregates" and was silent
+  on the form, and the shipped surface answered US-22's "day/month bar chart" by rendering **both**
+  granularities at once: a per-day table, a daily chart card, and a near-identical monthly chart
+  card. The Owner's call: **one chart with the toggle, and the per-day table stays** — a chart
+  cannot be read to the day, and she reads it to the day. So the second chart is what the toggle
+  replaces, not the table. `DESIGN.md` §1 and §3 now carry the toggle and its `Päivät` default, and
+  the month view is its own swept state because it draws a different dataset.
+- **2026-09-11 — AC5 was built and unenforced, which is not the same as met.** The delete
+  confirmation has named the student, counted the records and said it cannot be undone for as long
+  as the delete action has existed, but no test opened it. AC5 names "behaviour test" as its
+  enforcer and there was none, so nothing held the criterion shut. Five tests now do, watched red
+  the only way an already-passing criterion can be: by wiring the row action straight to
+  `deleteStudentMutation` and seeing all five fail.
+- **2026-09-11 — the tab row overflowed its own pills at 320px, and `A11Y-7` could not see it.**
+  `TabsList`'s `grid-cols-3 max-w-3xl` gave each label a ~97px column while "Läsnäolon kirjaus"
+  needs ~115px, so the text ran outside its pill and touched the viewport edge. The document never
+  scrolled, so the reflow check swept it clean — the same shape as slice 5's overlay finding, one
+  layer up: a gate that measures document overflow cannot see content overflowing a box inside it.
+  Found by screenshot, which is the only thing that did look. Two columns at 320px (145px per
+  label, third pill wrapping) and the prototype's pill row from `sm` up.
+- **2026-09-11 — a claim written into a comment, then disproved, recorded so it is not
+  re-inherited.** The chart toggle's root carries `role="radiogroup"` over Radix's default `group`,
+  and the first version of that comment asserted axe's `aria-required-parent` required it. Deleting
+  the line left the whole walk green: axe-core does not treat `radiogroup` as a required context for
+  `radio`. The role stays on judgement — a screen reader announcing "1 of 2" rather than two loose
+  radios — and the comment, the test and `REVIEW-DEBT.md` all now say that nothing gates it.
 
 ## Further Notes
 
