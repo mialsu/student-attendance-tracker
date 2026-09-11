@@ -6,23 +6,69 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 
 <!-- Newest first. -->
 
-## 2026-09-11 — nothing gates the `db` log bound, or the nginx request-id forwarding
-- **What:** AC-16 and AC-12 are `live:` criteria by design, so their proof is a deploy-time
-  exercise and **no gate watches either config**. Delete the `logging` block from `db`, or drop
-  `proxy_set_header X-Request-ID` from a location, and every gate stays green: the python suite
-  never reads `deployment/`, the boundary gate reads imports, and the drift gate reads vocabulary.
-  The first symptom of the first would be a full disk on the CX21; of the second, a log line that
-  cannot be joined to anything, which nobody notices until they need it.
-- **What would catch it:** a check in `scripts/drift-extra.sh` asserting that a diff touching
-  either compose file leaves `db` with a `logging` block, and that every `proxy_pass` in
-  `nginx.conf` is accompanied by `proxy_set_header X-Request-ID`. Both are greps.
-- **Why not done here:** the spec assigns both criteria `live:`, and adding gates to
-  `drift-extra.sh` changes a script the pre-commit hook runs in **both** working trees, including
-  the UI-redesign worktree another session is using. That needs the Owner's go.
-- **Also unchecked:** `10m` and `3` now appear in four places — both compose files,
-  `deployment/README.md`'s Rotation section, and INV-9's row. Nothing compares them, so the
-  four can drift apart silently.
-- **Disposition:** open, for the Owner.
+## 2026-09-11 — every nginx.conf change since the bind mount existed may never have taken effect
+- **What:** `deployment/production/docker-compose.yml` mounts `./nginx.conf:/etc/nginx/nginx.conf:ro`
+  — a **single-file** bind mount, which Docker binds by **inode**. The deploy's step 3 runs
+  `git reset --hard`, which replaces the file rather than editing it in place, so the running
+  container's mount keeps pointing at the old, now-unlinked inode and nginx keeps reading the
+  previous bytes. `nginx -t` then validates the stale config and `nginx -s reload` reloads it,
+  both succeeding honestly.
+- **Found in production, 2026-09-11, deploying `d25ec29`** (spec 0005 slice 6). The deploy printed
+  `nginx reloaded against the current nginx.conf` and went green. Neither the six
+  `proxy_set_header X-Request-ID` lines nor the `request_id=` `log_format` was in effect: the
+  access line carried no id, and the app's `request_id` was a dashed `uuid4` — what the middleware
+  generates when no header arrives — where a forwarded `$request_id` is 32 hex characters.
+  `docker compose exec nginx grep -c request_id /etc/nginx/nginx.conf` returned **0** against the
+  file's **9**.
+- **Reproduced locally rather than left as a theory:** a two-line compose project with a
+  single-file mount. Replace the file the way `git checkout` does and the container keeps the old
+  sha256; `up -d` reports `Running` and changes nothing; `up -d --force-recreate` re-binds and the
+  checksums match. Docker's behaviour, not nginx's.
+- **The blast radius is every earlier nginx.conf change.** A reload could never have picked one up.
+  Any that did take effect did so because something recreated the container for another reason —
+  a host reboot, a compose spec change, a manual `down`/`up`. The SSL work is the one to re-check
+  if anything there ever looked mysteriously inert.
+- **Fixed in the pipeline the same day:** step 7b of `.github/workflows/backend.yml` no longer
+  reloads. It compares the file's sha256 against what the container actually reads, and on a
+  difference validates the new file in a throwaway `nginx:alpine` on `attendance-prod-network`,
+  recreates the container, re-checks the checksum, and health-checks the public endpoint through
+  the new proxy. An unchanged file does nothing, so the common deploy keeps its current behaviour.
+- **What is still unproven:** the new step has **not run on the VM**. Its logic was exercised
+  locally and its shell passes `bash -n` and `shellcheck`, which is the same standing the deploy
+  job itself has — the first real execution is its own verification. Watch the next deploy's
+  `nginx config` group.
+- **Disposition:** the mechanism is fixed and confessed. Open only on "the next deploy is its own
+  proof", and on the question of whether any past nginx change was silently lost.
+
+
+## 2026-09-11 — the migration step recreates the database, and the deploy's own comment denies it
+- **What:** step 6 of `.github/workflows/backend.yml` says *"The database is never taken down: the
+  old `compose down` stopped postgres too, which turned every deploy into a database outage for no
+  reason"*, and recreates only `backend nginx jaeger`. That is true of step 6 and **false of the
+  deploy**. Step 5 runs `$COMPOSE run --rm backend alembic upgrade head` with **no `--no-deps`**,
+  so compose brings dependencies up to spec first — and when the `db` service's spec has changed,
+  that means recreating PostgreSQL.
+- **Observed in the 2026-09-11 deploy of `d25ec29`**, which is the first deploy to change the `db`
+  service (slice 6 added its `logging` block). The log, in order: `attendance-db-prod Recreate` →
+  `Recreated` → `Started` → `Waiting` → `Healthy` at 09:31:20–09:31:26, immediately before
+  `production-backend-run-38a8b0e01438 Creating`. **Roughly six seconds of database downtime**,
+  inside a deploy whose design says there is none.
+- **It only bites when the `db` service's spec changes**, which is rare — an unchanged spec means
+  `compose run` starts the dependency without recreating it. So most deploys really do leave
+  postgres alone, and the comment reads true for years at a time before it is wrong once.
+- **The upside, and it was an accident:** this is what satisfied **AC-16** on the VM. The bound
+  reached the running container through the migration step, not through step 6. Confirmed by the
+  Owner after the deploy — `up -d --no-deps db` reported `Running` rather than `Recreated`, and
+  `docker inspect` returned `map[max-file:3 max-size:10m]`.
+- **What this entry replaces.** It was first written as "the deploy does not apply the `db` log
+  bound, so AC-16 needs one manual command", reasoned from step 6's service list and a local
+  proof that log options need container recreation. Both halves of that were right and the
+  conclusion was wrong, because step 5 was never read. The local proof measured Docker's
+  behaviour and not this pipeline's.
+- **Disposition:** open, and the fix is the comment rather than the code. Step 6's claim should say
+  that step 5 brings dependencies to spec, so a `db` spec change costs a short restart. Changing
+  the code instead — adding `--no-deps` to step 5 — would stop the migration from being able to
+  reach a database that is not already up, which is worse.
 
 ## 2026-09-11 — slice 6's four criteria are proven as mechanisms locally, not yet on the VM
 - **What:** slice 6 is built (nginx forwards `X-Request-ID` from six proxied locations and logs
@@ -45,7 +91,13 @@ cut (`/confess`), read first by any architecture or review session, dispositione
   emits no spans.
 - **Consequence:** the verdicts stay **BLOCKED** until `/verify-live` runs after a deploy. A local
   mechanism proof shows the config parses and behaves; production is a separate claim.
-- **Disposition:** open until the deploy. `/verify-live` owns closing them.
+- **Disposition: closed, 2026-09-11.** `d25ec29` deployed and the Owner exercised all four on the
+  VM. All read WORKS, with the evidence in the spec's footnotes 3–5.
+- **And the gap between the two was real, which is the point of this entry.** AC-12 came back
+  **BROKEN** on the first check despite a green deploy — the local mechanism proof was sound and
+  production still served a stale nginx config, because the bind mount was never re-bound. Had the
+  verdicts been filled from the local evidence plus a successful deploy, AC-12 would read WORKS and
+  be false. The separate entry above carries the mechanism.
 
 ## 2026-09-11 — only `db` gained a log bound; local's other services are still unbounded
 - **What:** AC-16 names the `db` service, so that is what slice 6 bounded in both compose files.

@@ -375,24 +375,91 @@ jobs:
             docker image prune -f --filter "until=168h" >/dev/null 2>&1 || true
 
             echo "✅ Deployed $TARGET_SHA"
-            # ---- 7b. Reload the proxy, AFTER the backend is confirmed healthy.
-            #          nginx.conf is a BIND MOUNT and `up -d` does not restart a container whose spec is
-            #          unchanged, so editing nginx.conf and deploying LOOKED successful while nginx kept
-            #          the config it loaded at boot.
+            # ---- 7b. Bring the proxy onto the current nginx.conf, AFTER the backend is healthy.
             #
-            #          Order matters and cost a bug in review: `nginx -t` resolves upstream hostnames, so
-            #          running it straight after `up -d` fails with "host not found in upstream backend"
-            #          whenever the backend has not finished starting -- a spurious deploy failure on a
-            #          perfectly good config. After the health check, the upstream is known to resolve.
-            echo "::group::Reload nginx config"
-            if ! $COMPOSE exec -T nginx nginx -t; then
-              echo "nginx.conf failed validation - NOT reloading."
-              echo "nginx keeps its previous, working config and the backend is already healthy,"
-              echo "so the site stays up. Fix nginx.conf and re-run this workflow."
-              exit 1
+            #          `nginx -s reload` USED TO LIVE HERE AND COULD NOT WORK. nginx.conf is a
+            #          SINGLE-FILE bind mount, and Docker binds a single file by INODE. `git reset
+            #          --hard` in step 3 replaces the file rather than editing it in place, so the
+            #          running container's mount still points at the old, now-unlinked inode. The
+            #          container therefore keeps reading the PREVIOUS bytes forever: `nginx -t`
+            #          validated the stale config and `nginx -s reload` reloaded the stale config,
+            #          both succeeding honestly, and the deploy printed "nginx reloaded against the
+            #          current nginx.conf" while production served the old one.
+            #
+            #          Found on 2026-09-11 deploying d25ec29 (spec 0005 slice 6). The deploy went
+            #          green; the six `proxy_set_header X-Request-ID` lines and the `request_id=`
+            #          log_format never took effect. The tell was the app's own request id: a
+            #          dashed uuid4 it generates when no header arrives, where a forwarded
+            #          $request_id is 32 hex characters. Only recreating the container re-binds the
+            #          mount -- a reload cannot.
+            #
+            #          So: compare what the container actually READS against the file on disk. That
+            #          comparison IS the stale-mount detector, and it keeps the common case free --
+            #          most deploys do not touch nginx.conf, and restarting the proxy for nothing
+            #          would add a needless blip to every one of them.
+            #
+            #          Order still matters, for the reason the old comment gave: `nginx -t` resolves
+            #          upstream hostnames, so it needs the backend up. Validation runs in a THROWAWAY
+            #          container on the compose network, against the NEW file and the same
+            #          nginx:alpine image production runs -- validating with the running container is
+            #          what the stale mount makes meaningless.
+            echo "::group::nginx config"
+            HOST_SUM="$(sha256sum deployment/production/nginx.conf | cut -d' ' -f1)"
+            CTR_SUM="$($COMPOSE exec -T nginx sha256sum /etc/nginx/nginx.conf 2>/dev/null | cut -d' ' -f1 || true)"
+
+            if [ -n "$CTR_SUM" ] && [ "$HOST_SUM" = "$CTR_SUM" ]; then
+              echo "nginx.conf unchanged (sha256 $HOST_SUM) - nothing to do"
+            else
+              if [ -z "$CTR_SUM" ]; then
+                echo "could not read nginx.conf from the container; treating as changed"
+              else
+                echo "nginx.conf differs from what the container reads:"
+                echo "  on disk:   $HOST_SUM"
+                echo "  container: $CTR_SUM"
+              fi
+
+              # Validate the NEW file before touching the running proxy. A failure here leaves
+              # nginx serving its previous, working config and the backend already healthy, so the
+              # site stays up while the deploy fails.
+              if ! docker run --rm --network attendance-prod-network \
+                   -v "$PWD/deployment/production/nginx.conf:/etc/nginx/nginx.conf:ro" \
+                   -v /etc/letsencrypt:/etc/letsencrypt:ro \
+                   -v /var/www/certbot:/var/www/certbot:ro \
+                   nginx:alpine nginx -t; then
+                echo "the NEW nginx.conf failed validation - the proxy was NOT touched."
+                echo "nginx is still serving its previous config and the backend is healthy,"
+                echo "so the site is up. Fix nginx.conf and re-run this workflow."
+                exit 1
+              fi
+
+              # --force-recreate, not `up -d`: the service spec has not changed, only the contents
+              # of a bind-mounted file, so compose would otherwise leave the container alone.
+              $COMPOSE up -d --force-recreate --no-deps nginx
+
+              # Prove the container now reads the file we validated. Without this the recreate
+              # could silently fail to re-bind and we would be back where we started.
+              NEW_SUM="$($COMPOSE exec -T nginx sha256sum /etc/nginx/nginx.conf | cut -d' ' -f1)"
+              if [ "$NEW_SUM" != "$HOST_SUM" ]; then
+                echo "✖ after recreate the container still reads $NEW_SUM, expected $HOST_SUM"
+                exit 1
+              fi
+              echo "✔ nginx recreated and reading $NEW_SUM"
+
+              # The proxy just restarted, so re-check the public endpoint. The earlier health check
+              # passed THROUGH the old nginx and says nothing about this one.
+              ok2=0
+              for i in $(seq 1 15); do
+                code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "$HEALTH" || echo 000)"
+                if [ "$code" = "200" ]; then ok2=1; echo "✔ healthy through the new proxy after ${i} attempt(s)"; break; fi
+                echo "  attempt ${i}/15: $code"
+                sleep 4
+              done
+              if [ "$ok2" -ne 1 ]; then
+                echo "✖ the site is NOT healthy through the recreated proxy."
+                $COMPOSE logs --tail=50 nginx || true
+                exit 1
+              fi
             fi
-            $COMPOSE exec -T nginx nginx -s reload
-            echo "nginx reloaded against the current nginx.conf"
             echo "::endgroup::"
 
             $COMPOSE ps

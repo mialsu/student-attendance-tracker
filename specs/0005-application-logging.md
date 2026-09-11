@@ -269,13 +269,13 @@ Verdicts are filled by `/verify-live`, per criterion. A task's verdict is the **
 | AC-8 | An unhandled exception emits an `ERROR` line with Teacher UUID, route and request id, **and** uvicorn's traceback is byte-identical to today's | `test:` | US-4, US-14 | **WORKS** |
 | AC-9 | With no `X-Request-ID` header a generated id appears in the line; with one supplied it is honoured verbatim | `test:` | US-3 | **WORKS** |
 | AC-10 | With tracing off the `trace_id` field is **absent**, not zero-filled | `test:` | US-8, US-9 | **WORKS** |
-| AC-11 | With tracing on the line's `trace_id` matches the trace the same request produced in Jaeger | `live:` | US-8 | **BLOCKED** — slice 6 |
-| AC-12 | nginx forwards `$request_id` and a production log line carries the same id as its nginx access line | `live:` | US-3 | **BLOCKED** — slice 6 |
+| AC-11 | With tracing on the line's `trace_id` matches the trace the same request produced in Jaeger | `live:` | US-8 | **WORKS** ³ |
+| AC-12 | nginx forwards `$request_id` and a production log line carries the same id as its nginx access line | `live:` | US-3 | **WORKS** ⁴ |
 | AC-13 | Every emitted line is one valid JSON object, and a login attempt with an embedded newline in the email cannot produce a second line | `test:` | US-10 | **WORKS** |
 | AC-14 | `LOG_LEVEL` changes the level and `conftest.py` still imports with it unset | `test:` | US-9 | **WORKS** ² |
 | AC-15 | `app.middleware` is covered by an import-linter contract and `app.core` remains a leaf, watched failing on a planted upward import | `gate:` boundaries | — | **WORKS** |
-| AC-16 | The `db` service's log is bounded in both compose files, confirmed on the VM after deploy | `live:` | US-13 | **BLOCKED** — slice 6 |
-| AC-17 | `logs.sh` reads the new lines, with the documented `jq` path | `live:` | US-15 | **BLOCKED** — slice 6 |
+| AC-16 | The `db` service's log is bounded in both compose files, confirmed on the VM after deploy | `live:` | US-13 | **WORKS** ⁵ |
+| AC-17 | `logs.sh` reads the new lines, with the documented `jq` path | `live:` | US-15 | **WORKS** |
 | AC-18 | Both gate sets green on every commit: `just check` and `npm run check` | `gate:` | — | **WORKS** |
 | AC-19 | `REVIEW-DEBT.md` carries the retention confession, naming the absence of time-based erasure at this sink | `review-only` | US-12 | **WORKS** |
 | AC-20 | ADR-0007 records the decision with its rejected alternatives | `review-only` | US-11 | **WORKS** |
@@ -328,9 +328,14 @@ config, a `db` logging block and `logs.sh` — none of which exists yet, because
 They are not "unverified work"; they are unbuilt work, and calling them anything else would be the
 overclaim PRINCIPLES #10 exists to stop.
 
-**Task verdict: PARTIAL** — the worst criterion's verdict, and the worst is BLOCKED. **Slices 1–5
-are done: every criterion they own reads WORKS with evidence above.** Spec 0005 is not done until
-slice 6 lands and those four are exercised on the VM.
+**Task verdict: WORKS, 2026-09-11** — all 22 criteria, the four `live:` ones exercised on the VM
+after `d25ec29` deployed. It read PARTIAL until then, because the four were *unbuilt* rather than
+unverified; slice 6 built them and the Owner exercised each against the running system.
+
+**AC-12 was BROKEN in production first, for seven minutes.** The deploy that shipped it reported
+success while nginx served a stale config — delta 21 has the mechanism. It is recorded here rather
+than smoothed over, because the criterion would have been marked WORKS on the strength of a green
+deploy log and that would have been false.
 
 ¹ **AC-2's wording is wrong, and it always was** — recorded as delta 17 rather than dressed up as a
 pass. "All three HTTP responses stay byte-identical" is false: the inactive-account branch returns
@@ -342,6 +347,24 @@ also a user-enumeration leak, which is a finding of its own — `api/REVIEW-DEBT
 **Closed 2026-09-11:** the Owner chose to unify the message rather than reword the criterion, so
 AC-2 now reads true as written — delta 18. The verdict in the table records what was measured on
 2026-09-10 and is deliberately left as it was.
+
+³ **AC-11, on the VM 2026-09-11.** A denial line carried
+`trace_id: 7afd5094b25d155e8148235a862c3466`, and that id opened the matching trace in Jaeger,
+reached through `ssh -L 16686:localhost:16686`. This is the criterion with no local evidence of any
+kind — a stub upstream emits no spans — so the VM was the only place it could be proven.
+
+⁴ **AC-12, on the VM 2026-09-11, and only after the proxy was recreated.** Before: the access line
+carried no id and the app's `request_id` was `1238d9df-2d72-4271-b0da-c7474b5aac2e`, a dashed
+`uuid4` the middleware generates when no header arrives. After
+`up -d --force-recreate --no-deps nginx`: `9bb4a99f5eae6e2017ea6e73c0e588fa`, 32 hex characters,
+which is nginx's own `$request_id` forwarded downstream, matching its access line. Delta 21 has why
+the deploy's reload could not achieve this.
+
+⁵ **AC-16, on the VM 2026-09-11.** `docker inspect -f '{{.HostConfig.LogConfig.Config}}'
+attendance-db-prod` returned `map[max-file:3 max-size:10m]`. The bound reached the running
+container through the deploy's **migration** step, which brings dependencies to spec — not through
+step 6, which names only `backend nginx jaeger`. `api/REVIEW-DEBT.md` carries that side effect,
+since the deploy's own comment claims the database is never taken down.
 
 ² **AC-14 passes and the pass has a sharp edge**: `LOG_LEVEL=WARNING` silently switches off the
 irreversible-act record while leaving denials on, so US-5's "a record that a merge or a delete
@@ -781,4 +804,26 @@ rather than a change of mind.
     door, and `MAX_REQUEST_ID_LENGTH` defends the direct path rather than production traffic.
     The middleware's comment calling the header "client-supplied text" is accurate for the
     direct path and misleading for the proxied one.
+
+**2026-09-11, after the deploy.** One, and it is the reason AC-12 was BROKEN in production for
+seven minutes while the deploy that shipped it reported success.
+
+21. **Delta 19 was right about what nginx needed and wrong about that being enough.** It recorded
+    the `log_format` change as the missing half of AC-12, and it is. What neither delta noticed is
+    that **nginx could not read either change**. `nginx.conf` is a single-file bind mount, Docker
+    binds a single file by inode, and the deploy's `git reset --hard` replaces the file — so the
+    running container kept the bytes it was started with. The deploy's `nginx -t` validated the old
+    config and its `nginx -s reload` reloaded the old config, and both said so cheerfully.
+
+    **Measured on the VM:** `grep -c request_id /etc/nginx/nginx.conf` returned 0 inside the
+    container against 9 in the file, and the app's `request_id` came through as
+    `1238d9df-2d72-4271-b0da-c7474b5aac2e` — a dashed `uuid4`, which is what the middleware
+    generates when no header arrives. After `up -d --force-recreate --no-deps nginx` the same probe
+    returned `9bb4a99f5eae6e2017ea6e73c0e588fa`, 32 hex characters, which is nginx's `$request_id`.
+    The id shape is the cheapest tell there is: dashes mean the app invented it.
+
+    The pipeline now compares checksums and recreates rather than reloading. The lesson that
+    generalises past this criterion: **a `live:` verdict has to be taken against the running
+    system, never against the artifact the deploy claims to have shipped.** AC-12 would have been
+    recorded as WORKS on the strength of a green deploy log, and it was false.
 
