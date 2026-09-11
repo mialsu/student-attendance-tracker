@@ -1,6 +1,6 @@
 # Spec 0007 — the gaps between what the repo proves and what production does
 
-**Status:** shaped 2026-09-11, not started
+**Status:** shaped 2026-09-11; all three open questions resolved the same day, not started
 **Weight:** Standard
 **Domain dial:** on (project-wide); this spec touches no `INV-n` directly — see *Invariants touched*
 
@@ -114,9 +114,10 @@ keeps name-free. So the retention count sets how many complete copies of real st
 the VM, and raising it for recovery comfort raises that too. `ADR-0007` already argues the existing
 seven; any change to the number belongs in that argument, not in a script edit.
 
-**Recommendation, for the Owner to confirm:** nightly at 03:15 Europe/Helsinki, keep 14. Two weeks
-covers "she mentioned it a while ago", 14 gzipped dumps of this dataset are megabytes, and it
-doubles the on-disk copies from 7 to 14 — which is the part worth saying out loud.
+**Decided 2026-09-11 by the Owner: nightly, keep 14.** Timer at 03:15 Europe/Helsinki. Two weeks
+covers "she mentioned it a while ago"; 14 gzipped dumps of this dataset are megabytes. It also
+**doubles the complete copies of Student names on the VM, from 7 to 14**, and the Owner took that
+trade knowingly — recorded here because a later reader would otherwise see only a disk number.
 
 ### The requirements split
 
@@ -131,7 +132,7 @@ PostgreSQL everywhere else.
 
 ### Pinning
 
-**Recommendation: `pip-tools`.** `requirements.in` and `requirements-dev.in` hold the intent
+**Decided 2026-09-11 by the Owner: `pip-tools`.** `requirements.in` and `requirements-dev.in` hold the intent
 (`fastapi>=0.104`), `pip-compile` produces `requirements.txt` / `requirements-dev.txt` with exact
 versions, and the compiled files stay the thing the image and CI install — so the Dockerfile does
 not change and the artifact becomes reproducible.
@@ -182,8 +183,8 @@ Verdicts are filled by `/verify-live`, per criterion. A task's verdict is the **
 | AC-1 | A backup exists on the VM that no deploy and no human command produced, newer than the most recent deploy | `live:` | US-1 | |
 | AC-2 | A failed backup is visible without going looking for it: the journal carries it at `daemon.err` and the MOTD status reflects it, watched by making a run fail on purpose | `live:` | US-2 | |
 | AC-3 | `backup-db.sh` exits **non-zero** when `pg_dump` fails, and writes no archive that passes `gzip -t`, watched failing on a planted failure | `test:` | US-2 | |
-| AC-4 | Never more than the agreed count of archives on disk, and the oldest is that many days old | `live:` | US-3 | |
-| AC-5 | The agreed count of archives, measured, leaves the CX21 disk with headroom — a number, taken on the VM | `live:` | US-3 | |
+| AC-4 | Never more than **14** archives on disk, and the oldest is 14 days old | `live:` | US-3 | |
+| AC-5 | 14 archives, measured, leave the CX21 disk with headroom — a number, taken on the VM | `live:` | US-3 | |
 | AC-6 | The production image installs **no** test or lint package: `pytest`, `pytest-asyncio`, `pytest-cov`, `faker`, `aiosqlite`, `ruff`, `mypy`, `import-linter`, `coverage` all absent from `pip list` in the built image | `live:` | US-4 | |
 | AC-7 | A dev dependency added to the runtime requirements file fails the diff, watched failing on a planted line | `gate:` drift-extra | US-4 | |
 | AC-8 | Every line in both compiled requirements files pins with `==`, watched failing on a planted range | `gate:` drift-extra | US-5 | |
@@ -251,17 +252,25 @@ deploy where the image's dependency set changes deliberately.
 
 ## Open Questions
 
-1. **Does a backup failure deserve the MOTD banner, or nothing at all?** The Owner said an `ERROR`
-   *log line* should not reach them at this stage. A failed **backup** is a different event — the
-   thing that silently produces nothing for a month is the classic scheduled-job failure — and the
-   MOTD path reaches nobody until the next SSH login, so it arguably breaks no rule. AC-2 assumes
-   the banner. **If the answer is "nothing", AC-2 is struck and the timer is fire-and-forget**,
-   which is a materially weaker slice 2 and should be a deliberate choice rather than a default.
-2. **Retention: nightly, keep 14?** Recommended above, with the privacy consequence stated. The
-   Owner sets the number because it is a decision about copies of student data, not disk.
-3. **`pip-tools`, or `uv`?** Recommended `pip-tools` with the alternatives above. If `uv` is
-   wanted anywhere on this machine eventually, doing it here rather than twice is the argument
-   against the recommendation — worth an ADR if the answer is `uv`.
+**All three resolved 2026-09-11 by the Owner, before any code.** Kept with their reasoning rather
+than deleted, so a later session can see what was asked and what was chosen.
+
+1. **Does a backup failure deserve the MOTD banner, or nothing at all?** — **RESOLVED: the banner.**
+   A silently-failing scheduled job is the classic way a backup regime turns out not to exist, and
+   the MOTD path reaches nobody until the next SSH login, so it breaks no part of
+   `setup-ssl-monitoring.sh`'s rule. **AC-2 stands.** This is deliberately a different answer from
+   the one given for `ERROR` log lines, and the distinction is the event: a refused request is
+   information, a backup that produced nothing is a broken mechanism.
+2. **Retention: nightly, keep 14?** — **RESOLVED: nightly, keep 14**, with the doubling of on-disk
+   copies of Student names accepted. AC-4 and AC-5 now name the number.
+3. **`pip-tools`, or `uv`?** — **RESOLVED: `pip-tools`.** No ADR: the rejected alternatives are in
+   *Pinning* above and the decision is cheap to reverse — the compiled files are the artifact
+   either way, so swapping the compiler later changes how they are produced and not what consumes
+   them.
+
+**And one confirmed rather than opened:** the Owner reaffirmed on 2026-09-11 that the **BX11
+Storage Box is not being taken yet**. Off-site backup stays a non-goal with its research attached;
+slice 1 still has to leave archives in a shape `restic` can later read, which costs nothing now.
 
 ## Spec Deltas
 
