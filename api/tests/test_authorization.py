@@ -202,3 +202,48 @@ async def test_owning_teacher_can_read_own_student(
         f"/api/students/{test_student.id}", headers=auth_headers
     )
     assert response.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_other_teacher_cannot_supply_her_own_student_as_a_merge_duplicate(
+    client: AsyncClient,
+    auth_headers: dict,
+    other_teacher_headers: dict,
+    test_class: Class,
+) -> None:
+    """The merge's SECOND surface: the duplicate, which is not in the path.
+
+    The test above denies through the target — the id in the URL. This one runs as the owner of
+    the target and reaches for a Student in a Class she does not own, which is the same INV-1
+    violation arriving through the request BODY. It was refused before this test existed, but
+    by the same-Class comparison rather than by an ownership check, so a 403 became a 400 and
+    the log named INV-5. Deleting either `verify_class_ownership` call in `merge_students` now
+    turns this red.
+
+    Added 2026-09-10 with spec 0005 slice 4's ordering fix; the log-side assertion lives in
+    `tests/test_logging_events.py`, this one is about the response.
+    """
+    her_class = await client.post(
+        "/api/classes", json={"name": "Hänen kurssi"}, headers=other_teacher_headers
+    )
+    her_student = await client.post(
+        f"/api/classes/{her_class.json()['id']}/students",
+        json={"name": "Helena Salo"},
+        headers=other_teacher_headers,
+    )
+    my_student = await client.post(
+        f"/api/classes/{test_class.id}/students",
+        json={"name": "Aino Mäkinen"},
+        headers=auth_headers,
+    )
+
+    response = await client.post(
+        f"/api/students/{my_student.json()['id']}/merge",
+        headers=auth_headers,
+        json={"duplicate_student_id": her_student.json()["id"]},
+    )
+
+    assert response.status_code == 403, (
+        f"a merge whose DUPLICATE belongs to another teacher returned "
+        f"{response.status_code}; expected 403. Body: {response.text[:300]}"
+    )

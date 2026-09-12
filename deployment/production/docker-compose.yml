@@ -31,6 +31,15 @@ services:
     # Only expose on localhost for security
     ports:
       - "127.0.0.1:5432:5432"
+    # Bounded like backend, nginx and jaeger already are. Docker's json-file driver has no size
+    # limit by default, so an unbounded postgres log competes for the same CX21 disk the database
+    # itself needs. The 10m x 3 matches every other service in this file, and INV-9's row in
+    # api/INVARIANTS.md reasons about this sink rotating by size at exactly those values.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   # FastAPI Backend
   backend:
@@ -59,6 +68,10 @@ services:
       # which never needed it, and every future backend this VM is documented as able to host.
       # Removed 2026-09-02 by /audit; guarded by the API's tests/test_config.py::TestCookieScope.
       CORS_ORIGINS: ${CORS_ORIGINS}
+      # LOG_LEVEL is deliberately not passed through, so the API runs on its INFO default. The
+      # merge and student-delete audit lines are INFO: at WARNING or above they stop being
+      # written while denials and errors keep flowing, which leaves the log looking healthy with
+      # the record of the two irreversible operations missing. api/REVIEW-DEBT.md, 2026-09-10.
       ENVIRONMENT: production
       DEBUG: "false"
       # Basic auth for /docs, /redoc and /openapi.json. These were ABSENT from this block for

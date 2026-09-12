@@ -347,6 +347,47 @@ sudo systemctl disable --now nginx     # host nginx must stay disabled
 ./deployment/scripts/logs.sh production db
 ```
 
+#### The API's JSON lines
+
+The backend writes one JSON object per line (spec 0005). The same stream carries uvicorn's access
+lines and tracebacks, nginx and postgres as well, so `--json` keeps the app's lines and drops
+everything else. It needs `jq` on whichever machine runs the script.
+
+```bash
+./deployment/scripts/logs.sh production backend --json
+./deployment/scripts/logs.sh production backend --json 'select(.level == "WARNING")'
+./deployment/scripts/logs.sh production backend --json 'select(.rule == "INV-1")'
+```
+
+**Joining an app line to its nginx access line.** Both carry one id: nginx generates
+`$request_id`, writes it as `request_id=<id>` on its own access line, and forwards it to the
+backend as `X-Request-ID`.
+
+```bash
+./deployment/scripts/logs.sh production nginx | grep 'request_id='
+./deployment/scripts/logs.sh production backend --json 'select(.request_id == "<id>")'
+```
+
+nginx replaces any `X-Request-ID` the caller sent, so a production id is always nginx's own and a
+client cannot choose it. uvicorn's access line carries no id, so two lines sitting next to each
+other prove nothing; match them on the id.
+
+#### `LOG_LEVEL` and the audit record
+
+`LOG_LEVEL` defaults to `INFO`, and production sets it nowhere on purpose. At `WARNING` or above
+the merge and student-delete audit records stop being written while denials and errors keep
+flowing, so the log still looks healthy with the record of the two irreversible operations gone.
+`api/.env.example` and `deployment/production/.env.example` carry the same warning.
+
+#### Rotation
+
+In production every service caps its container log at `max-size: 10m`, `max-file: 3` on the
+json-file driver. Locally only `db` does; `backend`, `jaeger` and `db-test` are unbounded
+(`api/REVIEW-DEBT.md`, 2026-09-11). Rotation is size-based, with no time-based erasure, so a line
+survives until volume pushes it out. `api/INVARIANTS.md`'s INV-9 reasons about the log on that
+basis. Those two numbers now appear in four places — both compose files, this section and INV-9 —
+and nothing compares them, which `api/REVIEW-DEBT.md` records.
+
 ### Check Service Status
 
 ```bash

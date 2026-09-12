@@ -100,14 +100,20 @@ class TestLogin:
         assert response.status_code == 401
 
     async def test_login_inactive_user(self, client: AsyncClient, inactive_user: User):
-        """Test login with inactive user account."""
+        """Test login with inactive user account.
+
+        The body is the same as every other login refusal, deliberately (2026-09-11): an
+        inactive account must not be tellable from an unknown address without presenting a
+        credential. Which branch refused is legible only in the log, and
+        `tests/test_logging_events.py` is where that is proven.
+        """
         response = await client.post(
             "/api/auth/login",
             json={"email": inactive_user.email, "password": "testpassword123"},
         )
-        
+
         assert response.status_code == 401
-        assert "inactive" in response.json()["detail"].lower()
+        assert response.json()["detail"] == "Invalid email or password"
 
 
 @pytest.mark.asyncio

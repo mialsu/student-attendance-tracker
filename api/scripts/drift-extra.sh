@@ -4,7 +4,7 @@
 # Kept separate on purpose so scripts/drift-check.sh stays byte-identical to devkit's template and
 # future template updates still apply cleanly (ANTI-PATTERNS: two formats for one artifact).
 #
-# Four checks:
+# Five checks:
 #
 #  1. BANNED COMPOUND IDENTIFIERS. drift-check.sh's vocabulary check splits identifiers into
 #     segments (`pupilName` -> `pupil` + `name`) and compares each segment against CONTEXT.md's
@@ -33,6 +33,19 @@
 #     What a copy is not is *maintained*: shared classes change the definition of "associated
 #     with a Class", and a copy nobody remembered would keep enforcing the old one. Prose said
 #     "intended single owner" in INVARIANTS.md for three days and three copies existed anyway.
+#
+#  5. A STUDENT'S NAME IN A LOG LINE, and the log's own vocabulary. INV-9 (spec 0005, ADR-0007)
+#     says a log line identifies people by opaque id. Nothing in the language stops a later
+#     session adding `name=student.name` to a logger call "just for debugging" -- the argument
+#     ADR-0007 records as rejected -- and the runtime test only catches it on a route it
+#     exercises. This half fails the DIFF, so the leak becomes unlandable rather than merely
+#     noticed later. The second half closes the vocabulary: `event`, `rule` and `reason` are
+#     plain strings, and a tenth `reason` or `rule="INV3"` would log happily while silently
+#     breaking the grep a reader relies on (`rule=INV-6` to count real INV-6 refusals).
+#     Delegated to `scripts/log_lint.py`, which parses the file with `ast`: keywords are checked
+#     against an ALLOWLIST (a denylist of name-ish words was defeated by `search=`, `q=` and
+#     `who=student.full_name` in one line each), and a multi-line call is seen whole whether or
+#     not the diff contains its opening line. Watched failing on every one of those forms.
 #
 # Escape hatch: `drift-ok` in a comment on the line, same convention as drift-check.sh.
 #
@@ -157,6 +170,61 @@ if [ -n "$ownership_checks" ]; then
   echo "         specs/0003-consolidate-inv-1.md and INVARIANTS.md's INV-1 row."
   echo "         A comparison that is NOT an access decision takes \`drift-ok\` on the line."
   printf '%s\n' "$ownership_checks" | head -10 | awk -F'\t' '{ printf "     %s:%s  ->  %s\n", $1, $2, substr($3,1,90) }'
+fi
+
+# --- 5. INV-9 and the log's vocabulary --------------------------------------
+# Delegated to scripts/log_lint.py, which parses the FILE with `ast` rather than matching the
+# diff's text. That is not tidiness: the awk version this replaces was **false-clean on the
+# leak's normal shape** -- one keyword line added to a logger call that already existed, so no
+# opener appeared in the diff and there was nothing to count parens from. Two independent
+# reviews planted exactly that and both got `clean`, which is the same defect as the `^` anchor
+# above and the baseline guard that scored a crashed tool as zero problems.
+#
+# The diff still decides WHICH calls are judged, so this remains a diff gate.
+#
+# Content is read at the END of the range: the index for `--cached` (what the hook judges), a
+# commit for CI's resolved range, the working tree otherwise. Reading the wrong one is how a
+# check silently judges bytes nobody is committing.
+case "${RANGE[0]}" in
+  --cached) LOG_LINT_REV=":" ;;
+  HEAD)     LOG_LINT_REV="" ;;
+  *)        LOG_LINT_REV="${RANGE[${#RANGE[@]}-1]##*..}" ;;
+esac
+
+log_lint_out="$(added_lines | awk -F'\t' -v skip="$SKIP" '$1 !~ skip' | grep -v 'drift-ok' \
+                | python3 scripts/log_lint.py "$LOG_LINT_REV" || true)"
+
+log_lint_keywords="$(printf '%s\n' "$log_lint_out" | grep -E '^(keyword|unparsed)\b' || true)"
+log_lint_vocab="$(printf '%s\n' "$log_lint_out" | grep -E '^vocab\b' || true)"
+
+if [ -n "$log_lint_keywords" ]; then
+  violations=$((violations + 1))
+  echo; echo "EXTRA · a log field outside the sanctioned set (INV-9)"
+  echo "  ↳ invariant: INV-9 — a log line this application emits identifies people by opaque id"
+  echo "  ↳ anti-pattern: the argument ADR-0007 records as REJECTED — 'log the name, it makes"
+  echo "     this so much easier to debug'. The sink rotates by SIZE only, so at this app's"
+  echo "     volume a name written today effectively never ages out."
+  echo "  ↳ fix: log an id and a COUNT. They answer every question a name would, without making"
+  echo "         a copy that outlives the deletion CONTEXT.md treats as complete. If the field is"
+  echo "         genuinely not a person, ADD it to ALLOWED_KEYWORDS in scripts/log_lint.py in"
+  echo "         THIS commit — an allowlist, so a synonym (\`who=\`, \`search=\`) cannot slip past"
+  echo "         a word list. See api/docs/adr/0007-personal-data-in-logs.md and INV-9's row."
+  printf '%s\n' "$log_lint_keywords" | head -10 \
+    | awk -F'\t' '{ printf "     %s:%s  ->  %s\n", $2, $3, $4 }'
+fi
+
+if [ -n "$log_lint_vocab" ]; then
+  violations=$((violations + 1))
+  echo; echo "EXTRA · a log value outside the known vocabulary"
+  echo "  ↳ anti-pattern: a standard with no enforcer — \`event\`, \`rule\` and \`reason\` are plain"
+  echo "     strings, so a typo (\`rule=INV3\`, \`reason=inactive-class\`) logs happily and the"
+  echo "     grep a reader relies on misses it silently."
+  echo "  ↳ fix: use an existing value, or add the new one to KNOWN_EVENTS / KNOWN_RULES /"
+  echo "         KNOWN_REASONS in scripts/log_lint.py in the same commit. Widening the"
+  echo "         vocabulary is fine; widening it by accident is not. A rule id must match"
+  echo "         INV-<n> exactly as INVARIANTS.md spells it."
+  printf '%s\n' "$log_lint_vocab" | head -10 \
+    | awk -F'\t' '{ printf "     %s:%s  ->  %s\n", $2, $3, $4 }'
 fi
 
 echo
