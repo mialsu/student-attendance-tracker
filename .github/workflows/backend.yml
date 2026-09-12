@@ -317,7 +317,11 @@ jobs:
             # this second run is a no-op. Doing it here means a bad migration fails the deploy
             # instead of putting the new container into a restart loop behind `restart: always`.
             echo "::group::Migrations"
-            if ! $COMPOSE run --rm backend alembic upgrade head; then
+            # `</dev/null` for the same reason as step 7b's execs: `compose run` attaches the
+            # container's stdin, and this script is fed to bash by the ssh action. alembic reads
+            # no stdin, so closing it changes nothing here and removes a latent way for this step
+            # to swallow the rest of the deploy.
+            if ! $COMPOSE run --rm backend alembic upgrade head </dev/null; then
               echo "✖ migration failed. NOTHING was swapped — the previous container is still serving."
               echo "  Schema rollback, if the migration partially applied, is MANUAL:"
               echo "    ./deployment/scripts/restore-db.sh production $BACKUP"
@@ -403,15 +407,39 @@ jobs:
             #          container on the compose network, against the NEW file and the same
             #          nginx:alpine image production runs -- validating with the running container is
             #          what the stale mount makes meaningless.
+            # `</dev/null` on every exec below, and the reason is a real failure: on 2026-09-11
+            # this step exited 1 with NO output, 120ms after the group echo, and not one later
+            # statement ran. Both of its statements were then run by hand on the VM and both
+            # succeeded. A command that attaches the container's stdin, in a script the ssh action
+            # feeds to bash, can swallow the rest of that script -- so stdin is closed explicitly.
+            # That diagnosis is not certain (step 5's `compose run` attaches stdin too and has
+            # always worked), which is exactly why the two changes below matter more than this one.
             echo "::group::nginx config"
             HOST_SUM="$(sha256sum deployment/production/nginx.conf | cut -d' ' -f1)"
-            CTR_SUM="$($COMPOSE exec -T nginx sha256sum /etc/nginx/nginx.conf 2>/dev/null | cut -d' ' -f1 || true)"
+
+            # The container read CANNOT be allowed to fail the deploy. This step runs AFTER the
+            # backend is live and the health check has passed, so a failure here is a diagnostic
+            # problem and not a deploy problem -- the previous version turned a healthy deploy red.
+            # `set +e` around it, stderr KEPT rather than sent to /dev/null (suppressing it is what
+            # made the failure above cost a VM round-trip to understand), and an unreadable
+            # checksum falls through to "treat as changed", which is the safe direction: recreating
+            # a container that did not need it costs a second.
+            set +e
+            CTR_RAW="$($COMPOSE exec -T nginx sha256sum /etc/nginx/nginx.conf </dev/null 2>&1)"
+            CTR_RC=$?
+            set -e
+            CTR_SUM=""
+            if [ "$CTR_RC" -eq 0 ]; then
+              CTR_SUM="$(printf '%s' "$CTR_RAW" | cut -d' ' -f1)"
+            fi
 
             if [ -n "$CTR_SUM" ] && [ "$HOST_SUM" = "$CTR_SUM" ]; then
               echo "nginx.conf unchanged (sha256 $HOST_SUM) - nothing to do"
             else
               if [ -z "$CTR_SUM" ]; then
-                echo "could not read nginx.conf from the container; treating as changed"
+                echo "could not read nginx.conf from the container (exit $CTR_RC); treating as changed."
+                echo "what the container said:"
+                printf '  %s\n' "$CTR_RAW"
               else
                 echo "nginx.conf differs from what the container reads:"
                 echo "  on disk:   $HOST_SUM"
@@ -438,9 +466,14 @@ jobs:
 
               # Prove the container now reads the file we validated. Without this the recreate
               # could silently fail to re-bind and we would be back where we started.
-              NEW_SUM="$($COMPOSE exec -T nginx sha256sum /etc/nginx/nginx.conf | cut -d' ' -f1)"
-              if [ "$NEW_SUM" != "$HOST_SUM" ]; then
-                echo "✖ after recreate the container still reads $NEW_SUM, expected $HOST_SUM"
+              set +e
+              NEW_RAW="$($COMPOSE exec -T nginx sha256sum /etc/nginx/nginx.conf </dev/null 2>&1)"
+              NEW_RC=$?
+              set -e
+              NEW_SUM="$(printf '%s' "$NEW_RAW" | cut -d' ' -f1)"
+              if [ "$NEW_RC" -ne 0 ] || [ "$NEW_SUM" != "$HOST_SUM" ]; then
+                echo "✖ after recreate the container reads '$NEW_SUM' (exit $NEW_RC), expected $HOST_SUM"
+                printf '  %s\n' "$NEW_RAW"
                 exit 1
               fi
               echo "✔ nginx recreated and reading $NEW_SUM"
