@@ -6,6 +6,55 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 
 <!-- Newest first. -->
 
+## 2026-09-12 — every Card title is an h3, so three surfaces skip a heading level
+- **What:** `/settings` renders `<h1>Asetukset</h1>` and then two `CardTitle`s. `CardTitle` is an
+  **h3** (`src/components/ui/card.tsx:19`), so the document outline goes h1 → h3 with no h2. A
+  screen-reader user navigating by heading level gets a broken outline.
+- **Where:** the shared cause is `card.tsx:19`. `/settings` is the third surface to inherit it —
+  `ClassStatistics` and `StudentLogs` have done the same under `/class/:id`'s h1 since before this
+  spec.
+- **What green tests do NOT prove here:** heading structure, at all. axe *has* the rule —
+  `heading-order` — but it is tagged `best-practice`, and `e2e/assertions.ts:50` runs
+  `runOnly: {type: 'tag', values: ['wcag2a','wcag2aa','wcag21a','wcag21aa']}`. So the walk sweeps
+  `/settings` clean at both viewports and the skip is invisible to it. `DESIGN.md` §5 has no row
+  for heading order either.
+- **Why it was not fixed in slice 7:** the fix belongs at `card.tsx`, not on this one surface.
+  Hand-rolling an `<h2>` here would leave the other two surfaces broken and create a second
+  heading format for one artifact. Changing a primitive every Card in the app renders is a
+  whole-surface-set re-sweep, which is slice 8's job.
+- **Disposition:** open, for slice 8's a11y sweep. Two decisions there, both the Owner's: whether
+  `CardTitle` becomes an h2, and whether `heading-order` joins the walk's rule set as an
+  `A11Y-n` row with a named enforcer.
+
+## 2026-09-12 — `/settings`' email field has a refusal path the app does not own
+- **What:** *Uusi sähköposti* is `type="email"` and arrives **prefilled** with the current
+  address. A teacher who types without clearing produces `vanha@koulu.fiuusi@koulu.fi`, which the
+  browser's own constraint validation refuses — the form never submits, `handleEmailChange` never
+  runs, and the message she sees is the browser's native bubble in the browser's language, not one
+  of this app's toasts.
+- **Where:** `src/pages/Settings.tsx`, the `newEmail` input; the form carries no `noValidate`.
+- **How it was found:** not by reading the code. The behaviour test failed with the handler never
+  having run, and the instrumentation showed zero toasts and zero API calls. That is recorded in
+  the test as the reason `user.clear()` is on the line above the `user.type()`
+  (`Settings.test.tsx`), so the next person does not delete it as noise.
+- **What green tests do NOT prove here:** what that refusal looks like. `DESIGN.md:149`'s Refused
+  column describes a toast carrying the API's `detail` and says nothing about a client-side
+  refusal — unlike `/auth`'s row, which names its two inline ones explicitly.
+- **Disposition:** open, and a product question rather than a bug. The options are leaving native
+  validation to do it, or owning the refusal the way `/auth` does. Not decided, so not built.
+
+## 2026-09-12 — three new Finnish pending labels, none read by a native speaker
+- **What:** slice 7 added "Tallennetaan..." (both `/settings` submits), "Kirjaudutaan..." and
+  "Rekisteröidään..." (`/auth`'s two modes).
+- **Where:** `src/pages/Settings.tsx` and `src/pages/Auth.tsx`, each on its submit button.
+- **What green tests do NOT prove here:** the wording. The tests match the strings exactly, so
+  they hold these labels in place without anyone having judged them. They are mechanical
+  derivations of the shipped convention — "Luodaan..." (`TeacherDashboard.tsx:212`) and
+  "Kirjataan..." (`AttendanceTracking.tsx:392`) — which makes them lower-risk than free prose, but
+  copy voice still has no skill owner in this project. Same class as the autocomplete sentence
+  below, and the Owner has not ruled on that one either.
+- **Disposition:** open. Cheap to close alongside the autocomplete sentence, in one pass.
+
 ## 2026-09-11 — a full-page screenshot of *Tilastot* shows an empty chart, and the chart is fine
 - **What:** slice 6's restyle was checked by screenshot, and every `fullPage: true` shot of the
   statistics tab came back with axes, gridlines and labels drawn but **no bars** — at both

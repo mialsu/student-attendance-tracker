@@ -419,6 +419,30 @@ unrecorded is the defect.)*
   the line left the whole walk green: axe-core does not treat `radiogroup` as a required context for
   `radio`. The role stays on judgement — a screen reader announcing "1 of 2" rather than two loose
   radios — and the comment, the test and `REVIEW-DEBT.md` all now say that nothing gates it.
+- **2026-09-11 — slice 7 widened to `/auth`, by the Owner, because the unmet row was not
+  `/settings`'.** `DESIGN.md` §3's "button disables" was unmet in **four** places, not two: both
+  `/settings` submits and both modes of `/auth`'s single submit (`Auth.tsx:279`). Measured in the
+  browser before anything was written — three clicks on *Tallenna sähköposti* sent three
+  `PUT /api/auth/email`, two on *Tallenna salasana* sent two, two on *Kirjaudu* sent two `POST`.
+  One structural cause: those four call `AuthContext`'s plain `async` functions, while every other
+  mutation in the app goes through a TanStack `useMutation` and already disables. Slice 4 had
+  landed `/auth` as built. Fixing only `/settings` would have left the other half live and
+  uncaught, since none of AC6–AC10 covers the loading column and slice 8's sweep is scoped to
+  those. Precedent: slice 1 of this spec fixed one bug in three surfaces as one slice.
+- **2026-09-11 — `/settings` becomes two stacked cards, and drops its tabs.** Owner's call against
+  `prototype/index.html:735`. Both forms are now on screen together, so neither is a click away,
+  and the page joins the Card idiom the other surfaces use. Not a defect the tabs had — measured
+  at 320px, the two-column `TabsList` gave each label a 140px box against a 140px need and swept
+  clean, so this is the prototype winning on merit rather than slice 6's overflow repeating.
+- **2026-09-11 — the password card says "Kaikki istunnot", where the prototype says "Kaikki
+  **muut** istunnot".** One word, and the prototype's is wrong: `auth_service.py:218` revokes every
+  refresh token the teacher holds, the current browser's included, so her own session ends too —
+  within the 15 minutes her in-memory access token has left. INV-8, guarded by
+  `test_update_password_revokes_every_existing_session`. Verified against the API rather than
+  assumed from the sentence.
+- **2026-09-11 — `/settings`' h1 drops from `text-4xl` to `text-3xl`.** Slice 5 set the page-title
+  size and `ClassView.tsx:77` recorded the reasoning; Settings was simply never revisited, so it
+  stayed a size larger than the other two surfaces for three slices.
 
 ## Further Notes
 

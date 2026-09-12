@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useMutation } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -39,6 +40,19 @@ const Auth = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
 
+  /**
+   * The in-flight state `DESIGN.md:151` asks for in both modes of this surface.
+   *
+   * `useMutation` rather than a `useState` boolean because `isPending` is the vocabulary the
+   * other six mutations in this app already use — `TeacherDashboard.tsx:211`,
+   * `AttendanceTracking.tsx:389` and four in `StudentLogs.tsx`. Nothing is invalidated here: the
+   * auth context owns the user, so the mutation is carrying the pending flag and nothing else.
+   */
+  const submitMutation = useMutation({
+    mutationFn: () =>
+      isLogin ? login(email, password) : signup(email, password, registrationCode),
+  });
+
   // Validate email format
   const validateEmail = (email: string): boolean => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -78,11 +92,7 @@ const Auth = () => {
     }
 
     try {
-      if (isLogin) {
-        await login(email, password);
-      } else {
-        await signup(email, password, registrationCode);
-      }
+      await submitMutation.mutateAsync();
 
       toast({
         title: isLogin ? 'Kirjautunut sisään' : 'Rekisteröity onnistuneesti',
@@ -96,6 +106,10 @@ const Auth = () => {
       });
     }
   };
+
+  const submitLabel = submitMutation.isPending
+    ? (isLogin ? 'Kirjaudutaan...' : 'Rekisteröidään...')
+    : (isLogin ? 'Kirjaudu' : 'Rekisteröidy');
 
   // Reset form when switching between login and signup
   const handleToggleMode = () => {
@@ -276,8 +290,8 @@ const Auth = () => {
                 </div>
               </>
             )}
-            <Button type="submit" className="w-full">
-              {isLogin ? 'Kirjaudu' : 'Rekisteröidy'}
+            <Button type="submit" className="w-full" disabled={submitMutation.isPending}>
+              {submitLabel}
             </Button>
             <Button
               type="button"

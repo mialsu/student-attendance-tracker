@@ -67,7 +67,7 @@ One teacher, one Kurssi, in production since November 2025. Every surface below 
 | `/class/:id` → *Kirjaa läsnäolo* | the core loop: record who turned up, 1–50 at a time, with name autocomplete | — | built |
 | `/class/:id` → *Läsnäolot* | the tally per Student, the course-credit tick, and correcting mistakes (rename, merge, delete) | — | built |
 | `/class/:id` → *Tilastot* | four totals, the per-day table, and **one** bar chart carrying a day/month toggle | 0006/6 | built |
-| `/settings` | change email, change password | — | built |
+| `/settings` | change email, change password. Two stacked cards since slice 7, not the two tabs it shipped with — both forms on screen at once | 0006/7 | built |
 | `*` → 404 | the wrong address | — | built, and see below |
 | `/` | not a surface — renders `null` and redirects by session (`Index.tsx`) | — | built |
 | the shell | not a route: the frame every signed-in surface renders inside — brand, the Kurssi list, settings, the account menu. A drawer below 940px | 0006/3 | built |
@@ -146,9 +146,9 @@ accessibility check available here is also the width decision.
 | *Kirjaa läsnäolo* | n/a — the form is always the form | the submit button becomes "Kirjataan…" and disables | toast, `detail` from the API or "Läsnäolon kirjaaminen epäonnistui" | toast, and the field clears |
 | *Läsnäolot* | "Ei opiskelijoita vielä" (desktop) / "Ei läsnäoloja kirjattu vielä tälle kurssille" (narrow); searching yields "Ei hakutuloksia haulla …" | Card header stays, body becomes a spinner | "Opiskelijoiden lataaminen epäonnistui" + the retry | rows, tally, and the *Suoritus* tick |
 | *Tilastot* | "Ei läsnäoloja näytettäväksi" + "Kirjaa opiskelijoiden läsnäoloja nähdäksesi tilastot." — the empty branch owns the whole surface, so there is no chart frame and no toggle to press | "Ladataan tilastoja…" | "Tilastojen lataaminen epäonnistui" + the retry | four totals, the per-day table, and one chart whose granularity the *Kaavion jakso* toggle sets — **Päivät** by default, **Kuukaudet** the other. Both granularities are swept, because each draws a different dataset and `A11Y-7` has to hold for both |
-| `/settings` | n/a | button disables | toast with the API's `detail` | toast |
-| `/auth` — kirjautuminen | n/a | button disables | toast: "Väärä sähköposti tai salasana" | redirect to the dashboard |
-| `/auth` — rekisteröityminen | n/a | button disables | toast: "Rekisteröinti epäonnistui"; the two client-side refusals are inline — "Sähköpostin tulee olla oikeassa muodossa", "Salasanat eivät täsmää" | redirect to the dashboard |
+| `/settings` | n/a | each submit becomes "Tallennetaan..." and disables — **both**, independently, because the two cards are on screen together | toast, `detail` from the API or the surface's own wording | toast, and the confirming field clears |
+| `/auth` — kirjautuminen | n/a | the submit becomes "Kirjaudutaan..." and disables | toast: "Väärä sähköposti tai salasana" | redirect to the dashboard |
+| `/auth` — rekisteröityminen | n/a | the submit becomes "Rekisteröidään..." and disables | toast: "Rekisteröinti epäonnistui"; the two client-side refusals are inline — "Sähköpostin tulee olla oikeassa muodossa", "Salasanat eivät täsmää" | redirect to the dashboard |
 | `/class/:id` | n/a | full-surface spinner | redirect to `/dashboard`, silently | the three tabs |
 | 404 | n/a | n/a | n/a | English copy, untokenized colours |
 | the shell's course list | "Ei kursseja" | one `SidebarMenuSkeleton` row | "Kursseja ei voitu ladata" — muted, and deliberately **not** `role="alert"` | the Kurssi list, each row a link with its Student count |
@@ -203,7 +203,12 @@ here, and each of these is a change the current code does not yet make:
   the body region resolves. *Läsnäolot* already does this; `/class/:id` does not — it blanks the
   whole surface, tabs included, behind one spinner.
 - **A mutation never blanks anything.** It disables its own control and says what it is doing
-  ("Kirjataan…"). That is already the pattern and it stays.
+  ("Kirjataan…"). This line said "that is already the pattern and it stays" until slice 7, and it
+  was **wrong about four of the ten** — the two on `/settings` and the two modes of `/auth`'s one
+  submit never disabled at all, because they call `AuthContext`'s plain `async` functions rather
+  than a TanStack mutation. Measured in the browser, not read off the source: three clicks on
+  *Tallenna sähköposti* sent three `PUT /api/auth/email`. All four carry `isPending` now, and
+  `Settings.test.tsx` plus `auth-flow.test.tsx` are what keep them carrying it.
 
 ---
 
