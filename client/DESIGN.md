@@ -68,15 +68,17 @@ One teacher, one Kurssi, in production since November 2025. Every surface below 
 | `/class/:id` → *Läsnäolot* | the tally per Student, the course-credit tick, and correcting mistakes (rename, merge, delete) | — | built |
 | `/class/:id` → *Tilastot* | four totals, the per-day table, and **one** bar chart carrying a day/month toggle | 0006/6 | built |
 | `/settings` | change email, change password. Two stacked cards since slice 7, not the two tabs it shipped with — both forms on screen at once | 0006/7 | built |
-| `*` → 404 | the wrong address | — | built, and see below |
+| `*` → 404 | the wrong address | 0006/8 | built |
 | `/` | not a surface — renders `null` and redirects by session (`Index.tsx`) | — | built |
 | the shell | not a route: the frame every signed-in surface renders inside — brand, the Kurssi list, settings, the account menu. A drawer below 940px | 0006/3 | built |
 
-- **Surfaces serving nothing:** the 404 is real but was never finished to the standard of the rest.
-  It is the only file in the app written in English ("Oops! Page not found", "Return to Home")
-  and the only one that bypasses the token system (`bg-gray-100`, `text-gray-600`,
-  `text-blue-500`). Everywhere else the discipline holds: one stray `text-green-600` in
-  `StudentLogs.tsx`, and nothing else.
+- **Surfaces serving nothing:** the 404 was the last file in the app written in English ("Oops!
+  Page not found", "Return to Home") and the last one bypassing the token system (`bg-gray-100`,
+  `text-gray-600`, `text-blue-500`). **Both closed in slice 8**: it reads "Sivua ei löytynyt" on
+  `--background`, `--muted-foreground` and `--primary`, its link is a router `Link` rather than an
+  `<a href>` that reloaded the app, and the pair that link depends on is pinned by
+  `tokens-contrast.test.ts` in both themes. Everywhere else the discipline already held: one stray
+  `text-green-600` in `StudentLogs.tsx`, and nothing else.
 
   **That sentence said "the **only** file" until slice 5, and it was wrong.** The root breadcrumb
   read **"Dashboard"** — English, on screen, on every signed-in surface, because all three callers
@@ -150,7 +152,7 @@ accessibility check available here is also the width decision.
 | `/auth` — kirjautuminen | n/a | the submit becomes "Kirjaudutaan..." and disables | toast: "Väärä sähköposti tai salasana" | redirect to the dashboard |
 | `/auth` — rekisteröityminen | n/a | the submit becomes "Rekisteröidään..." and disables | toast: "Rekisteröinti epäonnistui"; the two client-side refusals are inline — "Sähköpostin tulee olla oikeassa muodossa", "Salasanat eivät täsmää" | redirect to the dashboard |
 | `/class/:id` | n/a | full-surface spinner | redirect to `/dashboard`, silently | the three tabs |
-| 404 | n/a | n/a | n/a | English copy, untokenized colours |
+| 404 | n/a | n/a | n/a | "Sivua ei löytynyt", one line under it, and one link back to `/` — Finnish and on tokens since slice 8 |
 | the shell's course list | "Ei kursseja" | one `SidebarMenuSkeleton` row | "Kursseja ei voitu ladata" — muted, and deliberately **not** `role="alert"` | the Kurssi list, each row a link with its Student count |
 
 **The hole is CLOSED — 2026-09-10, spec 0006 slice 1.** For the record of what it was: none of the
@@ -275,7 +277,7 @@ runs in `npm run check` and as a job `deploy` needs. One row moved the other way
 | A11Y-2a | Focus **order** follows reading order | `test:e2e/core-loop.spec.ts` — the forward tab sequence taken once, then asserted: name after date, quantity after name, submit last. A press *count* cannot do this job, because Tab wraps at the end of the document | `[test]` |
 | A11Y-2b | Focus is always **visible** | nothing. ADR-0005 rejected a screenshot baseline for it — genuinely stronger, and it buys committed PNGs and their churn in front of every `git status`. Split from A11Y-2a on 2026-09-07 rather than left `[live]`, because one row cannot carry two enforcers | `[review-only]` |
 | A11Y-3 | Every control has an accessible name, and no `<img>` is unlabelled | `lint:gate:a11y` (jsx-a11y, ratchet at 0) + `test:surfaces.a11y.test.tsx` (axe, six states, jsdom) + `test:e2e/states.spec.ts` (axe, every state in `e2e/states.spec.ts`'s table, real browser). The third one is the only one that could catch what it caught: `AppLogo` and `UserMenu` both hid their only text with `hidden sm:inline`, so below 640px each was a nameless control on every signed-in surface. jsx-a11y reads the span in the JSX; jsdom applies no media query | `[lint]` |
-| A11Y-4 | Text clears 4.5:1, and a boundary that identifies a control clears 3:1 | `test:tokens-contrast.test.ts` — every pair in its `PAIRS` table computed from `src/index.css`, not from intent, in both `:root` and `.dark`; run it for the count — **and** `test:e2e/states.spec.ts`, axe with `color-contrast` enabled over every rendered state in `e2e/states.spec.ts`'s table. The second half is not a duplicate: the token test proves the palette and cannot express an alpha composite. Three pairs were added on 2026-09-10 by making the badge solid and by asserting `--input` against `--card` as well as the page, which is why only the 404 is still exempt. Slice 4 added the first **gradient** pair: the auth aside runs `--primary` → `--auth-aside-to` under `--primary-foreground` text, and gating the two endpoints gates the span because every channel moves monotonically between them. The prototype's own third stop measured **3.28:1** there and no gate could see it — axe returns `color-contrast` as *incomplete* over a gradient and `e2e/assertions.ts:111` reads only `violations` | `[test]` |
+| A11Y-4 | Text clears 4.5:1, and a boundary that identifies a control clears 3:1 | `test:tokens-contrast.test.ts` — every pair in its `PAIRS` table computed from `src/index.css`, not from intent, in both `:root` and `.dark`; run it for the count — **and** `test:e2e/states.spec.ts`, axe with `color-contrast` enabled over every rendered state in `e2e/states.spec.ts`'s table. The second half is not a duplicate: the token test proves the palette and cannot express an alpha composite. Three pairs were added on 2026-09-10 by making the badge solid and by asserting `--input` against `--card` as well as the page, which left the 404 as the last exemption, and slice 8 closed that one too. Slice 4 added the first **gradient** pair: the auth aside runs `--primary` → `--auth-aside-to` under `--primary-foreground` text, and gating the two endpoints gates the span because every channel moves monotonically between them. The prototype's own third stop measured **3.28:1** there and no gate could see it — axe returns `color-contrast` as *incomplete* over a gradient and `e2e/assertions.ts:111` reads only `violations` | `[test]` |
 | A11Y-5 | Nothing conveys meaning by colour alone | nothing — a human has to look. The *Suoritus* badge carries its word, which is why it passes today | `[review-only]` |
 | A11Y-6 | `prefers-reduced-motion` is respected | nothing. `animate-fade-in`, `transition-smooth` and `active:scale-[0.98]` all ignore it | `[review-only]` |
 | A11Y-7 | Content reflows at 320px with no two-directional scrolling (WCAG 1.4.10) | `test:e2e/states.spec.ts` — `documentElement.scrollWidth <= clientWidth` in every state of `e2e/states.spec.ts`'s table at 320px, measured after `document.fonts.ready` so the widths are Fira Sans's and not system-ui's — Fira **stays** under spec 0006, so these measurements were not re-opened by the reskin. It **passes on all of them**, the three error states and the drawer included, and it caught one real failure on the way in: the *Tilastot* charts forced the page to 760px. An inner container that scrolls is deliberate and allowed; the document scrolling is not. **Second enforcer since slice 5: `expectOverlayWithinViewport`**, because the first one is structurally blind to every overlay — a `position: fixed` element is out of flow and adds nothing to document overflow. Measured, not argued: a `min-w-[34rem]` put on `DialogContent` on purpose rendered the create-course dialog **520px wide from x=-100 to x=420** at a 320px viewport, a third of it unreachable off each edge, while `documentElement.scrollWidth` stayed exactly **320** and the state swept clean. The new check measures the box of any open `[role="dialog"]` — the dialog and the drawer, the shell's whole navigation below 940px — and was watched red on that same break and green once it was reverted | `[test]` |
@@ -320,14 +322,14 @@ The honest list, because §5's tags make the rest of this document look more enf
   gate can tell them apart. **Walk it on a real phone before trusting this decision.** (The entry
   it replaced, `nested-interactive`, is gone for good: deleted along with the accordion rather
   than patched.)
-- **Whether the ONE open contrast failure matters to a real reader.** It was two until
-  2026-09-10; the register's badge at 3.25:1 is closed, and closed structurally — it stopped being
-  `bg-primary/10 text-primary` and became the solid `--accent` / `--accent-foreground` pair, so it
-  is asserted by the token test in both themes rather than being visible only to axe. What remains
-  is the **404's link at 3.34:1**, still in `e2e/states.spec.ts`'s `KNOWN_VIOLATIONS`, shrink-only,
-  and confessed in `REVIEW-DEBT.md`. The palette change could not touch it: that file bypasses the
-  token system altogether, so it needs tokenizing *and* translating. Not a gate failing to catch
-  something — the gate caught it.
+- ~~**Whether the ONE open contrast failure matters to a real reader.**~~ **Closed 2026-09-12.**
+  There were two: the register's badge at 3.25:1 went on 2026-09-10 by becoming the solid
+  `--accent` / `--accent-foreground` pair, and the **404's link at 3.34:1** went in slice 8 by
+  tokenizing and translating the file, which is what it always needed. `KNOWN_VIOLATIONS` in
+  `e2e/states.spec.ts` is **empty** now, in both projects, and it is shrink-only in both
+  directions — so a new exemption cannot be added without a `REVIEW-DEBT.md` entry, and a stale
+  one cannot be left behind. Neither of these was a gate failing to catch something; the gate
+  caught both.
 - **A gradient with a stop in the middle.** Slice 4 brought the auth aside inside the token test
   by reducing its gradient to two endpoints and asserting both — sound only because every channel
   moves monotonically between them, so the ends bracket every pixel. Add a third stop to

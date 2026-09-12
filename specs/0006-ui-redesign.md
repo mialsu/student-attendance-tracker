@@ -444,6 +444,13 @@ unrecorded is the defect.)*
   size and `ClassView.tsx:77` recorded the reasoning; Settings was simply never revisited, so it
   stayed a size larger than the other two surfaces for three slices.
 
+- **2026-09-12 — the 404 loses the numeral, and the copy is the Owner's.** "Sivua ei löytynyt" is
+  the heading; the numeral is gone rather than translated, because it names an HTTP status to a
+  teacher who will never care which one. Its link goes to `/`, not `/dashboard`, since `Index.tsx`
+  routes by session and a signed-out visitor must not be bounced to `/auth` by a 404 — which is
+  why the label reads "alkuun" and not "kursseihin". It is also a router `Link` now: this was the
+  one route in the app that reached for a full page reload.
+
 ## Further Notes
 
 - `prototype/index.html` and `prototype/DESIGN_SYSTEM.md` are the visual reference; §8 of the

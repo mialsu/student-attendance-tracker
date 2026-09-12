@@ -333,8 +333,8 @@ cut (`/confess`), read first by any architecture or review session, dispositione
   only victim is a keyboard user sideways-scrolling an *empty* table. Listed in
   `KNOWN_VIOLATIONS` under the `reflow-320` key alone, because at 1280px there is nothing to
   scroll and therefore nothing to report.
-- **Disposition — the badge is CLOSED (2026-09-10, spec 0006 slice 2); the 404 and the
-  `scrollable-region-focusable` row stay open.**
+- **Disposition — the badge is CLOSED (2026-09-10, spec 0006 slice 2), the 404 is CLOSED
+  (2026-09-12, spec 0006 slice 8); the `scrollable-region-focusable` row stays open.**
 
   **Badge, closed and structurally so.** It was fixed the way this entry predicted — a palette
   change — but with one addition that matters more than the new hue: `badge.tsx`'s `default`
@@ -359,10 +359,15 @@ cut (`/confess`), read first by any architecture or review session, dispositione
   is a palette decision nobody has needed yet. It will surface the day a destructive badge renders
   in a swept state, exactly as this entry warned.
 
-  **404: open, and untouched by the palette.** It bypasses the token system entirely
-  (`bg-gray-100`, `text-gray-600`, `text-blue-500`), so re-hueing the tokens could not move its
-  3.34:1. It needs tokenizing *and* translating — the only untokenized, English surface in the
-  app, which `DESIGN.md` §1 records. Spec 0006 slice 8 owns it.
+  **404: CLOSED 2026-09-12, and it needed exactly what this entry said it needed.** Re-hueing the
+  palette could never move its 3.34:1, because the file bypassed the token system altogether
+  (`bg-gray-100`, `text-gray-600`, `text-blue-500`). Slice 8 tokenized *and* translated it:
+  `--background`, `--muted-foreground` and `--primary`, reading "Sivua ei löytynyt". Both
+  `KNOWN_VIOLATIONS` rows are deleted and the state sweeps clean at both viewports with
+  `color-contrast` on. The link's pair — `primary` on `background` — is now in
+  `tokens-contrast.test.ts`'s `PAIRS`, so it is gated in both themes rather than resting on the
+  one axe run. `KNOWN_VIOLATIONS` still holds the `scrollable-region-focusable` row and nothing
+  else.
 
 ## 2026-09-07 — the sweep measured contrast mid-animation before it was told not to
 - **What:** the first run of the state sweep reported `color-contrast` on `/settings`'s inactive

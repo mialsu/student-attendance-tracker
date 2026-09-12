@@ -74,6 +74,7 @@ const PAIRS: Pair[] = [
   { fg: 'primary-foreground', bg: 'primary', need: TEXT, where: 'every default Button, e.g. "Kirjaa läsnäolo"' },
   { fg: 'secondary-foreground', bg: 'secondary', need: TEXT, where: '8 uses of bg-secondary' },
   { fg: 'destructive-foreground', bg: 'destructive', need: TEXT, where: '6 uses of bg-destructive' },
+  { fg: 'primary', bg: 'background', need: TEXT, where: "the 404's only link, since slice 8" },
   { fg: 'ring', bg: 'background', need: UI, where: 'the focus ring, 23 components' },
   { fg: 'input', bg: 'background', need: UI, where: 'a form field is identified by its border alone' },
 

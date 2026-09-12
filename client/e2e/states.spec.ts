@@ -379,7 +379,7 @@ const STATES: SweptState[] = [
     arrange: async () => {},
     reach: async (page) => {
       await page.goto('/ei-ole-olemassa');
-      await expect(page.getByRole('heading', { name: '404' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Sivua ei löytynyt' })).toBeVisible();
     },
   },
 ];
@@ -423,11 +423,13 @@ const KNOWN_VIOLATIONS: Record<string, string[]> = {
   // to gated in both themes. This ratchet is what forced the deletion: it failed with
   // "Saw: nothing" and named the rows, which is the half that stops ground being given back.
   //
-  // The 404's row stays, and the palette had nothing to do with it: that file bypasses the token
-  // system entirely (`bg-gray-100`, `text-gray-600`, `text-blue-500`) and is the only English
-  // screen in the app, so re-hueing the tokens cannot move its 3.34:1. Spec 0006 slice 8 owns it.
-  'reflow-320 · 404 — the wrong address': ['color-contrast'],
-  'desktop-1280 · 404 — the wrong address': ['color-contrast'],
+  // The 404's two rows are GONE — deleted 2026-09-12, spec 0006 slice 8. That file bypassed the
+  // token system entirely (`bg-gray-100`, `text-gray-600`, `text-blue-500`) and its link measured
+  // 3.34:1, which no palette change could reach. It is on `--background`, `--muted-foreground`
+  // and `--primary` now, and `tokens-contrast.test.ts` pins the link's pair in both themes. This
+  // ratchet is shrink-only in both directions, so leaving these rows here after the fix would
+  // have failed the run with "Saw: nothing" — which is the half that stops ground being given
+  // back quietly.
   // Keyed by viewport as well as state, and this row is why: the empty register scrolls only
   // where 34rem does not fit, so at 1280px there is no scrollable region and nothing to report.
   // A state-only key would have demanded this violation at desktop too, and failed there.
