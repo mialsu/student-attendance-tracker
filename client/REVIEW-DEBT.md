@@ -524,8 +524,15 @@ cut (`/confess`), read first by any architecture or review session, dispositione
   announce in English ("Close", "More pages") in an otherwise Finnish app, two of them on
   components in daily use, and app code has no `sr-only` text at all. axe reads a name's presence,
   never its language, so `A11Y-9` is the row that names this and it has no gate.
-- **Disposition:** open — Playwright is the single change that would convert three rows from
-  `[live]`/`[review-only]` to `[test]`. Revisit when a second surface or a second user arrives.
+- **Disposition:** `A11Y-1`, `A11Y-2a` and `A11Y-7` closed 2026-09-07 by ADR-0005 — Playwright
+  landed and was the single change that converted them, as this entry predicted. **`A11Y-6`
+  closed 2026-09-12** (spec 0006 slice 8): `index.css` carries a `prefers-reduced-motion: reduce`
+  block and `e2e/motion.spec.ts` is its enforcer, with a `no-preference` control so the pair
+  proves the media query switches rather than a constant being read back. `active:scale-[0.98]`
+  is out of its scope on purpose and the `A11Y-6` row says why. **`A11Y-8` (200% zoom) and
+  `A11Y-9` (a control announcing itself in the wrong language) stay open**, both still
+  `[review-only]` with nothing behind them, and `A11Y-9` still has the seven English `sr-only`
+  strings in `src/components/ui/**` behind it.
 
 ## 2026-09-07 — DESIGN.md's loading thresholds are decided but not implemented
 - **What:** §3 decides that nothing shows a spinner before 300ms, that a Card's frame never waits

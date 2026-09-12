@@ -288,3 +288,32 @@ All colors MUST be HSL.
     transition: all 0.2s ease-in-out;
   }
 }
+
+/*
+  A11Y-6: prefers-reduced-motion, which had no enforcer and no implementation until slice 8.
+
+  Outside @layer on purpose. Tailwind's utilities layer loses to later layers on equal
+  specificity, and the durations being overridden are authored in that same layer three rules
+  up -- so this block sits after every layer and carries !important, which is the combination
+  that holds regardless of how the utility arrived.
+
+  0.01ms rather than 0. A zero-length animation never fires animationend, and
+  e2e/assertions.ts:82 awaits animation.finished on every finite animation before axe runs; a
+  true 0 would leave that promise pending and hang the sweep. This is the standard value for
+  that reason, not a superstition.
+
+  What this does NOT neutralise: active:scale-[0.98] on every Button variant. The transform
+  still applies, it simply applies instantly once the transition is gone. An instant state
+  change is not animation, so it is out of scope for this rule -- recorded here because the
+  A11Y-6 row used to name that utility as one of the three that ignored the preference.
+*/
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
