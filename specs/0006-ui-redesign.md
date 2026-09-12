@@ -451,6 +451,21 @@ unrecorded is the defect.)*
   why the label reads "alkuun" and not "kursseihin". It is also a router `Link` now: this was the
   one route in the app that reached for a full page reload.
 
+- **2026-09-12 — slice 8 extends `surfaces.a11y.test.tsx` by two states, not by five surfaces.**
+  The slice reads "extend `surfaces.a11y.test.tsx`", written before the browser walk existed.
+  `e2e/states.spec.ts` now sweeps all 21 of `DESIGN.md` §3's states through axe at both viewports
+  with `color-contrast` and, since this slice, `heading-order` on — everything the jsdom sweep
+  does and three things it cannot. Re-covering `/auth`, `/dashboard`, `/class/:id` and `/settings`
+  there would be two formats for one artifact, and the weaker format at that. What the jsdom file
+  uniquely carries is the state a mutation is **in flight**, which the walk's table has no row for
+  at all; slice 7 created two of those, so those two were added and nothing else was. Neither
+  found a violation on its first run, which is stated here rather than left to look like a catch.
+- **2026-09-12 — `A11Y-10` is a new row, and `A11Y-6` gains its first enforcer.** Neither was a
+  spec change so much as the spec's AC7 finally being met: "reduced-motion respected" had no
+  implementation and no gate, and heading order had no row because no WCAG success criterion names
+  it. Both are `[test]` now, leaving `A11Y-2b`, `A11Y-5`, `A11Y-8` and `A11Y-9` as the four rows
+  still carrying nothing.
+
 ## Further Notes
 
 - `prototype/index.html` and `prototype/DESIGN_SYSTEM.md` are the visual reference; §8 of the
