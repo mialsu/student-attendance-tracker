@@ -6,7 +6,7 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 
 <!-- Newest first. -->
 
-## 2026-09-12 — every Card title is an h3, so three surfaces skip a heading level
+## 2026-09-12 — every Card title is an h3, so three surfaces skip a heading level — CLOSED the same day
 - **What:** `/settings` renders `<h1>Asetukset</h1>` and then two `CardTitle`s. `CardTitle` is an
   **h3** (`src/components/ui/card.tsx:19`), so the document outline goes h1 → h3 with no h2. A
   screen-reader user navigating by heading level gets a broken outline.
@@ -22,9 +22,19 @@ cut (`/confess`), read first by any architecture or review session, dispositione
   Hand-rolling an `<h2>` here would leave the other two surfaces broken and create a second
   heading format for one artifact. Changing a primitive every Card in the app renders is a
   whole-surface-set re-sweep, which is slice 8's job.
-- **Disposition:** open, for slice 8's a11y sweep. Two decisions there, both the Owner's: whether
-  `CardTitle` becomes an h2, and whether `heading-order` joins the walk's rule set as an
-  `A11Y-n` row with a named enforcer.
+- **Disposition — CLOSED 2026-09-12, later the same day, in slice 8.** The Owner took both
+  decisions: `CardTitle` is an `h2` (`card.tsx:19`) and `heading-order` runs as its own axe pass
+  in `e2e/assertions.ts`, recorded as `A11Y-10` with `[test]` behind it.
+
+  **Three surfaces was an undercount, and the gate is what corrected it.** Turning the rule on
+  against the unfixed code failed *five* swept states on `CardTitle` alone, and then surfaced two
+  more skips this entry had not seen at all: the dashboard's course-card title was a bare `h3`
+  under the page `h1` (`TeacherDashboard.tsx:95`), and `StudentLogs`' expanded-row heading was an
+  `h4` (`:559`) that skipped `h3` once `CardTitle` moved up. The second of those is reached by no
+  swept state today, so the gate did not report it — it was fixed on the way past, as the same
+  defect in the same slice, rather than left for whoever adds an expanded-row state. That is the
+  argument for fixing this at the primitive rather than per surface, made by the measurement
+  instead of by me.
 
 ## 2026-09-12 — `/settings`' email field has a refusal path the app does not own
 - **What:** *Uusi sähköposti* is `type="email"` and arrives **prefilled** with the current

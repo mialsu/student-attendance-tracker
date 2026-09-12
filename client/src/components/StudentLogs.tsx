@@ -556,9 +556,12 @@ const StudentLogs = ({ classId }: StudentLogsProps) => {
     getRowId: (row) => row.student_id,
     renderExpanded: (student) => (
       <div className="px-6 py-4 space-y-2 bg-muted/30">
-        <h4 className="text-sm font-medium text-muted-foreground mb-3">
+        {/* `h3`, following `CardTitle`'s `h2` one level up. No swept state expands a row today,
+            so `heading-order` did not report this one — it is the same skip as the two it did
+            report, fixed alongside them rather than left for whoever adds that state. */}
+        <h3 className="text-sm font-medium text-muted-foreground mb-3">
           Läsnäolomerkinnät ({student.records.length})
-        </h4>
+        </h3>
         <div className="space-y-1">
           {student.records.map((record) => (
             <div

@@ -92,9 +92,12 @@ const CourseCard = ({ cls }: { cls: Class }) => (
       </span>
 
       <div className="min-w-0 flex-1">
-        <h3 className="truncate text-lg font-semibold leading-snug tracking-tight text-heading">
+        {/* `h2`: this sits directly under the page's "Kurssit" `h1`, so an `h3` skipped a level.
+            Caught by the `heading-order` pass added in slice 8, on this state at both viewports
+            and on the drawer state that reaches the same page. */}
+        <h2 className="truncate text-lg font-semibold leading-snug tracking-tight text-heading">
           {cls.name}
-        </h3>
+        </h2>
         <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
           {cls.description || 'Ei kuvausta'}
         </p>
