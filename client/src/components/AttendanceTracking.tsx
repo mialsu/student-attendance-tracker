@@ -1,15 +1,14 @@
-import { useState, useRef } from 'react';
+import { useId, useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Command, CommandEmpty, CommandGroup, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { useCreateAttendance } from '@/hooks/useAttendance';
 import { useStudentAutocomplete } from '@/hooks/useStudents';
 import { useDebounce } from '@/hooks/useDebounce';
-import { UserPlus, Check, Calendar as CalendarIcon } from 'lucide-react';
+import { UserPlus, Check, Info, Calendar as CalendarIcon } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
@@ -38,6 +37,46 @@ const AttendanceTracking = ({ classId }: AttendanceTrackingProps) => {
     debouncedName,
     autocompleteOpen && debouncedName.length >= 2
   );
+
+  // Which suggestion the keyboard has nominated. -1 is "none", and it is the state the list
+  // opens in: ARIA's combobox pattern nominates nothing until a key asks for it, so Enter on a
+  // freshly-opened list still means "submit what I typed" rather than "take the first row".
+  const [activeIndex, setActiveIndex] = useState(-1);
+  const fieldId = useId();
+  const listboxId = `${fieldId}-suggestions`;
+  const optionId = (index: number) => `${fieldId}-suggestion-${index}`;
+
+  // Open means "there is a list on screen". `autocompleteOpen` alone was also true while the
+  // request was in flight and while it came back empty, which is why it cannot drive
+  // `aria-expanded`.
+  const listOpen = autocompleteOpen && (suggestions?.length ?? 0) > 0;
+
+  // US-14, and only when the answer is really in: `suggestions` is undefined until the request
+  // resolves, and `debouncedName` lags the field by 300ms, so both have to agree with what is
+  // typed before this may claim nobody matches.
+  const noMatch =
+    autocompleteOpen &&
+    studentName.trim().length >= 2 &&
+    debouncedName.trim() === studentName.trim() &&
+    suggestions?.length === 0;
+
+  const step = (current: number, delta: number) => {
+    const count = suggestions?.length ?? 0;
+    if (count === 0) return -1;
+    if (current < 0) return delta > 0 ? 0 : count - 1;
+    return (current + delta + count) % count;
+  };
+
+  const closeList = () => {
+    setAutocompleteOpen(false);
+    setActiveIndex(-1);
+  };
+
+  const accept = (student: { name: string }) => {
+    setStudentName(student.name);
+    setSelectedFromDropdown(true);  // Mark as selected
+    closeList();
+  };
 
   const handleSmartSubmit = () => {
     const trimmedName = studentName.trim();
@@ -150,7 +189,9 @@ const AttendanceTracking = ({ classId }: AttendanceTrackingProps) => {
   };
 
   return (
-    <Card>
+    // Capped, as the prototype caps it: a form this short does not want the whole desktop
+    // width, and the submit belongs near the field it submits.
+    <Card className="max-w-[760px]">
       <CardHeader>
         <CardTitle>Kirjaa opiskelijan läsnäolo</CardTitle>
         <CardDescription>
@@ -189,7 +230,8 @@ const AttendanceTracking = ({ classId }: AttendanceTrackingProps) => {
             </Popover>
           </div>
 
-          <div className="grid md:grid-cols-2 gap-6">
+          {/* The name field earns the space; the quantity is three characters wide. */}
+          <div className="grid gap-6 md:grid-cols-[1fr_160px]">
             {/* Student Name with Autocomplete */}
             <div className="space-y-3">
               <Label htmlFor="studentName">Opiskelijan nimi</Label>
@@ -197,9 +239,17 @@ const AttendanceTracking = ({ classId }: AttendanceTrackingProps) => {
                 <Input
                   id="studentName"
                   value={studentName}
+                  role="combobox"
+                  aria-expanded={listOpen}
+                  aria-controls={listOpen ? listboxId : undefined}
+                  aria-activedescendant={
+                    listOpen && activeIndex >= 0 ? optionId(activeIndex) : undefined
+                  }
+                  aria-autocomplete="list"
                   onChange={(e) => {
                     setStudentName(e.target.value);
                     setSelectedFromDropdown(false);  // Reset when user types
+                    setActiveIndex(-1);              // a new query has a new list
                     if (e.target.value.length >= 2) {
                       setAutocompleteOpen(true);
                     } else {
@@ -213,65 +263,98 @@ const AttendanceTracking = ({ classId }: AttendanceTrackingProps) => {
                   }}
                   onBlur={() => {
                     // Delay closing to allow clicking on suggestions
-                    setTimeout(() => setAutocompleteOpen(false), 150);
+                    setTimeout(() => closeList(), 150);
                   }}
                   onKeyDown={(e) => {
+                    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                      // The list is a sibling of this input, not its parent, so nothing else is
+                      // listening for these: before 2026-09-11 this branch returned and let a
+                      // `Command` that never had focus "handle" them, which meant nothing moved.
+                      if (!listOpen) {
+                        if (studentName.length >= 2) setAutocompleteOpen(true);
+                        return;
+                      }
+                      e.preventDefault();
+                      setActiveIndex((current) => step(current, e.key === 'ArrowDown' ? 1 : -1));
+                      return;
+                    }
+
                     if (e.key === 'Enter') {
                       e.preventDefault();
 
+                      // An option is nominated: Enter accepts it and the form stays put. Submit
+                      // is a second, deliberate Enter.
+                      if (listOpen && activeIndex >= 0) {
+                        const chosen = suggestions?.[activeIndex];
+                        if (chosen) accept(chosen);
+                        return;
+                      }
+
                       // If dropdown is open, close it and let user review
-                      if (autocompleteOpen && suggestions && suggestions.length > 0) {
-                        setAutocompleteOpen(false);
+                      if (listOpen) {
+                        closeList();
                         return;
                       }
 
                       // Smart validation before submission
                       handleSmartSubmit();
                     } else if (e.key === 'Escape') {
-                      setAutocompleteOpen(false);
-                    } else if (e.key === 'ArrowDown' && autocompleteOpen) {
-                      // Let dropdown handle arrow navigation
-                      return;
+                      closeList();
                     }
                   }}
                   placeholder="Etunimi Sukunimi"
                   autoComplete="off"
                 />
-                {suggestions && suggestions.length > 0 && autocompleteOpen && (
-                  <div className="absolute z-50 w-full mt-1 rounded-md border bg-popover p-0 text-popover-foreground shadow-md">
-                    <Command>
-                      <CommandList>
-                        <CommandEmpty>Ei ehdotuksia</CommandEmpty>
-                        <CommandGroup>
-                          {suggestions.map((student) => (
-                            <CommandItem
-                              key={student.id}
-                              value={student.name}
-                              onSelect={() => {
-                                setStudentName(student.name);
-                                setSelectedFromDropdown(true);  // Mark as selected
-                                setAutocompleteOpen(false);
-                              }}
-                              className="cursor-pointer"
-                            >
-                              <Check
-                                className={cn(
-                                  "mr-2 h-4 w-4",
-                                  studentName.trim().toLowerCase() === student.name.toLowerCase() ? "opacity-100" : "opacity-0"
-                                )}
-                              />
-                              <div className="flex justify-between items-center w-full">
-                                <span>{student.name}</span>
-                                <span className="text-xs text-muted-foreground ml-2">
-                                  {student.total_attendance} läsnäoloa
-                                </span>
-                              </div>
-                            </CommandItem>
-                          ))}
-                        </CommandGroup>
-                      </CommandList>
-                    </Command>
-                  </div>
+                {listOpen && (
+                  <ul
+                    id={listboxId}
+                    role="listbox"
+                    aria-label="Opiskelijaehdotukset"
+                    className="absolute z-50 w-full mt-1 overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
+                  >
+                    {(suggestions ?? []).map((student, index) => (
+                      <li
+                        key={student.id}
+                        id={optionId(index)}
+                        role="option"
+                        aria-selected={index === activeIndex}
+                        // The tally would otherwise run into the name in the accessible name —
+                        // "Väinö Nieminen7 läsnäoloa". The visible name is the leading substring
+                        // of this one, which is what WCAG 2.5.3 asks for.
+                        aria-label={`${student.name}, ${student.total_attendance} läsnäoloa`}
+                        // mousedown, not click: the input's blur would otherwise close the list
+                        // out from under the pointer. preventDefault keeps focus in the field.
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          accept(student);
+                        }}
+                        onMouseEnter={() => setActiveIndex(index)}
+                        className={cn(
+                          'flex cursor-pointer items-center rounded-sm px-2 py-1.5 text-sm',
+                          index === activeIndex && 'bg-accent text-accent-foreground'
+                        )}
+                      >
+                        <Check
+                          className={cn(
+                            "mr-2 h-4 w-4 shrink-0",
+                            studentName.trim().toLowerCase() === student.name.toLowerCase() ? "opacity-100" : "opacity-0"
+                          )}
+                        />
+                        <div className="flex justify-between items-center w-full">
+                          <span>{student.name}</span>
+                          <span className="text-xs text-muted-foreground ml-2">
+                            {student.total_attendance} läsnäoloa
+                          </span>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {noMatch && (
+                  <p role="status" className="mt-2 text-xs text-muted-foreground">
+                    Ei osumia — nimellä <strong>{studentName.trim()}</strong> luodaan uusi
+                    opiskelija.
+                  </p>
                 )}
               </div>
             </div>
@@ -310,11 +393,13 @@ const AttendanceTracking = ({ classId }: AttendanceTrackingProps) => {
           </Button>
         </form>
 
-        <div className="mt-6 p-4 bg-muted/50 rounded-lg">
+        <div className="mt-6 flex gap-3 rounded-lg border border-border bg-muted/40 p-4">
+          <Info className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
           <p className="text-sm text-muted-foreground">
-            <strong>Ohje:</strong> Ala kirjoittaa opiskelijan nimeä nähdäksesi ehdotuksia.
-            Voit myös kirjoittaa uuden nimen manuaalisesti. Määrä-kentällä voit kirjata
-            useita läsnäoloja kerralla (esim. korjaukset tai aiemmat tunnit).
+            <strong className="font-semibold text-foreground">Ohje:</strong> Ala kirjoittaa
+            opiskelijan nimeä nähdäksesi ehdotuksia. Voit myös kirjoittaa uuden nimen
+            manuaalisesti. Määrä-kentällä voit kirjata useita läsnäoloja kerralla (esim.
+            korjaukset tai aiemmat tunnit).
           </p>
         </div>
       </CardContent>

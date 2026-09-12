@@ -8,7 +8,16 @@ const badgeVariants = cva(
   {
     variants: {
       variant: {
-        default: "border-transparent bg-primary/10 text-primary hover:bg-primary/15",
+        // A SOLID pair, not `bg-primary/10 text-primary`. That composite is why the *Suoritus*
+        // badge sat in the browser walk's KNOWN_VIOLATIONS at 3.25:1: an alpha tint has no single
+        // token behind it, so tokens-contrast.test.ts could not express the pair and only axe
+        // could see it — and it then measured differently over a card than over the page.
+        // `--accent` / `--accent-foreground` carry the same visual intent (the design system's
+        // `primary-soft`) as two real tokens, gated in both themes. Spec 0006 slice 2.
+        //
+        // No hover state: these badges are non-interactive status labels on a <div>, so a colour
+        // change on hover only suggested they could be clicked.
+        default: "border-transparent bg-accent text-accent-foreground",
         secondary: "border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/80",
         destructive: "border-transparent bg-destructive/10 text-destructive hover:bg-destructive/15",
         outline: "text-foreground",

@@ -6,6 +6,27 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 
 <!-- Newest first. -->
 
+## 2026-09-11 — the query budget guards an enumerated list, so a fourth N+1 sat unwatched
+- **What:** `GET /api/classes` ran one `COUNT` per class in a Python loop — **7 statements for 5
+  classes** — and had done so since the endpoint was written. The entry below is headed "three
+  N+1 loops" and dispositioned **closed**; it was closed for the three it names, and that is a
+  narrower claim than it reads as. This fourth one was found only because spec 0006's sidebar
+  needed a second count on the same endpoint, which is luck, not a gate.
+- **Where:** fixed at `app/services/class_service.py` — both counts now ride the class query as
+  correlated subqueries, **2 statements**, measured unchanged at 1, 5 and 20 classes. The same
+  `COUNT` had also been inlined separately in `list_classes`, `get_class` and `update_class`, with
+  a service helper (`get_class_with_attendance_count`) that had no production caller at all —
+  four implementations of one query. There is one now (`count_class_rows`).
+- **What green tests/gates did NOT prove here:** `tests/test_query_budget.py` is a ratchet over a
+  **hand-written parametrize list**. An endpoint nobody added to that list is not slow-tested at
+  all, and nothing fails when a new endpoint is added without a budget. The four routes it holds
+  are the four someone thought of in September; `/api/classes`, `/api/auth/*` and the statistics
+  route were never on it. Coverage does not help — these lines were all covered.
+- **Disposition:** partly closed. `/api/classes` now has a ceiling and was watched failing at 7
+  against 3 before the fix. **Open:** the remaining unbudgeted endpoints, and the absence of
+  anything that notices a new route arriving without a budget. A cheap version is a test that
+  walks the OpenAPI paths and fails on any list route missing from the parametrize list.
+
 ## 2026-09-11 — every nginx.conf change since the bind mount existed may never have taken effect
 - **What:** `deployment/production/docker-compose.yml` mounts `./nginx.conf:/etc/nginx/nginx.conf:ro`
   — a **single-file** bind mount, which Docker binds by **inode**. The deploy's step 3 runs

@@ -23,6 +23,7 @@ import { format } from 'date-fns';
 import { fi } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
 import { useDebounce } from '@/hooks/useDebounce';
+import { QueryErrorState } from '@/components/QueryErrorState';
 import type { AttendanceSummary } from '@/api/types';
 
 interface StudentLogsProps {
@@ -100,7 +101,14 @@ const StudentLogs = ({ classId }: StudentLogsProps) => {
   const skip = (currentPage - 1) * ITEMS_PER_PAGE;
 
   // Fetch attendance summary with search, pagination, and sorting
-  const { data: paginatedResponse, isLoading } = useAttendanceSummary(classId, {
+  // `error` was dropped here, so a failed request said "Ei opiskelijoita vielä" about a register
+  // that holds thirty. DESIGN.md §3, spec 0006.
+  const {
+    data: paginatedResponse,
+    isLoading,
+    error,
+    refetch,
+  } = useAttendanceSummary(classId, {
     skip,
     limit: ITEMS_PER_PAGE,
     search: debouncedSearch || undefined,
@@ -548,9 +556,12 @@ const StudentLogs = ({ classId }: StudentLogsProps) => {
     getRowId: (row) => row.student_id,
     renderExpanded: (student) => (
       <div className="px-6 py-4 space-y-2 bg-muted/30">
-        <h4 className="text-sm font-medium text-muted-foreground mb-3">
+        {/* `h3`, following `CardTitle`'s `h2` one level up. No swept state expands a row today,
+            so `heading-order` did not report this one — it is the same skip as the two it did
+            report, fixed alongside them rather than left for whoever adds that state. */}
+        <h3 className="text-sm font-medium text-muted-foreground mb-3">
           Läsnäolomerkinnät ({student.records.length})
-        </h4>
+        </h3>
         <div className="space-y-1">
           {student.records.map((record) => (
             <div
@@ -594,6 +605,27 @@ const StudentLogs = ({ classId }: StudentLogsProps) => {
     );
   }
 
+  // Same frame as the loading branch above, and before the main return: the DataTable's
+  // `emptyMessage` is what a failure used to fall into. DESIGN.md §3, spec 0006.
+  if (error) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Opiskelijoiden läsnäolot</CardTitle>
+          <CardDescription>
+            Näet kaikki opiskelijat ja heidän läsnäolomerkintänsä kurssilla
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <QueryErrorState
+            message="Opiskelijoiden lataaminen epäonnistui"
+            onRetry={() => void refetch()}
+          />
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <Card>
       <CardHeader>
@@ -603,24 +635,6 @@ const StudentLogs = ({ classId }: StudentLogsProps) => {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
-        {/* Legacy students: shown only when the cutoff is actually holding someone back,
-            or while they are revealed. Nothing renders until a student's first attendance
-            is over five years old. */}
-        {(showLegacy || legacyHidden > 0) && (
-          <div className="flex items-center justify-between gap-2 rounded-md border border-dashed px-3 py-2">
-            <p className="text-sm text-muted-foreground">
-              {showLegacy
-                ? 'Vanhat opiskelijat näkyvissä'
-                : legacyHidden === 1
-                  ? '1 vanha opiskelija piilotettu'
-                  : `${legacyHidden} vanhaa opiskelijaa piilotettu`}
-            </p>
-            <Button variant="outline" size="sm" onClick={handleToggleLegacy}>
-              {showLegacy ? 'Piilota' : 'Näytä'}
-            </Button>
-          </div>
-        )}
-
         {/* Search Bar */}
         <div className="flex gap-2">
           <div className="relative flex-1">
@@ -645,6 +659,29 @@ const StudentLogs = ({ classId }: StudentLogsProps) => {
           )}
         </div>
 
+        {/* Legacy students: shown only when the cutoff is actually holding someone back,
+            or while they are revealed. Nothing renders until a student's first attendance
+            is over five years old.
+
+            It sits directly above the table now, after the search rather than before it: it is
+            a note explaining which rows are missing, so it belongs beside the rows and not at
+            the top of the card where it read as the surface's headline. The dashed border stays
+            — it is what marks the group as held back rather than merely filtered. */}
+        {(showLegacy || legacyHidden > 0) && (
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-dashed bg-muted/30 px-3 py-2">
+            <p className="text-sm text-muted-foreground">
+              {showLegacy
+                ? 'Vanhat opiskelijat näkyvissä'
+                : legacyHidden === 1
+                  ? '1 vanha opiskelija piilotettu'
+                  : `${legacyHidden} vanhaa opiskelijaa piilotettu`}
+            </p>
+            <Button variant="outline" size="sm" onClick={handleToggleLegacy}>
+              {showLegacy ? 'Piilota' : 'Näytä'}
+            </Button>
+          </div>
+        )}
+
         {/* One table at every width. It scrolls sideways inside its own container rather
             than forking into a second implementation — see DESIGN.md §4. */}
         <DataTable
@@ -668,7 +705,7 @@ const StudentLogs = ({ classId }: StudentLogsProps) => {
 
         {/* Results Summary */}
         {total > 0 && (
-          <p className="text-sm text-muted-foreground text-center pt-2">
+          <p className="pt-2 text-sm text-muted-foreground">
             {searchInput ? (
               <>
                 Löytyi {total} opiskelija{total !== 1 ? 'a' : ''} haulla "{debouncedSearch}"

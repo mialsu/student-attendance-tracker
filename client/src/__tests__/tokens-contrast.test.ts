@@ -74,8 +74,39 @@ const PAIRS: Pair[] = [
   { fg: 'primary-foreground', bg: 'primary', need: TEXT, where: 'every default Button, e.g. "Kirjaa läsnäolo"' },
   { fg: 'secondary-foreground', bg: 'secondary', need: TEXT, where: '8 uses of bg-secondary' },
   { fg: 'destructive-foreground', bg: 'destructive', need: TEXT, where: '6 uses of bg-destructive' },
+  { fg: 'primary', bg: 'background', need: TEXT, where: "the 404's only link, since slice 8" },
   { fg: 'ring', bg: 'background', need: UI, where: 'the focus ring, 23 components' },
   { fg: 'input', bg: 'background', need: UI, where: 'a form field is identified by its border alone' },
+
+  // Added by spec 0006 slice 2, and the first two exist because a pair moved INTO this test's
+  // reach. The *Suoritus* badge used to be `bg-primary/10 text-primary` — an alpha composite with
+  // no token behind it, which this file's maths cannot express and which therefore lived in
+  // `e2e/states.spec.ts`'s KNOWN_VIOLATIONS at 3.25:1 where only axe could see it. `badge.tsx`
+  // now paints `--accent` / `--accent-foreground`, so the pair is solid, gated here in both
+  // themes, and that exemption is deleted.
+  { fg: 'accent-foreground', bg: 'accent', need: TEXT, where: 'the Suoritus badge (badge.tsx default variant)' },
+  { fg: 'accent-foreground', bg: 'card', need: TEXT, where: 'accent text on a Card' },
+  // The tighter half of the control-boundary rule, and it was missing: a field usually sits on a
+  // Card, not on the page, and `--card` is lighter than `--background` in the light theme. Solving
+  // `--input` against `background` alone would have left the commoner case unasserted.
+  { fg: 'input', bg: 'card', need: UI, where: 'a form field inside a Card — the commoner case' },
+
+  // Added by spec 0006 slice 4, and it is the first pair here that gates a GRADIENT. The auth
+  // aside paints `linear-gradient(150deg, hsl(var(--primary)), hsl(var(--auth-aside-to)))` with
+  // `--primary-foreground` text, and the file header above is explicit that this test cannot see
+  // "text over an image or a gradient". It can see this one, because the gradient was reduced to
+  // two token endpoints between which every channel moves monotonically — so no pixel behind the
+  // aside's text is lighter than `--auth-aside-to` (light theme) or darker than `--primary`
+  // (dark, where the text colour inverts). Gate the endpoints and the span is gated.
+  //
+  // The pair below is the one that failed as the prototype drew it: 3.28:1 at its third stop,
+  // invisible to every gate this repo owns. See the token's comment in index.css.
+  {
+    fg: 'primary-foreground',
+    bg: 'auth-aside-to',
+    need: TEXT,
+    where: "the auth aside's gradient end — the lightest pixel behind its text (Auth.tsx)",
+  },
 ];
 
 /**

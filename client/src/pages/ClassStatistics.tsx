@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useAttendanceStatistics } from '@/hooks/useAttendance';
@@ -7,6 +7,8 @@ import { fi } from 'date-fns/locale';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from 'recharts';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import type { ChartConfig } from '@/components/ui/chart';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { QueryErrorState } from '@/components/QueryErrorState';
 
 interface ClassStatisticsProps {
   classId: string;
@@ -24,7 +26,18 @@ const ClassStatistics = ({ classId }: ClassStatisticsProps) => {
   // For now, exclude the bulk log from 2026-02-27
   const excludeDates = ['2026-02-27'];
 
-  const { data: stats, isLoading } = useAttendanceStatistics(classId, excludeDates);
+  // Which granularity the one chart is drawing. Days first: it is the view the table beside it
+  // agrees with, and the one a teacher reads during a course rather than after it.
+  const [granularity, setGranularity] = useState<'day' | 'month'>('day');
+
+  // `error` was dropped here, so a failed request rendered "Ei läsnäoloja näytettäväksi" to
+  // someone with hundreds of records. DESIGN.md §3, spec 0006.
+  const {
+    data: stats,
+    isLoading,
+    error,
+    refetch,
+  } = useAttendanceStatistics(classId, excludeDates);
 
   // Format daily data for chart
   const dailyData = useMemo(() => {
@@ -54,6 +67,24 @@ const ClassStatistics = ({ classId }: ClassStatisticsProps) => {
     );
   }
 
+  // Before the empty check, always: `!stats` is true on failure too, and whichever branch runs
+  // first owns the failure.
+  if (error) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Tilastot</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <QueryErrorState
+            message="Tilastojen lataaminen epäonnistui"
+            onRetry={() => void refetch()}
+          />
+        </CardContent>
+      </Card>
+    );
+  }
+
   if (!stats || stats.total_records === 0) {
     return (
       <Card>
@@ -70,38 +101,57 @@ const ClassStatistics = ({ classId }: ClassStatisticsProps) => {
     );
   }
 
+  // The heading names the granularity, which is also how the tests tell the two apart: Recharts
+  // draws nothing in jsdom, so the title is the only readable evidence of which dataset is in.
+  const chart =
+    granularity === 'day'
+      ? {
+          title: 'Läsnäolot päivittäin (kaavio)',
+          description: 'Visuaalinen esitys läsnäoloista päivittäin',
+          data: dailyData,
+          dataKey: 'displayDate',
+        }
+      : {
+          title: 'Läsnäolot kuukausittain (kaavio)',
+          description: 'Visuaalinen esitys läsnäoloista kuukausittain',
+          data: monthlyData,
+          dataKey: 'displayMonth',
+        };
+
   return (
     <div className="space-y-8">
-      {/* Summary Cards */}
-      <div className="grid gap-4 md:grid-cols-4">
+      {/* Four totals. `auto-fit`/`minmax` rather than a fixed `md:grid-cols-4`, so they
+          reflow one-by-one instead of jumping four-to-one at the md breakpoint —
+          the prototype's stat grid does the same. */}
+      <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(180px,1fr))]">
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
+            <CardTitle className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Yhteensä läsnäoloja
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.total_records}</div>
+            <div className="text-3xl font-bold tabular-nums text-heading">{stats.total_records}</div>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
+            <CardTitle className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Opiskelijoita
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.total_students}</div>
+            <div className="text-3xl font-bold tabular-nums text-heading">{stats.total_students}</div>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
+            <CardTitle className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Ensimmäinen läsnäolo
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
+            <div className="text-xl font-semibold tabular-nums text-heading">
               {stats.first_date
                 ? format(new Date(stats.first_date), 'P', { locale: fi })
                 : '-'}
@@ -110,12 +160,12 @@ const ClassStatistics = ({ classId }: ClassStatisticsProps) => {
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
+            <CardTitle className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Viimeisin läsnäolo
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
+            <div className="text-xl font-semibold tabular-nums text-heading">
               {stats.last_date
                 ? format(new Date(stats.last_date), 'P', { locale: fi })
                 : '-'}
@@ -154,13 +204,38 @@ const ClassStatistics = ({ classId }: ClassStatisticsProps) => {
         </CardContent>
       </Card>
 
-      {/* Daily Bar Chart */}
+      {/* One chart, two granularities (AC9 / US-22). This was two near-identical cards, one per
+          granularity, with no toggle: "day/month bar chart" was served by showing both at once.
+          The per-day TABLE above stays — a chart cannot be read to the day, and she reads it to
+          the day (Owner, 2026-09-11). */}
       <Card>
-        <CardHeader>
-          <CardTitle>Läsnäolot päivittäin (kaavio)</CardTitle>
-          <CardDescription>
-            Visuaalinen esitys läsnäoloista päivittäin
-          </CardDescription>
+        <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="space-y-1.5">
+            <CardTitle>{chart.title}</CardTitle>
+            <CardDescription>{chart.description}</CardDescription>
+          </div>
+          <ToggleGroup
+            type="single"
+            value={granularity}
+            onValueChange={(next) => {
+              // Radix clears the value when the active item is pressed again. A chart with no
+              // granularity has nothing to draw, so an empty value keeps what is on screen.
+              if (next === 'day' || next === 'month') setGranularity(next);
+            }}
+            variant="outline"
+            size="sm"
+            // Radix's root is `role="group"` while its single-select items are `role="radio"`,
+            // so the group is what lets a screen reader announce "1 of 2" instead of two loose
+            // radios. NOTHING GATES THIS: removing the line was measured on 2026-09-11 and the
+            // whole walk, axe included, stayed green — axe-core no longer treats `radiogroup` as
+            // a required context for `radio`. It is here on judgement, and that gap is in
+            // REVIEW-DEBT.md rather than implied by this comment.
+            role="radiogroup"
+            aria-label="Kaavion jakso"
+          >
+            <ToggleGroupItem value="day">Päivät</ToggleGroupItem>
+            <ToggleGroupItem value="month">Kuukaudet</ToggleGroupItem>
+          </ToggleGroup>
         </CardHeader>
         <CardContent>
           {/* max-w-full because ChartContainer carries `aspect-video`, and overriding only the
@@ -170,39 +245,10 @@ const ClassStatistics = ({ classId }: ClassStatisticsProps) => {
               desktop widths, where 711px already fitted. */}
           <ChartContainer config={chartConfig} className="h-[400px] max-w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={dailyData}>
+              <BarChart data={chart.data}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis
-                  dataKey="displayDate"
-                  angle={-45}
-                  textAnchor="end"
-                  height={100}
-                  fontSize={12}
-                />
-                <YAxis />
-                <ChartTooltip content={<ChartTooltipContent />} />
-                <Bar dataKey="count" fill="hsl(var(--primary))" />
-              </BarChart>
-            </ResponsiveContainer>
-          </ChartContainer>
-        </CardContent>
-      </Card>
-
-      {/* Monthly Bar Chart */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Läsnäolot kuukausittain (kaavio)</CardTitle>
-          <CardDescription>
-            Visuaalinen esitys läsnäoloista kuukausittain
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <ChartContainer config={chartConfig} className="h-[400px] max-w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={monthlyData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis
-                  dataKey="displayMonth"
+                  dataKey={chart.dataKey}
                   angle={-45}
                   textAnchor="end"
                   height={100}

@@ -105,6 +105,28 @@ export async function statistics(
 }
 
 /**
+ * An endpoint that refuses, so the walk can reach `DESIGN.md` §3's fourth state.
+ *
+ * **500, not a dropped connection.** `route.abort()` would also produce an error state, but it
+ * models a different failure — the browser never got an answer at all — and axios surfaces the
+ * two differently. A refusing server is the failure these three surfaces were getting wrong.
+ *
+ * Reaching the state costs real time, and the number is not arbitrary: `App.tsx:15` builds its
+ * QueryClient with a bare `new QueryClient()`, so `retry` takes query-core's browser default of 3
+ * (`retryer.js:88`) with `min(1000 * 2 ** failureCount, 30000)` backoff (`retryer.js:6`) — 1s,
+ * then 2s, then 4s. The error state therefore appears about **7 seconds** after the first refusal,
+ * and any assertion on it needs a timeout past that. The mock answers instantly; the whole wait is
+ * the app's own retry policy, which is what makes it deterministic rather than flake.
+ */
+
+export async function failing(page: Page, url: RegExp): Promise<void> {
+  await mockJson(page, url, { detail: 'Internal Server Error' }, 500);
+}
+
+/** The wait an error state needs: the ~7s of retry backoff, plus room to render. See `failing`. */
+export const RETRY_BACKOFF_MS = 15_000;
+
+/**
  * A request that is accepted and never answered — which is how a loading state is held still.
  *
  * Deliberately not a timer. ADR-0005's `retries: 0` is a claim that nothing here is

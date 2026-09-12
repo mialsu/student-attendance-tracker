@@ -33,7 +33,7 @@ const ClassView = () => {
 
   const breadcrumbs = useMemo(() => {
     const crumbs: BreadcrumbItem[] = [
-      { label: 'Dashboard', href: '/dashboard' },
+      { label: 'Kurssit', href: '/dashboard' },
     ];
 
     if (classData) {
@@ -74,10 +74,13 @@ const ClassView = () => {
 
   return (
     <TeacherLayout breadcrumbs={breadcrumbs}>
-      <div className="mb-10">
-        <h1 className="text-4xl font-bold text-heading mb-3">{classData.name}</h1>
+      {/* `text-3xl`, not `text-4xl`: the dashboard's own h1 is 3xl since slice 5, and two page
+          titles at two sizes is the kind of drift a reskin exists to remove. The description is
+          real Kurssi data, so unlike the dashboard's dropped sub-line it stays. */}
+      <div className="mb-8 space-y-2">
+        <h1 className="text-3xl font-bold text-heading">{classData.name}</h1>
         {classData.description && (
-          <p className="text-lg text-muted-foreground">{classData.description}</p>
+          <p className="text-muted-foreground">{classData.description}</p>
         )}
       </div>
 
@@ -86,7 +89,16 @@ const ClassView = () => {
         onValueChange={(value) => setActiveTab(value)}
         className="space-y-8"
       >
-          <TabsList className="grid w-full max-w-3xl grid-cols-3">
+          {/* Two layouts, both measured at 320px and 1280px rather than reasoned about.
+              From `sm` up: the fit-content pill row the prototype draws, instead of three short
+              Finnish labels stretched across a 1280px grid.
+              At 320px, all three options were wrong until this one — the old `grid-cols-3` gave
+              each label a ~97px column while "Läsnäolon kirjaus" needs ~115px, so the text
+              overflowed its own pill and touched the viewport edge; a fit-content row clipped
+              "Tilastot" behind a scrollbar nobody can see. Two columns give the longest label
+              145px, which fits, and the third pill wraps onto a second row. `h-auto` because
+              the shadcn base pins `h-10`, which would clip that second row. */}
+          <TabsList className="grid h-auto w-full grid-cols-2 sm:inline-flex sm:h-10 sm:w-fit">
             <TabsTrigger value="attendance">Läsnäolon kirjaus</TabsTrigger>
             <TabsTrigger value="logs">Läsnäolot</TabsTrigger>
             <TabsTrigger value="statistics">Tilastot</TabsTrigger>
