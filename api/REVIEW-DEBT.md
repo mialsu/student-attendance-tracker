@@ -24,10 +24,15 @@ cut (`/confess`), read first by any architecture or review session, dispositione
   single-file mount. Replace the file the way `git checkout` does and the container keeps the old
   sha256; `up -d` reports `Running` and changes nothing; `up -d --force-recreate` re-binds and the
   checksums match. Docker's behaviour, not nginx's.
-- **The blast radius is every earlier nginx.conf change.** A reload could never have picked one up.
-  Any that did take effect did so because something recreated the container for another reason —
-  a host reboot, a compose spec change, a manual `down`/`up`. The SSL work is the one to re-check
-  if anything there ever looked mysteriously inert.
+- **The blast radius is narrower than this entry first claimed, and the correction matters.** It
+  said "every earlier nginx.conf change may never have taken effect". Measured on 2026-09-12: a
+  plain **`docker compose restart` re-binds the mount**, not only a recreate. So a change landed
+  whenever anything restarted that container — a host reboot, a daemon restart, a compose spec
+  change, a manual `down`/`up` — which is most of them, eventually.
+  That is why this went unnoticed for months: config changes did take effect, just **not from the
+  deploy and not predictably**. The defect was never "nginx ignores the file", it was "the deploy
+  cannot be trusted to apply it, and says it did". Anything that looked mysteriously inert between
+  a config change and the next restart has its explanation; nothing needs re-checking wholesale.
 - **Fixed in the pipeline the same day:** step 7b of `.github/workflows/backend.yml` no longer
   reloads. It compares the file's sha256 against what the container actually reads, and on a
   difference validates the new file in a throwaway `nginx:alpine` on `attendance-prod-network`,
@@ -37,6 +42,11 @@ cut (`/confess`), read first by any architecture or review session, dispositione
   `nginx.conf unchanged (sha256 227d07c7...) - nothing to do`. That proves the detector reads a
   checksum from both sides, that host and container now agree, and that an unchanged file costs no
   restart.
+- **The crash is fixed, proven 2026-09-12.** `9935000`'s deploy ran the step cleanly, read the
+  container successfully and went green — the `exec` that died silently on 2026-09-11 worked, which
+  points at the closed stdin as the real cause. It printed `nginx.conf unchanged`, correctly: the
+  whole stack had been restarted about twenty minutes earlier, which re-bound the mount, so host
+  and container genuinely matched.
 - **The other half is still unproven, and it is the half with the moving parts:** the `else`
   branch — validating in a throwaway `nginx:alpine` on the hardcoded `attendance-prod-network`,
   `--force-recreate`, the post-recreate checksum re-check, and the second health check through the
