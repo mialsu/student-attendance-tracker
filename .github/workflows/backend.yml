@@ -100,6 +100,10 @@ jobs:
       # "host not found in upstream" otherwise. And a throwaway self-signed certificate at the
       # path `ssl_certificate` names, because `nginx -t` checks that the file exists — Let's
       # Encrypt's real one lives only on the VM.
+      # `github.workspace`, NOT `$PWD`: this job sets `working-directory: api`, so a relative
+      # mount path resolved to `api/deployment/production/nginx.conf` and docker failed with
+      # exit 125 mounting a path that does not exist. An absolute workspace path does not care
+      # what the working directory is.
       - name: nginx.conf is valid
         run: |
           CERTS=/tmp/nginx-validate/live/attendance-api.kotoio.fi
@@ -107,11 +111,14 @@ jobs:
           openssl req -x509 -newkey rsa:2048 -nodes -days 1 \
             -keyout "$CERTS/privkey.pem" -out "$CERTS/fullchain.pem" \
             -subj "/CN=validate-only" 2>/dev/null
+          test -f "$CONF" || { echo "no nginx.conf at $CONF"; exit 1; }
           docker run --rm --add-host backend:127.0.0.1 \
-            -v "$PWD/deployment/production/nginx.conf:/etc/nginx/nginx.conf:ro" \
+            -v "$CONF:/etc/nginx/nginx.conf:ro" \
             -v /tmp/nginx-validate:/etc/letsencrypt:ro \
             -v /tmp/nginx-validate-webroot:/var/www/certbot:ro \
             nginx:alpine nginx -t
+        env:
+          CONF: ${{ github.workspace }}/deployment/production/nginx.conf
 
   test:
     name: Tests
