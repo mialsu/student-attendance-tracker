@@ -6,6 +6,42 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 
 <!-- Newest first. -->
 
+## 2026-09-12 — the nginx staleness is fixed by deleting the fix, and the clever version is why
+- **What:** the deploy now recreates the nginx container on **every** deploy
+  (`up -d --force-recreate --no-deps nginx`) and health-checks the public endpoint afterwards.
+  Two commands. `nginx.conf`'s syntax is validated in the **`gates`** job on a runner instead, so
+  a broken config fails the PR rather than being caught on the VM after the backend has already
+  been swapped.
+- **What it replaces, and this is the entry's point:** a four-part step that compared the file's
+  sha256 against what the container read, validated the new file in a throwaway container on the
+  compose network, recreated, re-checked the checksum and health-checked. **It failed three
+  deploys.** Every one of its commands works when run by hand on the VM — the Owner ran the
+  validation command there twice, exit 0 both times — but inside the deploy script, the moment it
+  entered the recreate branch it exited 1 in ~100 ms printing nothing at all. Twice. A second fix
+  (stdin closed, stderr kept, detection made non-fatal) did not help: the third failure was
+  byte-identical to the first, 108 ms against 106 ms for the successful run that took the other
+  branch.
+- **Root cause: unknown, and deliberately abandoned.** Two theories were wrong. Three sessions of
+  deploys went to it. The whole apparatus existed to avoid a one-second nginx restart on deploys
+  that do not touch `nginx.conf`, and a one-second restart is cheaper than a step nobody can
+  debug. Step 6 already recreates the backend, so the deploy was never gapless.
+- **Watched both ways, 2026-09-12:** the new gate goes red on a planted bogus directive
+  (`unknown directive ... test failed`, exit 1) and green on the real file, run with the exact
+  mounts the workflow uses — `--add-host backend:127.0.0.1` because nginx resolves `proxy_pass`
+  upstreams at parse time, and a throwaway self-signed certificate at the path `ssl_certificate`
+  names because `nginx -t` checks the file exists.
+- **What is still unproven:** the recreate itself has never run **from the deploy**. The Owner has
+  run `--force-recreate` by hand on the VM successfully, and the command is now unconditional
+  rather than behind a branch, so the next deploy exercises it whether or not `nginx.conf`
+  changed. That is the one improvement the simplification buys for free: there is no longer a path
+  that only runs sometimes.
+- **Cost accepted:** nginx restarts on every deploy, about a second of refused connections, and
+  the deploy no longer refuses to proceed on a bad config — it starts nginx and lets the second
+  health check catch it. The gate in front should mean that never happens.
+- **Disposition:** open only on "the next deploy is its own proof". The bind-mount entry below and
+  the blast-radius correction stand.
+
+
 ## 2026-09-11 — every nginx.conf change since the bind mount existed may never have taken effect
 - **What:** `deployment/production/docker-compose.yml` mounts `./nginx.conf:/etc/nginx/nginx.conf:ro`
   — a **single-file** bind mount, which Docker binds by **inode**. The deploy's step 3 runs

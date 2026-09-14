@@ -91,6 +91,28 @@ jobs:
       - name: Typecheck (mypy ratchet)
         run: ./scripts/baseline-guard.sh mypy mypy
 
+      # nginx.conf is validated HERE, on the runner, and no longer during the deploy. A broken
+      # config now fails the PR instead of being caught after the backend has already been
+      # swapped, and this runs on a clean machine rather than against production state.
+      #
+      # Two mounts make `nginx -t` possible away from the VM. `--add-host backend:127.0.0.1`
+      # because nginx resolves the upstream named in `proxy_pass` at parse time and fails with
+      # "host not found in upstream" otherwise. And a throwaway self-signed certificate at the
+      # path `ssl_certificate` names, because `nginx -t` checks that the file exists — Let's
+      # Encrypt's real one lives only on the VM.
+      - name: nginx.conf is valid
+        run: |
+          CERTS=/tmp/nginx-validate/live/attendance-api.kotoio.fi
+          mkdir -p "$CERTS" /tmp/nginx-validate-webroot
+          openssl req -x509 -newkey rsa:2048 -nodes -days 1 \
+            -keyout "$CERTS/privkey.pem" -out "$CERTS/fullchain.pem" \
+            -subj "/CN=validate-only" 2>/dev/null
+          docker run --rm --add-host backend:127.0.0.1 \
+            -v "$PWD/deployment/production/nginx.conf:/etc/nginx/nginx.conf:ro" \
+            -v /tmp/nginx-validate:/etc/letsencrypt:ro \
+            -v /tmp/nginx-validate-webroot:/var/www/certbot:ro \
+            nginx:alpine nginx -t
+
   test:
     name: Tests
     runs-on: ubuntu-latest
@@ -407,91 +429,46 @@ jobs:
             #          container on the compose network, against the NEW file and the same
             #          nginx:alpine image production runs -- validating with the running container is
             #          what the stale mount makes meaningless.
-            # `</dev/null` on every exec below, and the reason is a real failure: on 2026-09-11
-            # this step exited 1 with NO output, 120ms after the group echo, and not one later
-            # statement ran. Both of its statements were then run by hand on the VM and both
-            # succeeded. A command that attaches the container's stdin, in a script the ssh action
-            # feeds to bash, can swallow the rest of that script -- so stdin is closed explicitly.
-            # That diagnosis is not certain (step 5's `compose run` attaches stdin too and has
-            # always worked), which is exactly why the two changes below matter more than this one.
-            echo "::group::nginx config"
-            HOST_SUM="$(sha256sum deployment/production/nginx.conf | cut -d' ' -f1)"
+            # ---- 7b. Put the proxy onto the current nginx.conf. UNCONDITIONALLY. ------------
+            #
+            #          nginx.conf is a SINGLE-FILE bind mount and Docker binds a single file by
+            #          INODE. Step 3's `git reset --hard` replaces the file, so the running
+            #          container keeps reading the old, unlinked inode: `nginx -s reload` reloads
+            #          the STALE config and reports success. Only recreating the container
+            #          re-binds the mount. (A plain `restart` also re-binds, which is why this
+            #          went unnoticed for months — changes landed whenever something happened to
+            #          restart nginx, just never from the deploy.)
+            #
+            #          THIS REPLACES A FOUR-PART VERSION THAT FAILED THREE DEPLOYS IN A ROW.
+            #          It compared the file's sha256 against what the container read, validated
+            #          the new file in a throwaway container on the compose network, recreated,
+            #          re-checked the checksum and health-checked. Every piece worked when run by
+            #          hand on the VM; inside this script the moment it entered the recreate
+            #          branch it exited 1 in ~100ms printing nothing, twice, and the second
+            #          attempt to fix that did not help either. All of it existed to avoid a
+            #          one-second nginx restart on deploys that do not touch nginx.conf.
+            #          A one-second restart is cheaper than a step nobody can debug.
+            #
+            #          The config is validated in the `gates` job now, on a runner. A broken
+            #          nginx.conf therefore fails the PR rather than being caught here, after the
+            #          backend has already been swapped — which is where that check belonged.
+            echo "::group::Recreate nginx onto the current config"
+            $COMPOSE up -d --force-recreate --no-deps nginx
 
-            # The container read CANNOT be allowed to fail the deploy. This step runs AFTER the
-            # backend is live and the health check has passed, so a failure here is a diagnostic
-            # problem and not a deploy problem -- the previous version turned a healthy deploy red.
-            # `set +e` around it, stderr KEPT rather than sent to /dev/null (suppressing it is what
-            # made the failure above cost a VM round-trip to understand), and an unreadable
-            # checksum falls through to "treat as changed", which is the safe direction: recreating
-            # a container that did not need it costs a second.
-            set +e
-            CTR_RAW="$($COMPOSE exec -T nginx sha256sum /etc/nginx/nginx.conf </dev/null 2>&1)"
-            CTR_RC=$?
-            set -e
-            CTR_SUM=""
-            if [ "$CTR_RC" -eq 0 ]; then
-              CTR_SUM="$(printf '%s' "$CTR_RAW" | cut -d' ' -f1)"
-            fi
-
-            if [ -n "$CTR_SUM" ] && [ "$HOST_SUM" = "$CTR_SUM" ]; then
-              echo "nginx.conf unchanged (sha256 $HOST_SUM) - nothing to do"
-            else
-              if [ -z "$CTR_SUM" ]; then
-                echo "could not read nginx.conf from the container (exit $CTR_RC); treating as changed."
-                echo "what the container said:"
-                printf '  %s\n' "$CTR_RAW"
-              else
-                echo "nginx.conf differs from what the container reads:"
-                echo "  on disk:   $HOST_SUM"
-                echo "  container: $CTR_SUM"
-              fi
-
-              # Validate the NEW file before touching the running proxy. A failure here leaves
-              # nginx serving its previous, working config and the backend already healthy, so the
-              # site stays up while the deploy fails.
-              if ! docker run --rm --network attendance-prod-network \
-                   -v "$PWD/deployment/production/nginx.conf:/etc/nginx/nginx.conf:ro" \
-                   -v /etc/letsencrypt:/etc/letsencrypt:ro \
-                   -v /var/www/certbot:/var/www/certbot:ro \
-                   nginx:alpine nginx -t; then
-                echo "the NEW nginx.conf failed validation - the proxy was NOT touched."
-                echo "nginx is still serving its previous config and the backend is healthy,"
-                echo "so the site is up. Fix nginx.conf and re-run this workflow."
-                exit 1
-              fi
-
-              # --force-recreate, not `up -d`: the service spec has not changed, only the contents
-              # of a bind-mounted file, so compose would otherwise leave the container alone.
-              $COMPOSE up -d --force-recreate --no-deps nginx
-
-              # Prove the container now reads the file we validated. Without this the recreate
-              # could silently fail to re-bind and we would be back where we started.
-              set +e
-              NEW_RAW="$($COMPOSE exec -T nginx sha256sum /etc/nginx/nginx.conf </dev/null 2>&1)"
-              NEW_RC=$?
-              set -e
-              NEW_SUM="$(printf '%s' "$NEW_RAW" | cut -d' ' -f1)"
-              if [ "$NEW_RC" -ne 0 ] || [ "$NEW_SUM" != "$HOST_SUM" ]; then
-                echo "✖ after recreate the container reads '$NEW_SUM' (exit $NEW_RC), expected $HOST_SUM"
-                printf '  %s\n' "$NEW_RAW"
-                exit 1
-              fi
-              echo "✔ nginx recreated and reading $NEW_SUM"
-
-              # The proxy just restarted, so re-check the public endpoint. The earlier health check
-              # passed THROUGH the old nginx and says nothing about this one.
-              ok2=0
-              for i in $(seq 1 15); do
-                code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "$HEALTH" || echo 000)"
-                if [ "$code" = "200" ]; then ok2=1; echo "✔ healthy through the new proxy after ${i} attempt(s)"; break; fi
-                echo "  attempt ${i}/15: $code"
-                sleep 4
-              done
-              if [ "$ok2" -ne 1 ]; then
-                echo "✖ the site is NOT healthy through the recreated proxy."
-                $COMPOSE logs --tail=50 nginx || true
-                exit 1
-              fi
+            # The proxy just restarted, so re-check the PUBLIC endpoint. The health check above
+            # passed through the OLD nginx and says nothing about this one. If nginx refused to
+            # start on a bad config, this is what catches it.
+            ok2=0
+            for i in $(seq 1 15); do
+              code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "$HEALTH" || echo 000)"
+              if [ "$code" = "200" ]; then ok2=1; echo "✔ healthy through the recreated proxy after ${i} attempt(s)"; break; fi
+              echo "  attempt ${i}/15: $code"
+              sleep 4
+            done
+            if [ "$ok2" -ne 1 ]; then
+              echo "✖ the site is NOT healthy through the recreated proxy."
+              $COMPOSE logs --tail=50 nginx || true
+              exit 1
             fi
             echo "::endgroup::"
 
