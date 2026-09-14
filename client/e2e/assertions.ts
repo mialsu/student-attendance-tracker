@@ -52,6 +52,25 @@ export const AXE_OPTIONS: RunOptions = {
 };
 
 /**
+ * A second pass, for one rule that the four WCAG tag sets do not carry.
+ *
+ * `heading-order` is tagged `cat.semantics, best-practice` in axe-core, so the options above
+ * cannot see it — and `runOnly` is exclusive, so a rule outside the named tags stays off however
+ * it is enabled. Adding `'best-practice'` to that list would switch on every other rule in the
+ * category (`region`, `landmark-one-main`, `page-has-heading-one`, and a dozen more), which is a
+ * far larger decision than this one rule. So it runs on its own.
+ *
+ * Why it earns a pass at all: `CardTitle` rendered an `<h3>` until slice 8, so `/settings`,
+ * *Läsnäolot* and *Tilastot* each went `h1` → `h3` and a reader navigating by heading level got a
+ * broken outline on three surfaces. Nothing saw it — not this walk, not the jsdom sweep, not the
+ * lint gate — which is precisely the shape of defect a sweep is supposed to catch. Watched red
+ * against the unfixed `card.tsx` and green after it.
+ */
+export const HEADING_ORDER_OPTIONS: RunOptions = {
+  runOnly: { type: 'rule', values: ['heading-order'] },
+};
+
+/**
  * Wait for the webfont before measuring anything.
  *
  * Fira Sans is self-hosted and same-origin, so this always resolves — but `font-display: swap`
@@ -107,8 +126,15 @@ export async function expectNoAxeViolations(
   await settleAnimations(page);
   await page.addScriptTag({ path: AXE_BUNDLE });
 
-  const found = await page.evaluate(async (options: RunOptions) => {
-    const { violations } = await window.axe.run(document, options);
+  const found = await page.evaluate(async (optionSets: RunOptions[]) => {
+    // Sequentially, and it is not a style choice: axe-core keeps one global run at a time and
+    // throws "Axe is already running" the moment a second overlaps. `Promise.all` here failed
+    // every state in the table at once, the 404 included — a page with a single `h1` and nothing
+    // for `heading-order` to object to, which is what gave the real cause away.
+    const violations = [];
+    for (const options of optionSets) {
+      violations.push(...(await window.axe.run(document, options)).violations);
+    }
     return violations.map((v) => {
       const node = v.nodes[0];
       const target = node?.target.join(' ') ?? 'no target';
@@ -122,7 +148,7 @@ export async function expectNoAxeViolations(
         : '';
       return `${v.id} × ${v.nodes.length} — ${v.help} (${target})${numbers}`;
     });
-  }, AXE_OPTIONS);
+  }, [AXE_OPTIONS, HEADING_ORDER_OPTIONS]);
 
   if (known.length > 0) {
     const ids = found.map((row) => row.split(' ')[0] ?? '').sort();
@@ -168,6 +194,54 @@ export async function expectNoHorizontalScroll(page: Page, where: string): Promi
   });
 
   expect(overflow, `${where}: the page itself scrolls sideways (A11Y-7, WCAG 1.4.10)`).toBeNull();
+}
+
+/**
+ * The half of `A11Y-7` that `expectNoHorizontalScroll` structurally cannot see.
+ *
+ * **Measured, on 2026-09-11, rather than reasoned about.** A `min-w-[34rem]` was put on
+ * `DialogContent` on purpose and the create-course dialog was opened at a 320px viewport. The
+ * dialog rendered **520px wide, from x=-100 to x=420** — a third of it unreachable off each edge —
+ * and `document.documentElement.scrollWidth` stayed exactly **320**. `position: fixed` takes an
+ * element out of flow, so it contributes nothing to the document's scrollable overflow, and the
+ * document-scroll check therefore passes on an overlay that has failed WCAG 1.4.10 outright.
+ *
+ * Every overlay in this app is affected: the create-course dialog, the delete confirmations, and
+ * the off-canvas drawer, which is the shell's entire navigation below 940px.
+ *
+ * Scoped to `[role="dialog"]` deliberately. A blanket "nothing may extend past the viewport" would
+ * fire on things that are off-screen *by design* — and the drawer is exactly that when closed.
+ * Radix gives both the dialog and the sheet `role="dialog"` only while they are open, so the role
+ * is the honest selector for "an overlay currently claiming the screen".
+ */
+
+export async function expectOverlayWithinViewport(page: Page, where: string): Promise<void> {
+  await fontsReady(page);
+  // Both overlays animate in. Measuring mid-transition would report a box that is briefly
+  // off-centre, which is the nondeterminism `retries: 0` claims this walk does not have.
+  await settleAnimations(page);
+
+  const spilling = await page.evaluate(() => {
+    const width = document.documentElement.clientWidth;
+    return [...document.querySelectorAll('[role="dialog"]')]
+      .map((el) => {
+        const box = el.getBoundingClientRect();
+        const cls = (el.getAttribute('class') ?? '').split(' ')[0] ?? '';
+        return {
+          el: `${el.tagName.toLowerCase()}${cls ? `.${cls}` : ''}`,
+          left: Math.round(box.left),
+          right: Math.round(box.right),
+          viewport: width,
+        };
+      })
+      .filter((box) => box.left < -1 || box.right > width + 1);
+  });
+
+  expect(
+    spilling,
+    `${where}: an open overlay extends past the viewport (A11Y-7, WCAG 1.4.10). The document ` +
+      `scroll check cannot see this — a fixed element adds nothing to document overflow`,
+  ).toEqual([]);
 }
 
 export function toast(page: Page, text: string): Locator {

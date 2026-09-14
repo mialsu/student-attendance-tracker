@@ -94,103 +94,156 @@ All colors MUST be HSL.
 */
 
 @layer base {
-  /* Variant A, "Tilikirja", chosen 2026-09-07 after a /prototype run on the real route.
-     Palette from ui-ux-pro-max's colors.csv — "Education teal + course amber + grade green" —
-     with `--input` darkened away from `--border`, because WCAG 1.4.11 wants 3:1 of a boundary
-     that identifies a control and the corpus ships one border colour for both jobs.
+  /* "Läsnä" — one confident indigo on quiet neutrals. Spec 0006 slice 2, 2026-09-10.
+     Mapped from prototype/DESIGN_SYSTEM.md §2 onto the shadcn token names the components
+     already consume, so almost no component markup needed a per-element colour edit.
 
-     Every pair here is asserted by src/__tests__/tokens-contrast.test.ts. It replaced a cyan
-     accent that measured 2.61:1 against white — below even the 3:1 large-text floor, on every
-     button in production. Do not hand-edit a value here without running that test. */
+     It replaces variant A, "Tilikirja" (education teal + course amber), which was chosen
+     2026-09-07 after a /prototype run on the real route and was NOT a default scaffold — it
+     closed seven contrast failures, white-on-cyan at 2.61:1 among them. Replacing it was the
+     Owner's call; git history holds the teal values.
+
+     THREE PLACES THIS DELIBERATELY DEPARTS FROM THE PROTOTYPE, each because a number was
+     measured rather than trusted:
+
+     1. `--input` is much darker than the prototype's `--border-strong`. That file labels
+        `#C4C9DB` "Control boundaries (inputs) — clears 3:1" and it does not: 1.53:1 on the page
+        and 1.65:1 on a card. WCAG 1.4.11 wants 3:1 of a boundary that identifies a control, and
+        the CURRENT palette already satisfied it deliberately, so adopting the prototype's value
+        would have broken a passing pair — "ground you cannot give back", in the contrast test's
+        own words. Solved against the card as well as the page, since a field usually sits on one.
+     2. `--primary` is `#4F45E0`, a step darker than the prototype's `#5A4FF3`. At the lighter
+        value the *Suoritus* badge measured 4.73:1 over a card but 4.41:1 over the page — a pass
+        that depended on what happened to be behind it. The Owner took the darkening.
+     3. `--accent` / `--accent-foreground` carry the prototype's `primary-soft` pair, so the badge
+        is a SOLID pair instead of `bg-primary/10 text-primary`. The token test's maths takes two
+        solid tokens and cannot express an alpha composite, which is exactly why that badge sat in
+        the browser walk's KNOWN_VIOLATIONS at 3.25:1 where only axe could see it. As a real pair
+        it is now gated in both themes and the exemption is gone.
+
+     Every pair here is asserted by src/__tests__/tokens-contrast.test.ts, in BOTH blocks.
+     Do not hand-edit a value without running it. */
   :root {
     /* Backgrounds */
-    --background: 166 76% 97%;
+    --background: 230 43% 97%;
     --card: 0 0% 100%;
-    --muted: 195 35% 93%;
+    --muted: 227 43% 96%;
     --popover: 0 0% 100%;
 
     /* Text */
-    --foreground: 176 61% 19%;
-    --muted-foreground: 215 19% 35%;
-    --card-foreground: 176 61% 19%;
-    --popover-foreground: 176 61% 19%;
+    --foreground: 232 33% 14%;
+    --muted-foreground: 231 16% 39%;
+    --card-foreground: 232 33% 14%;
+    --popover-foreground: 232 33% 14%;
 
-    /* Borders — `border` divides, `input` identifies a control and must clear 3:1 */
-    --border: 171 77% 64%;
-    --input: 173 22% 45%;
+    /* Borders — `border` divides (1.14:1, legitimate), `input` identifies a control and clears 3:1 */
+    --border: 227 33% 92%;
+    --input: 224 23% 58%;
 
-    /* Accent (education teal) */
-    --primary: 175 84% 32%;
-    --primary-foreground: 170 100% 4%;
-    --accent: 32 95% 44%;
-    --accent-foreground: 32 100% 5%;
+    /* Accent — indigo, and the soft tint that carries the badge */
+    --primary: 244 71% 57%;
+    --primary-foreground: 0 0% 100%;
+    --accent: 243 90% 96%;
+    --accent-foreground: 244 71% 57%;
+
+    /* The auth aside's gradient END. Its start is `--primary`, reused rather than re-declared, so
+       the panel cannot drift away from the app's own indigo.
+
+       FOURTH departure from the prototype, same reason as the three above: `prototype/index.html`
+       runs this gradient to a third stop, `#b06cf0`, and white on that measures 3.28:1 — below AA
+       for every size the aside uses except its 34px heading. The prototype also thinned its small
+       text to opacity .85, which took the 13px feature sub-labels to 2.86:1. Both are gone: the
+       third stop is deleted and the aside paints solid `--primary-foreground` throughout.
+
+       What survives is the prototype's own 55% stop, unchanged, at 4.92:1.
+
+       No gate could have caught the old version, which is why the stop is a token at all.
+       `tokens-contrast.test.ts` needs two solid colours and cannot express a gradient; axe returns
+       `color-contrast` as *incomplete* over one, and `e2e/assertions.ts:111` reads only
+       `violations`. Declaring the endpoint here puts it back inside that test's reach — and the two
+       endpoints are enough, because every channel moves monotonically between them (R 78→123,
+       G 67→83, B 223→233), so the end stop is the lightest pixel behind any text. */
+    --auth-aside-to: 256 77% 62%;
 
     /* Secondary */
-    --secondary: 172 66% 50%;
-    --secondary-foreground: 222 47% 11%;
+    --secondary: 226 37% 93%;
+    --secondary-foreground: 232 33% 14%;
 
     /* Semantic */
-    --destructive: 0 72% 51%;
+    --destructive: 344 72% 50%;
     --destructive-foreground: 0 0% 100%;
-    --ring: 175 84% 32%;
+    --ring: 244 71% 57%;
 
     /* Sidebar */
-    --sidebar-background: 166 60% 95%;
-    --sidebar-foreground: 176 61% 19%;
-    --sidebar-primary: 175 84% 32%;
-    --sidebar-primary-foreground: 170 100% 4%;
-    --sidebar-accent: 195 35% 93%;
-    --sidebar-accent-foreground: 176 61% 19%;
-    --sidebar-border: 171 77% 64%;
-    --sidebar-ring: 175 84% 32%;
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 232 33% 14%;
+    --sidebar-primary: 244 71% 57%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 243 90% 96%;
+    --sidebar-accent-foreground: 244 71% 57%;
+    --sidebar-border: 227 33% 92%;
+    --sidebar-ring: 244 71% 57%;
 
     --radius: 0.25rem;
   }
 
-  /* Still unreachable: darkMode is `class` and nothing sets it (DESIGN.md §6). Kept in step with
-     the light set and asserted by the same test, so the day a theme toggle appears the palette is
-     already honest rather than three years stale. */
+  /* Still unreachable, and still asserted. The Owner declined dark mode for spec 0006 (no toggle,
+     no persistence, no prefers-color-scheme read), so nothing sets the `dark` class and
+     `tailwind.config.ts` keeps `darkMode: ["class"]` with no setter.
+
+     Re-mapped to indigo anyway, in step with `:root` above. Leaving it teal would have pointed the
+     contrast gate at a palette nobody chose, and deleting it breaks that test outright — it throws
+     `no .dark block in index.css`. This is the discipline the previous version of this comment
+     committed to in writing, and it is kept: the day a theme toggle appears the palette is already
+     honest rather than three years stale. */
   .dark {
     /* Backgrounds */
-    --background: 200 20% 10%;
-    --card: 200 18% 13%;
-    --muted: 200 14% 18%;
-    --popover: 200 18% 13%;
+    --background: 235 30% 7%;
+    --card: 237 31% 13%;
+    --muted: 235 29% 16%;
+    --popover: 237 31% 13%;
 
     /* Text */
-    --foreground: 166 30% 96%;
-    --muted-foreground: 190 12% 72%;
-    --card-foreground: 166 30% 96%;
-    --popover-foreground: 166 30% 96%;
+    --foreground: 234 38% 95%;
+    --muted-foreground: 231 23% 72%;
+    --card-foreground: 234 38% 95%;
+    --popover-foreground: 234 38% 95%;
 
-    /* Borders */
-    --border: 200 12% 26%;
-    --input: 195 12% 58%;
+    /* Borders — same split as light: divider vs control boundary */
+    --border: 235 25% 21%;
+    --input: 233 21% 46%;
 
     /* Accent */
-    --primary: 172 66% 50%;
-    --primary-foreground: 175 100% 6%;
-    --accent: 32 95% 60%;
-    --accent-foreground: 32 100% 8%;
+    --primary: 244 100% 76%;
+    --primary-foreground: 240 40% 12%;
+    --accent: 240 27% 19%;
+    --accent-foreground: 244 100% 76%;
+
+    /* The auth aside's gradient end, dark's counterpart. It travels the same hue distance from
+       `--primary` (244 → 256) and the same 5 points of lightness, so the panel reads as the same
+       object in a theme nobody can reach yet. Dark inverts which end is the risk — the text is
+       near-black `--primary-foreground` — so the LIGHTEST stop is the safe one here and the
+       gradient's start is the tight end. Both are asserted. */
+    --auth-aside-to: 256 100% 81%;
 
     /* Secondary */
-    --secondary: 200 14% 18%;
-    --secondary-foreground: 166 30% 96%;
+    --secondary: 234 27% 21%;
+    --secondary-foreground: 234 38% 95%;
 
     /* Semantic */
-    --destructive: 0 72% 52%;
+    --destructive: 344 72% 50%;
     --destructive-foreground: 0 0% 100%;
-    --ring: 172 66% 50%;
+    --ring: 244 100% 76%;
 
     /* Sidebar */
-    --sidebar-background: 200 20% 10%;
-    --sidebar-foreground: 166 30% 96%;
-    --sidebar-primary: 172 66% 50%;
-    --sidebar-primary-foreground: 175 100% 6%;
-    --sidebar-accent: 200 14% 18%;
-    --sidebar-accent-foreground: 166 30% 96%;
-    --sidebar-border: 200 12% 26%;
-    --sidebar-ring: 172 66% 50%;
+    --sidebar-background: 237 31% 13%;
+    --sidebar-foreground: 234 38% 95%;
+    --sidebar-primary: 244 100% 76%;
+    --sidebar-primary-foreground: 240 40% 12%;
+    --sidebar-accent: 240 27% 19%;
+    --sidebar-accent-foreground: 244 100% 76%;
+    --sidebar-border: 235 25% 21%;
+    --sidebar-ring: 244 100% 76%;
   }
 }
 
@@ -233,5 +286,34 @@ All colors MUST be HSL.
   /* Smooth transitions */
   .transition-smooth {
     transition: all 0.2s ease-in-out;
+  }
+}
+
+/*
+  A11Y-6: prefers-reduced-motion, which had no enforcer and no implementation until slice 8.
+
+  Outside @layer on purpose. Tailwind's utilities layer loses to later layers on equal
+  specificity, and the durations being overridden are authored in that same layer three rules
+  up -- so this block sits after every layer and carries !important, which is the combination
+  that holds regardless of how the utility arrived.
+
+  0.01ms rather than 0. A zero-length animation never fires animationend, and
+  e2e/assertions.ts:82 awaits animation.finished on every finite animation before axe runs; a
+  true 0 would leave that promise pending and hang the sweep. This is the standard value for
+  that reason, not a superstition.
+
+  What this does NOT neutralise: active:scale-[0.98] on every Button variant. The transform
+  still applies, it simply applies instantly once the transition is gone. An instant state
+  change is not animation, so it is out of scope for this rule -- recorded here because the
+  A11Y-6 row used to name that utility as one of the three that ignored the preference.
+*/
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

@@ -13,7 +13,33 @@
 # Install once per clone:  git config core.hooksPath .githooks
 # Bypassing with --no-verify is a confession: it needs a REVIEW-DEBT.md entry.
 set -euo pipefail
-cd "$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+
+# Resolve the tree being committed from GIT, not from where this script happens to live.
+#
+# This used to be `cd "$(dirname "${BASH_SOURCE[0]}")/.."`, and that is wrong the moment anyone
+# commits from a `git worktree`. `core.hooksPath` holds ONE repository-wide value, and in this
+# clone it is an ABSOLUTE path into the main checkout — `api/justfile`'s `install-hooks` writes it
+# relative, which would have been fine, so something else made it absolute (husky's installer is
+# the likely culprit; it owned this setting for client/ before the merge). Whatever the cause, an
+# absolute value means every worktree's commit executes the MAIN checkout's copy of this file:
+# `BASH_SOURCE[0]` points there, so the old line cd'd into the main checkout and ran
+# `cd client && npm run …` against whatever *that* tree happened to contain.
+#
+# Git still exports `GIT_INDEX_FILE`, so `git diff --cached` below read the *correct* index and
+# dispatched the *correct* packages. The gates ran, reported green, and had validated somebody
+# else's working tree. Caught on 2026-09-10, when a worktree commit's boundary gate cruised 101
+# modules while the same command run inside the worktree cruised 103 — the two files being
+# committed were simply absent from what it checked.
+#
+# Fixing it here rather than by rewriting the config, because a config value is per-clone and any
+# tool may rewrite it again; this line is correct however `core.hooksPath` is spelled.
+#
+# That is this header's own warning one level up: "you commit, see no complaint, and assume the
+# gates ran." A gate pointed at the wrong tree is worse than no gate, because it answers.
+#
+# `--show-toplevel` is correct in both cases: git runs hooks from the top of the working tree being
+# committed, and resolves this against the worktree's own gitdir rather than the common one.
+cd "$(git rev-parse --show-toplevel)"
 
 staged="$(git diff --cached --name-only --diff-filter=ACMR)"
 [ -z "$staged" ] && exit 0

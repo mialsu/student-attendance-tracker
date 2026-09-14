@@ -19,16 +19,40 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render } from '@/test/test-utils';
 import axe, { type RunOptions } from 'axe-core';
+import userEvent from '@testing-library/user-event';
+import { screen } from '@testing-library/react';
 import AttendanceTracking from '../AttendanceTracking';
 import StudentLogs from '../StudentLogs';
+import Auth from '@/pages/Auth';
+import Settings from '@/pages/Settings';
+import ProtectedRoute from '../ProtectedRoute';
 import * as useAttendanceHooks from '@/hooks/useAttendance';
 import * as useStudentsHooks from '@/hooks/useStudents';
+import * as useClassesHooks from '@/hooks/useClasses';
 import * as useMediaQueryHooks from '@/hooks/useMediaQuery';
+import type { User } from '@/api/types';
 
 vi.mock('@/hooks/useAttendance');
 vi.mock('@/hooks/useStudents');
+vi.mock('@/hooks/useClasses');
 vi.mock('@/hooks/useMediaQuery');
 vi.mock('@/hooks/use-toast', () => ({ useToast: () => ({ toast: vi.fn() }) }));
+
+// The two auth surfaces have no query hook to stand in front of: they call the context, whose
+// only collaborator is this module. Same seam `auth-flow.test.tsx` uses.
+vi.mock('@/api/auth', () => ({
+  authApi: {
+    login: vi.fn(),
+    signup: vi.fn(),
+    logout: vi.fn(),
+    refreshToken: vi.fn(),
+    getCurrentUser: vi.fn(),
+    updateEmail: vi.fn(),
+    updatePassword: vi.fn(),
+  },
+}));
+
+import { authApi } from '@/api/auth';
 
 const AXE_OPTIONS: RunOptions = {
   runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'] },
@@ -79,6 +103,18 @@ const asDeleteStudent = (v: unknown) => v as ReturnType<typeof useStudentsHooks.
 const asMergeStudent = (v: unknown) => v as ReturnType<typeof useStudentsHooks.useMergeStudent>;
 
 const idleMutation = { mutateAsync: vi.fn(), isPending: false };
+
+const asClasses = (v: unknown) => v as ReturnType<typeof useClassesHooks.useClasses>;
+
+const TEACHER: User = {
+  id: 'ac1d0000-0000-0000-0000-000000000001',
+  email: 'opettaja@koulu.fi',
+  active: true,
+  created_at: '2026-09-02T00:00:00Z',
+};
+
+/** A request accepted and never answered — how a mid-mutation state is held still. */
+const neverSettles = <T,>() => new Promise<T>(() => {});
 
 const summary = (itemCount: number, legacyHidden = 0) => ({
   data: {
@@ -159,5 +195,57 @@ describe('the surfaces pass axe in every state', () => {
     vi.mocked(useAttendanceHooks.useAttendanceSummary).mockReturnValue(asSummary(summary(3)));
     const { container } = render(<StudentLogs classId={classId} />);
     await expectNoViolations(container, NARROW);
+  });
+
+  /*
+    The two surfaces slice 7 gave a mid-mutation state to.
+
+    Deliberately NOT the whole of slices 3-7. `e2e/states.spec.ts` already sweeps all 21 states in
+    `DESIGN.md` §3 through axe in a real browser, at both viewports, with `color-contrast` and
+    `heading-order` on — everything this file can do and three things it cannot. Re-covering those
+    states here would be two formats for one artifact, and the weaker one at that.
+
+    What this file uniquely carries is the state a mutation is *in flight*, which the walk's table
+    has no row for: `Kirjaa läsnäolo — mid-submit` above has been the only one. Slice 7 created two
+    more, and a disabled control whose label has just changed is exactly where an accessible name
+    goes missing, so they belong here.
+  */
+  it('/auth — mid-login, the submit disabled', async () => {
+    const user = userEvent.setup();
+    vi.mocked(authApi.login).mockReturnValue(neverSettles());
+
+    const { container } = render(<Auth />);
+    await user.type(screen.getByLabelText('Sähköposti'), TEACHER.email);
+    await user.type(screen.getByLabelText('Salasana'), 'salasana123');
+    await user.click(screen.getByRole('button', { name: /^kirjaudu$/i }));
+
+    await screen.findByRole('button', { name: 'Kirjaudutaan...' });
+    await expectNoViolations(container);
+  });
+
+  it('/settings — mid-email-change, the submit disabled', async () => {
+    const user = userEvent.setup();
+    vi.mocked(useClassesHooks.useClasses).mockReturnValue(asClasses({ data: [], isLoading: false }));
+    vi.mocked(authApi.refreshToken).mockResolvedValue({ access_token: 'an-access-token' });
+    vi.mocked(authApi.getCurrentUser).mockResolvedValue(TEACHER);
+    vi.mocked(authApi.updateEmail).mockReturnValue(neverSettles());
+
+    const { container } = render(
+      <ProtectedRoute>
+        <Settings />
+      </ProtectedRoute>,
+    );
+    await screen.findByRole('heading', { name: 'Asetukset', level: 1 });
+
+    // `clear` before `type`, because the field arrives prefilled and appending makes the value
+    // two addresses joined — invalid for `type="email"`, which the browser refuses before React
+    // sees it. `Settings.test.tsx` carries the same line and the same reason.
+    await user.clear(screen.getByLabelText('Uusi sähköposti'));
+    await user.type(screen.getByLabelText('Uusi sähköposti'), 'uusi@koulu.fi');
+    await user.type(screen.getByLabelText('Vahvista salasanallasi'), 'salasana123');
+    await user.click(screen.getByRole('button', { name: 'Tallenna sähköposti' }));
+
+    await screen.findByRole('button', { name: 'Tallennetaan...' });
+    await expectNoViolations(container);
   });
 });

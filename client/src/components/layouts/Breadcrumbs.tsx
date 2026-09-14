@@ -16,7 +16,12 @@ interface BreadcrumbsProps {
 
 export function Breadcrumbs({ items }: BreadcrumbsProps) {
   return (
-    <Breadcrumb className="hidden md:flex">
+    // Visible at every width since slice 3. It was `hidden md:flex` while it sat in the header
+    // beside the brand, where there was no room for it on a phone; at the top of the main region
+    // there is, and it is now the only thing naming which tab of a Kurssi you are on — the
+    // sidebar marks the Kurssi, not the tab. `BreadcrumbList` already wraps, so 320px costs
+    // vertical space rather than a sideways scroll (`A11Y-7`).
+    <Breadcrumb className="mb-5">
       <BreadcrumbList>
         {items.map((item, index) => {
           const isLast = index === items.length - 1;

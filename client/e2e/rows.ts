@@ -51,6 +51,10 @@ export const KURSSI: Class = {
   created_at: '2025-11-03T08:05:00Z',
   updated_at: null,
   attendance_count: 59,
+  // Both counts, because the API sends both on the class list and slice 5 puts them on the card.
+  // Without this the walk would sweep a card with one count and never render the other branch,
+  // which is the shape production never has.
+  student_count: 25,
 };
 
 export const ACCESS_TOKEN = 'e2e-access-token-not-a-real-jwt';

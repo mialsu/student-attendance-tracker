@@ -1,5 +1,7 @@
 import type { Config } from "tailwindcss";
+import defaultTheme from "tailwindcss/defaultTheme";
 import tailwindcssAnimate from "tailwindcss-animate";
+import { SHELL_BREAKPOINT_PX } from "./src/lib/breakpoints";
 
 export default {
   darkMode: ["class"],
@@ -19,6 +21,13 @@ export default {
         "2xl": "1400px",
       },
     },
+    screens: {
+      ...defaultTheme.screens,
+      // The app shell's own breakpoint. Not `md`: see src/lib/breakpoints.ts for the 544px
+      // register column that sets it. `use-mobile.tsx` reads the same constant, so the CSS
+      // breakpoint and the JS one cannot disagree.
+      shell: `${SHELL_BREAKPOINT_PX}px`,
+    },
     extend: {
       fontFamily: {
         sans: ['Fira Sans', 'system-ui', 'sans-serif'],
@@ -36,6 +45,12 @@ export default {
       spacing: {
         '18': '4.5rem',
         '22': '5.5rem',
+      },
+      backgroundImage: {
+        // The auth aside, spec 0006 slice 4. Both endpoints are tokens so that
+        // `src/__tests__/tokens-contrast.test.ts` can gate them — a gradient written inline in
+        // JSX would be invisible to every gate this repo owns. See `--auth-aside-to` in index.css.
+        'auth-aside': 'linear-gradient(150deg, hsl(var(--primary)), hsl(var(--auth-aside-to)))',
       },
       boxShadow: {
         'subtle': '0 1px 2px 0 rgb(0 0 0 / 0.04)',

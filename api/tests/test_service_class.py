@@ -59,7 +59,9 @@ class TestGetClassesForTeacher:
         result = await class_service.get_classes_for_teacher(db, test_user.id)
 
         assert len(result) >= 4  # test_class + 3 new ones
-        assert all(c.teacher_id == test_user.id for c in result)
+        assert all(c.teacher_id == test_user.id for c, _ in result)
+        # Both counts ride the same query; these classes hold nothing yet.
+        assert all(counts == (0, 0) for _, counts in result)
 
     async def test_get_classes_with_pagination(
         self, db: AsyncSession, test_user: User
@@ -89,8 +91,8 @@ class TestGetClassesForTeacher:
 
         assert len(result2) == 5
         # Should be different classes
-        ids1 = {c.id for c in result}
-        ids2 = {c.id for c in result2}
+        ids1 = {c.id for c, _ in result}
+        ids2 = {c.id for c, _ in result2}
         assert ids1.isdisjoint(ids2)
 
 

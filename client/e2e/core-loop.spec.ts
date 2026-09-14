@@ -115,4 +115,62 @@ test.describe('the core loop', () => {
     ]);
     await expect(name).toHaveValue('');
   });
+
+  /**
+   * AC4 / US-13, and the half the test above cannot reach. It types a whole name and dismisses
+   * the list with Escape, which was the only keyboard path that ever worked: measured on
+   * 2026-09-11, two ArrowDown presses left the active option at index 0, focus never left the
+   * input, and Enter left the field holding "Vä". The list rendered as a sibling of the input, so
+   * the `Command` that was supposed to "handle arrow navigation" never received a key.
+   *
+   * jsdom cannot be the enforcer here — the defect was about which element had focus — so this
+   * runs in the browser, beside the walk it belongs to.
+   */
+  test('with no mouse: the suggestion list itself is operable', async ({ page }) => {
+    await signedIn(page);
+    await oneKurssi(page);
+    await register(page);
+    const { posted } = await attendanceLogging(page);
+
+    await page.goto(classUrl);
+    const name = page.getByLabel('Opiskelijan nimi', { exact: true });
+    await name.click();
+    await page.keyboard.type('Li');
+
+    const options = page.getByRole('option');
+    await expect(options).toHaveCount(SUGGESTIONS.length);
+
+    // ARIA's combobox nominates nothing until a key asks, so that Enter on a freshly opened list
+    // still means "submit what I typed".
+    await expect(name).not.toHaveAttribute('aria-activedescendant', /./);
+
+    await page.keyboard.press('ArrowDown');
+    await expect(options.nth(0)).toHaveAttribute('aria-selected', 'true');
+
+    await page.keyboard.press('ArrowDown');
+    await expect(options.nth(1)).toHaveAttribute('aria-selected', 'true');
+    await expect(options.nth(0)).toHaveAttribute('aria-selected', 'false');
+
+    // The input keeps focus and points at the active row, which is the whole reason
+    // `aria-activedescendant` exists. Focus moving into the list would break typing.
+    await expect(name).toBeFocused();
+    expect(await name.getAttribute('aria-activedescendant')).toBe(
+      await options.nth(1).getAttribute('id'),
+    );
+
+    // Enter accepts the nomination. It must not also submit — that would post on the keystroke
+    // that was only meant to choose a name.
+    await page.keyboard.press('Enter');
+    await expect(name).toHaveValue(SUGGESTIONS[1]!.name);
+    await expect(options).toHaveCount(0);
+    await expect(name).toHaveAttribute('aria-expanded', 'false');
+    expect(posted).toEqual([]);
+
+    // The second, deliberate Enter is the submit.
+    await page.keyboard.press('Enter');
+    await expect(toast(page, 'Läsnäolo kirjattu')).toBeVisible();
+    expect(posted).toEqual([
+      expect.objectContaining({ student_name: SUGGESTIONS[1]!.name, quantity: 1 }),
+    ]);
+  });
 });

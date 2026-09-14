@@ -14,9 +14,15 @@ const CardHeader = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDiv
 );
 CardHeader.displayName = "CardHeader";
 
+// `h2`, not the `h3` shadcn ships. Every Card in this app sits directly under a page `<h1>`, so
+// an `h3` here skipped a level on five swept states at once and a reader navigating by heading
+// level got a broken outline. Fixed here rather than per surface, because the level is a property
+// of where Cards are used in this app and not of any one screen. `e2e/assertions.ts` runs
+// `heading-order` as its own axe pass so this cannot come back; it was watched red against the
+// `h3` and green against this.
 const CardTitle = React.forwardRef<HTMLParagraphElement, React.HTMLAttributes<HTMLHeadingElement>>(
   ({ className, ...props }, ref) => (
-    <h3 ref={ref} className={cn("text-2xl font-semibold leading-none tracking-tight", className)} {...props} />
+    <h2 ref={ref} className={cn("text-2xl font-semibold leading-none tracking-tight", className)} {...props} />
   ),
 );
 CardTitle.displayName = "CardTitle";

@@ -6,6 +6,227 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 
 <!-- Newest first. -->
 
+## 2026-09-12 — every Card title is an h3, so three surfaces skip a heading level — CLOSED the same day
+- **What:** `/settings` renders `<h1>Asetukset</h1>` and then two `CardTitle`s. `CardTitle` is an
+  **h3** (`src/components/ui/card.tsx:19`), so the document outline goes h1 → h3 with no h2. A
+  screen-reader user navigating by heading level gets a broken outline.
+- **Where:** the shared cause is `card.tsx:19`. `/settings` is the third surface to inherit it —
+  `ClassStatistics` and `StudentLogs` have done the same under `/class/:id`'s h1 since before this
+  spec.
+- **What green tests do NOT prove here:** heading structure, at all. axe *has* the rule —
+  `heading-order` — but it is tagged `best-practice`, and `e2e/assertions.ts:50` runs
+  `runOnly: {type: 'tag', values: ['wcag2a','wcag2aa','wcag21a','wcag21aa']}`. So the walk sweeps
+  `/settings` clean at both viewports and the skip is invisible to it. `DESIGN.md` §5 has no row
+  for heading order either.
+- **Why it was not fixed in slice 7:** the fix belongs at `card.tsx`, not on this one surface.
+  Hand-rolling an `<h2>` here would leave the other two surfaces broken and create a second
+  heading format for one artifact. Changing a primitive every Card in the app renders is a
+  whole-surface-set re-sweep, which is slice 8's job.
+- **Disposition — CLOSED 2026-09-12, later the same day, in slice 8.** The Owner took both
+  decisions: `CardTitle` is an `h2` (`card.tsx:19`) and `heading-order` runs as its own axe pass
+  in `e2e/assertions.ts`, recorded as `A11Y-10` with `[test]` behind it.
+
+  **Three surfaces was an undercount, and the gate is what corrected it.** Turning the rule on
+  against the unfixed code failed *five* swept states on `CardTitle` alone, and then surfaced two
+  more skips this entry had not seen at all: the dashboard's course-card title was a bare `h3`
+  under the page `h1` (`TeacherDashboard.tsx:95`), and `StudentLogs`' expanded-row heading was an
+  `h4` (`:559`) that skipped `h3` once `CardTitle` moved up. The second of those is reached by no
+  swept state today, so the gate did not report it — it was fixed on the way past, as the same
+  defect in the same slice, rather than left for whoever adds an expanded-row state. That is the
+  argument for fixing this at the primitive rather than per surface, made by the measurement
+  instead of by me.
+
+## 2026-09-12 — `/settings`' email field has a refusal path the app does not own
+- **What:** *Uusi sähköposti* is `type="email"` and arrives **prefilled** with the current
+  address. A teacher who types without clearing produces `vanha@koulu.fiuusi@koulu.fi`, which the
+  browser's own constraint validation refuses — the form never submits, `handleEmailChange` never
+  runs, and the message she sees is the browser's native bubble in the browser's language, not one
+  of this app's toasts.
+- **Where:** `src/pages/Settings.tsx`, the `newEmail` input; the form carries no `noValidate`.
+- **How it was found:** not by reading the code. The behaviour test failed with the handler never
+  having run, and the instrumentation showed zero toasts and zero API calls. That is recorded in
+  the test as the reason `user.clear()` is on the line above the `user.type()`
+  (`Settings.test.tsx`), so the next person does not delete it as noise.
+- **What green tests do NOT prove here:** what that refusal looks like. `DESIGN.md:149`'s Refused
+  column describes a toast carrying the API's `detail` and says nothing about a client-side
+  refusal — unlike `/auth`'s row, which names its two inline ones explicitly.
+- **Disposition:** open, and a product question rather than a bug. The options are leaving native
+  validation to do it, or owning the refusal the way `/auth` does. Not decided, so not built.
+
+## 2026-09-12 — three new Finnish pending labels, none read by a native speaker
+- **What:** slice 7 added "Tallennetaan..." (both `/settings` submits), "Kirjaudutaan..." and
+  "Rekisteröidään..." (`/auth`'s two modes).
+- **Where:** `src/pages/Settings.tsx` and `src/pages/Auth.tsx`, each on its submit button.
+- **What green tests do NOT prove here:** the wording. The tests match the strings exactly, so
+  they hold these labels in place without anyone having judged them. They are mechanical
+  derivations of the shipped convention — "Luodaan..." (`TeacherDashboard.tsx:212`) and
+  "Kirjataan..." (`AttendanceTracking.tsx:392`) — which makes them lower-risk than free prose, but
+  copy voice still has no skill owner in this project. Same class as the autocomplete sentence
+  below, and the Owner has not ruled on that one either.
+- **Disposition:** open. Cheap to close alongside the autocomplete sentence, in one pass.
+
+## 2026-09-11 — a full-page screenshot of *Tilastot* shows an empty chart, and the chart is fine
+- **What:** slice 6's restyle was checked by screenshot, and every `fullPage: true` shot of the
+  statistics tab came back with axes, gridlines and labels drawn but **no bars** — at both
+  viewports, and still empty after waiting 2.2s for Recharts' grow-from-zero animation.
+- **Where:** any Playwright `page.screenshot({ fullPage: true })` over `ClassStatistics`.
+- **Why it is not a defect:** measured instead of assumed. The DOM holds four
+  `.recharts-bar-rectangle` paths, the first `128 × 235.6` at `x=402`, `fill` computing to
+  `rgb(78, 67, 223)`. An **element** screenshot of `.recharts-surface` draws all four bars in
+  indigo at the fixture's 13 / 14 / 15 / 1. A full-page capture resizes the viewport, which makes
+  `ResponsiveContainer` re-measure and Recharts restart its animation from zero, and the shot
+  catches that.
+- **What green tests do NOT prove here:** that any bar is ever *painted*. The walk asserts axe and
+  reflow over this state and both read the DOM and CSS, so a chart that drew nothing at all would
+  pass every gate in this repo. Nothing renders-and-looks at it.
+- **Disposition:** open, and it is a **trap for slice 8**: `/verify-live` will screenshot this
+  surface, and the honest reading of an empty plot is "take an element shot" rather than "file a
+  bug". Closing it properly means either a visual check a human makes or
+  `isAnimationActive={false}` under test, which changes production code to suit a camera and so
+  wants the Owner's call.
+
+## 2026-09-11 — the chart toggle's grouping role is judgement, not a gate
+- **What:** the day/month toggle is a Radix `ToggleGroup type="single"`, whose root is
+  `role="group"` while its items are `role="radio"`. `ClassStatistics.tsx` overrides the root to
+  `role="radiogroup"` so a screen reader can announce "1 of 2" rather than two loose radios.
+- **Where:** `src/pages/ClassStatistics.tsx`, the `role="radiogroup"` prop on the `ToggleGroup`.
+- **What green tests do NOT prove here:** that the override is needed or kept. The line was
+  **deleted on purpose and the entire walk stayed green, axe included** — axe-core does not treat
+  `radiogroup` as a required context for `radio`, so `aria-required-parent` never fires. The only
+  thing holding the pairing is one assertion in `src/pages/__tests__/ClassStatistics.test.tsx`,
+  which checks the role rather than what a screen reader does with it. A future ToggleGroup
+  elsewhere in the app will have no such assertion and nothing will notice.
+- **Disposition:** open. The honest close is a screen-reader pass at `/verify-live` (slice 8),
+  which is also the only way to confirm the announcement actually improves. A cheaper partial is a
+  lint rule over `ToggleGroup type="single"` usages; there is exactly one today, so it would be a
+  rule with a single subject.
+
+## 2026-09-11 — the autocomplete's new Finnish copy has had no native reader
+- **What:** US-14 had no signal at all — "Ei ehdotuksia" said the list was empty, never that
+  submitting would create a student. The replacement reads "Ei osumia — nimellä **<nimi>** luodaan
+  uusi opiskelija."
+- **Where:** `src/components/AttendanceTracking.tsx`, the `role="status"` paragraph under the
+  name field.
+- **What green tests do NOT prove here:** the wording. The test matches `/luodaan uusi
+  opiskelija/i`, so it holds the *claim* and not the phrasing, and **the sentence is the agent's
+  own Finnish** — `DESIGN.md`'s own table records that copy voice has no skill owner in this
+  project and falls to the Owner, with `/code-review` as the backstop. The em dash and the
+  bolded name are both choices nobody reviewed.
+- **Disposition:** open, and cheap to close — the Owner reads one sentence. Flagged in the slice's
+  commit message as well so it is not found only by whoever greps this file.
+
+## 2026-09-11 — the overlay reflow check sees dialogs, and nothing else that floats
+- **What:** slice 5 added `expectOverlayWithinViewport` (`e2e/assertions.ts`) after measuring that
+  `expectNoHorizontalScroll` cannot see a fixed-position overlay at all — a deliberately widened
+  `DialogContent` rendered 520px wide at a 320px viewport, from x=-100 to x=420, while
+  `documentElement.scrollWidth` stayed exactly 320. The new check is scoped to `[role="dialog"]`.
+- **What green tests do NOT prove here:** that *nothing else* fixed or absolutely positioned
+  spills off screen. **Toasts are the live gap** — Radix renders them in a viewport container that
+  is `fixed`, they carry `role="status"` rather than `dialog`, and no swept state in
+  `e2e/states.spec.ts` has one open, so a toast too wide for 320px would pass every gate in this
+  repo. The same hole covers any future popover, dropdown or tooltip.
+- **Why scoped anyway:** a blanket "nothing may extend past the viewport" fires on elements that
+  are off-screen *by design*, and this app has one — the closed off-canvas drawer sits at
+  `left: -18rem`. Distinguishing deliberate from accidental needs a rule, and `role="dialog"` was
+  the honest one available: it is present only while an overlay is actually claiming the screen.
+- **Disposition:** open. Cheapest close is a swept state with a toast up (the logging form already
+  raises one on submit), which would extend the same check to `role="status"` containers without
+  inventing a new rule. Not done now because no slice has needed a toast state yet and inventing
+  one to test a gate is machinery ahead of the problem.
+
+## 2026-09-11 — the dashboard's counts are shown, and nothing proves they are the right two
+- **What:** the course card renders `student_count` and `attendance_count` straight from the class
+  list (`src/pages/TeacherDashboard.tsx`), and both `TeacherDashboard.test.tsx` and the walk feed
+  them from fixtures the test itself writes.
+- **What green tests do NOT prove here:** that the API's two fields mean what the card's two words
+  claim. A backend that swapped the two subqueries in `class_service.py` would show 35 opiskelijaa
+  and 12 läsnäoloa on a 12-student class, and every client test would stay green — they assert the
+  wiring, not the arithmetic. The API's own suite is where that lives, and this client has no
+  contract test against a running backend at all.
+- **Disposition:** accepted. The alternative is a contract test, which needs a live API in the
+  client's gate set — a large change to buy one assertion. The `/verify-live` pass at slice 8 is
+  where a human reads real numbers against a real class, and the seeded local stack already has
+  two Kurssit with known counts (12/35 and 3/6) for exactly that.
+
+## 2026-09-11 — a gradient is gated at its endpoints, which holds only while it has two
+- **What:** slice 4's auth aside paints `linear-gradient(150deg, hsl(var(--primary)),
+  hsl(var(--auth-aside-to)))` under `--primary-foreground` text.
+  `src/__tests__/tokens-contrast.test.ts` now asserts the end stop in both themes, which is a real
+  gate — it was watched red at 3.28:1 against the prototype's own third stop. But the argument
+  that makes two assertions cover the whole panel is **monotonicity**: every channel increases
+  from start to end (R 78→123, G 67→83, B 223→233), so no pixel behind the text is lighter than
+  the endpoint. A third stop breaks that argument silently.
+- **Where:** `tailwind.config.ts` (`backgroundImage.auth-aside`), `src/index.css`
+  (`--auth-aside-to`, both blocks), `src/__tests__/tokens-contrast.test.ts`.
+- **What green tests do NOT prove here:** that the gradient still has only two stops. Nothing
+  parses `backgroundImage`; the test reads the two tokens it is named. And the browser cannot
+  cover for it — axe returns `color-contrast` as *incomplete* over any gradient, and
+  `e2e/assertions.ts:111` keeps only `violations`, so an unmeasured middle stop sweeps clean at
+  both viewports. This is the same shape as the badge that sat at 3.25:1 where only axe could see
+  it, with the polarity reversed: here axe is the blind one.
+- **Disposition:** open, and cheap to close if it ever matters — a test that reads the gradient
+  string out of the Tailwind config and fails on any stop it cannot resolve to a token. Not
+  written now because there is exactly one gradient in the app and inventing a parser for it
+  would be machinery ahead of the problem. `DESIGN.md` §6 carries the rule in prose meanwhile:
+  a stop in an app gradient is a token, or it is unmeasured.
+
+## 2026-09-11 — the aside's copy is verified for its claims, not for its language
+- **What:** slice 4 asserts that the registration-code hint carries the code's real rules and that
+  the word `pääkäyttäjä` appears nowhere (`e2e/auth.spec.ts`). Both were watched red. Neither is
+  a check that the Finnish is *good* Finnish, and AC8 — "the auth aside contains no sales copy;
+  all UI strings remain Finnish" — is tagged `/verify-live` for exactly that reason.
+- **Where:** `src/pages/Auth.tsx` (`FUNCTIONS`, `LEDE`, the hint), `e2e/auth.spec.ts`.
+- **What green tests do NOT prove here:** that "Kertakäyttöinen, voimassa 24 tuntia ja sidottu
+  yhteen sähköpostiosoitteeseen." reads naturally to the teacher, that the three function labels
+  describe what she thinks those screens do, or that the lede is the sentence worth keeping when
+  it is the *only* thing a phone shows. A11Y-9 (no control announces itself in the wrong language)
+  remains `[review-only]` and is untouched by this slice.
+- **Disposition:** open until the Owner's live pass. Deliberately deferred per his decision of
+  2026-09-11 — *"I will review live when we get the full UI thing ready"* — so no AC verdict is
+  filled for slice 4 either.
+
+## 2026-09-11 — no gate checks contrast in a hover, focus or active state
+- **What:** slice 3 shipped a real below-AA hover state and only found it by accident. The brand
+  link carried `hover:opacity-80` (inherited from `AppLogo`, where it was safe on 16px
+  `--foreground` text at 9.12:1); over 11.2px `--muted-foreground` it took 6.95:1 to **4.28:1**.
+  It surfaced because the drawer slides in beneath a stationary pointer, so axe happened to
+  measure the hover state.
+- **Where:** fixed at `src/components/layouts/AppSidebar.tsx` (tints the background instead), and
+  the sweep now parks the pointer at `e2e/states.spec.ts`'s shell state.
+- **What green tests do NOT prove here:** `tokens-contrast.test.ts` compares *token pairs* and
+  cannot express a composite, and the walk only ever sees the resting state now that the pointer
+  is parked — deliberately, since measuring whichever element the layout puts under the cursor is
+  nondeterministic. So every `:hover`, `:focus-visible` and `:active` colour in the app is
+  unchecked. `--ring` is asserted against `--background` as a pair, which is not the same claim.
+- **Disposition:** open. The cheap version is a token-level rule (never dim text below AA; dim
+  backgrounds instead) with review as its enforcer; the real version needs axe driven over
+  forced pseudo-states, which Playwright can do via CDP and nothing here does yet.
+
+## 2026-09-11 — the walk cannot see an unnamed dialog
+- **What:** the off-canvas drawer shipped nameless in slice 3's first draft and the browser walk
+  swept it **clean**. axe's `aria-dialog-name` is tagged `cat.aria, best-practice`, and the walk
+  runs only `wcag2a`, `wcag2aa`, `wcag21a`, `wcag21aa`.
+- **Where:** `e2e/assertions.ts:51` (the tag set); fixed for this dialog by the `sr-only`
+  `SheetTitle` in `src/components/ui/sidebar.tsx` and asserted by
+  `src/components/__tests__/AppShell.test.tsx`.
+- **What green tests do NOT prove here:** the *class* is still open — the next dialog added to this
+  app is equally invisible to the tag set, and the app already has several (create-class,
+  delete-confirm, merge). Only the drawer's name is asserted.
+- **Disposition:** open. Adding `best-practice` to the walk's tags is the structural fix and opens
+  a baseline nobody has measured; do it as its own change, not inside a feature slice.
+
+## 2026-09-11 — nothing states that the main region must be able to shrink
+- **What:** making the shell a flex row broke `A11Y-7` in three states at once. A flex item's
+  `min-width` defaults to `auto`, so `main` could not shrink below the register's `min-w-[34rem]`
+  and the document measured 809px at a 320px viewport.
+- **Where:** `src/components/layouts/TeacherLayout.tsx` — `min-w-0` on `SidebarInset` and on the
+  inner container.
+- **What green tests do NOT prove here:** the walk caught this one because the register happens to
+  be in a swept state. The rule itself is written nowhere and has no enforcer, so the next layout
+  change can reintroduce it and will only be caught if the widest content is under a swept state.
+- **Disposition:** accepted for now — the walk is a real enforcer for the states it holds, and
+  `DESIGN.md` §6 records the gap. A lint rule for this does not exist.
+
 ## 2026-09-07 — the browser walk proves the screen, not the integration
 - **What:** `e2e/` mocks `/api/*` at the browser boundary, so nothing in the walk exercises the real
   API, the database, or the two together from a browser. Forty green tests say the screens behave
@@ -122,12 +343,41 @@ cut (`/confess`), read first by any architecture or review session, dispositione
   only victim is a keyboard user sideways-scrolling an *empty* table. Listed in
   `KNOWN_VIOLATIONS` under the `reflow-320` key alone, because at 1280px there is nothing to
   scroll and therefore nothing to report.
-- **Disposition:** open, and deliberately **not** fixed here. Both are decisions the Owner owns:
-  the badge is a palette change (`DESIGN.md` delegates the look to `frontend-design`, and the
-  token values live in `src/index.css`), and the 404 needs tokenizing *and* translating — it is
-  the only untokenized, English surface in the app, which `DESIGN.md` §1 already records. The
-  three defects that were pure plumbing — two missing accessible names and one keyboard-unreachable
-  scroll region — were fixed in the same commit instead of listed.
+- **Disposition — the badge is CLOSED (2026-09-10, spec 0006 slice 2), the 404 is CLOSED
+  (2026-09-12, spec 0006 slice 8); the `scrollable-region-focusable` row stays open.**
+
+  **Badge, closed and structurally so.** It was fixed the way this entry predicted — a palette
+  change — but with one addition that matters more than the new hue: `badge.tsx`'s `default`
+  variant no longer paints an alpha composite at all. It carries the solid
+  `--accent` / `--accent-foreground` pair, which measures **5.61:1 light and 4.98:1 dark** and is
+  now a row in `tokens-contrast.test.ts`'s `PAIRS`. So the gap this entry describes — "no way to
+  express a 10%-alpha composite over a Card" — is not merely worked around; the pair moved
+  *into* the token test's reach and is asserted in both themes. Both `KNOWN_VIOLATIONS` rows were
+  deleted, and the ratchet is what forced it: the sweep failed with "Saw: nothing" and named them.
+
+  Worth keeping from this entry: the indigo primary was deliberately darkened one step
+  (`#5A4FF3` → `#4F45E0`) *because* of this defect. At the design system's own value the badge
+  measured 4.73:1 over a Card but 4.41:1 over the page — a pass that depended on what sat behind
+  it, which is the same fragility one hue lighter. `--input` was likewise darkened well past the
+  design system's `--border-strong`, whose documentation claims it "clears 3:1" and which actually
+  measures 1.53:1. Two numbers in a design document that were wrong; the test is why they were
+  checked.
+
+  **`destructive` badge: still the composite shape**, and still uncovered. `bg-destructive/10
+  text-destructive` was left alone because no surface renders it — grep finds only `default` and
+  `secondary` in use — and giving it a solid pair means adding a `--destructive-soft` token, which
+  is a palette decision nobody has needed yet. It will surface the day a destructive badge renders
+  in a swept state, exactly as this entry warned.
+
+  **404: CLOSED 2026-09-12, and it needed exactly what this entry said it needed.** Re-hueing the
+  palette could never move its 3.34:1, because the file bypassed the token system altogether
+  (`bg-gray-100`, `text-gray-600`, `text-blue-500`). Slice 8 tokenized *and* translated it:
+  `--background`, `--muted-foreground` and `--primary`, reading "Sivua ei löytynyt". Both
+  `KNOWN_VIOLATIONS` rows are deleted and the state sweeps clean at both viewports with
+  `color-contrast` on. The link's pair — `primary` on `background` — is now in
+  `tokens-contrast.test.ts`'s `PAIRS`, so it is gated in both themes rather than resting on the
+  one axe run. `KNOWN_VIOLATIONS` still holds the `scrollable-region-focusable` row and nothing
+  else.
 
 ## 2026-09-07 — the sweep measured contrast mid-animation before it was told not to
 - **What:** the first run of the state sweep reported `color-contrast` on `/settings`'s inactive
@@ -284,8 +534,15 @@ cut (`/confess`), read first by any architecture or review session, dispositione
   announce in English ("Close", "More pages") in an otherwise Finnish app, two of them on
   components in daily use, and app code has no `sr-only` text at all. axe reads a name's presence,
   never its language, so `A11Y-9` is the row that names this and it has no gate.
-- **Disposition:** open — Playwright is the single change that would convert three rows from
-  `[live]`/`[review-only]` to `[test]`. Revisit when a second surface or a second user arrives.
+- **Disposition:** `A11Y-1`, `A11Y-2a` and `A11Y-7` closed 2026-09-07 by ADR-0005 — Playwright
+  landed and was the single change that converted them, as this entry predicted. **`A11Y-6`
+  closed 2026-09-12** (spec 0006 slice 8): `index.css` carries a `prefers-reduced-motion: reduce`
+  block and `e2e/motion.spec.ts` is its enforcer, with a `no-preference` control so the pair
+  proves the media query switches rather than a constant being read back. `active:scale-[0.98]`
+  is out of its scope on purpose and the `A11Y-6` row says why. **`A11Y-8` (200% zoom) and
+  `A11Y-9` (a control announcing itself in the wrong language) stay open**, both still
+  `[review-only]` with nothing behind them, and `A11Y-9` still has the seven English `sr-only`
+  strings in `src/components/ui/**` behind it.
 
 ## 2026-09-07 — DESIGN.md's loading thresholds are decided but not implemented
 - **What:** §3 decides that nothing shows a spinner before 300ms, that a Card's frame never waits

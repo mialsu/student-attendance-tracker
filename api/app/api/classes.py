@@ -3,12 +3,10 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, status
-from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.dependencies import CurrentUser
-from app.models.attendance import AttendanceRecord
 from app.schemas.class_ import ClassCreate, ClassResponse, ClassUpdate
 from app.services import class_service
 
@@ -32,29 +30,21 @@ async def list_classes(
         limit: Maximum records to return (1-100)
 
     Returns:
-        List of classes with attendance counts
+        List of classes, each with its attendance and Student counts
     """
-    # Get classes for teacher
+    # One statement, counts included. The COUNT-per-class loop that used to live here measured
+    # 7 statements for 5 classes; test_query_budget.py holds the ceiling that keeps it flat.
     classes = await class_service.get_classes_for_teacher(
         db, current_user.id, skip, limit
     )
-    
-    # Get attendance counts for each class
+
     class_responses = []
-    for class_obj in classes:
-        # Count attendance records
-        count_result = await db.execute(
-            select(func.count(AttendanceRecord.id)).where(
-                AttendanceRecord.class_id == class_obj.id
-            )
-        )
-        attendance_count = count_result.scalar_one()
-        
-        # Create response with attendance count
+    for class_obj, counts in classes:
         response = ClassResponse.model_validate(class_obj)
-        response.attendance_count = attendance_count
+        response.attendance_count = counts.attendance_count
+        response.student_count = counts.student_count
         class_responses.append(response)
-    
+
     return class_responses
 
 
@@ -76,11 +66,12 @@ async def create_class(
         Created class
     """
     class_obj = await class_service.create_class(db, class_data, current_user)
-    
-    # Return with attendance count of 0
+
+    # A Class is born empty on both counts, so this needs no query.
     response = ClassResponse.model_validate(class_obj)
     response.attendance_count = 0
-    
+    response.student_count = 0
+
     return response
 
 
@@ -105,23 +96,16 @@ async def get_class(
         404: If class not found
         403: If user doesn't own the class
     """
-    # Verify ownership
+    # INV-1's single enforcement site (spec 0003). Counting happens after, never instead.
     class_obj = await class_service.verify_class_ownership(
         db, class_id, current_user
     )
-    
-    # Get attendance count
-    count_result = await db.execute(
-        select(func.count(AttendanceRecord.id)).where(
-            AttendanceRecord.class_id == class_id
-        )
-    )
-    attendance_count = count_result.scalar_one()
-    
-    # Create response with attendance count
+    counts = await class_service.count_class_rows(db, class_id)
+
     response = ClassResponse.model_validate(class_obj)
-    response.attendance_count = attendance_count
-    
+    response.attendance_count = counts.attendance_count
+    response.student_count = counts.student_count
+
     return response
 
 
@@ -151,19 +135,12 @@ async def update_class(
     class_obj = await class_service.update_class(
         db, class_id, class_data, current_user
     )
-    
-    # Get attendance count
-    count_result = await db.execute(
-        select(func.count(AttendanceRecord.id)).where(
-            AttendanceRecord.class_id == class_id
-        )
-    )
-    attendance_count = count_result.scalar_one()
-    
-    # Create response with attendance count
+    counts = await class_service.count_class_rows(db, class_id)
+
     response = ClassResponse.model_validate(class_obj)
-    response.attendance_count = attendance_count
-    
+    response.attendance_count = counts.attendance_count
+    response.student_count = counts.student_count
+
     return response
 
 

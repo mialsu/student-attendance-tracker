@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@/test/test-utils';
+import { fireEvent, render, screen, waitFor } from '@/test/test-utils';
 import userEvent from '@testing-library/user-event';
 import Auth from '@/pages/Auth';
 import type { AuthResponse, User } from '@/api/types';
@@ -237,5 +237,49 @@ describe('Authentication flow', () => {
     expect((screen.getByLabelText('Salasana') as HTMLInputElement).value).toBe('');
     expect((screen.getByLabelText('Vahvista salasana') as HTMLInputElement).value).toBe('');
     expect((screen.getByLabelText('Rekisteröintikoodi') as HTMLInputElement).value).toBe('');
+  });
+
+  /**
+   * The in-flight state, which this form did not have. Measured in the browser before it was
+   * written: two clicks on *Kirjaudu* sent two `POST /api/auth/login`. `DESIGN.md:151` says
+   * "button disables" for both modes of this surface, and §3 states the convention every other
+   * mutation in the app already follows. One `<Button type="submit">` serves both modes
+   * (`Auth.tsx:279`), so the two tests below are the two branches of one control.
+   */
+  const neverSettles = <T,>() => new Promise<T>(() => {});
+
+  it('disables its submit while a login is in flight, so a double click posts once', async () => {
+    const user = userEvent.setup();
+    vi.mocked(authApi.login).mockReturnValue(neverSettles<AuthResponse>());
+
+    render(<Auth />);
+    await user.type(screen.getByLabelText('Sähköposti'), teacher.email);
+    await user.type(screen.getByLabelText('Salasana'), 'password123');
+    await user.click(screen.getByRole('button', { name: /^kirjaudu$/i }));
+
+    const pending = await screen.findByRole('button', { name: 'Kirjaudutaan...' });
+    expect(pending).toBeDisabled();
+
+    // fireEvent, not userEvent: `disabled:pointer-events-none` makes userEvent refuse the click
+    // as unreachable, which would assert the CSS rather than the guard.
+    fireEvent.click(pending);
+    await waitFor(() => expect(authApi.login).toHaveBeenCalledTimes(1));
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it('disables its submit while a signup is in flight, so a double click posts once', async () => {
+    const user = userEvent.setup();
+    vi.mocked(authApi.signup).mockReturnValue(neverSettles<AuthResponse>());
+
+    render(<Auth />);
+    await toSignup(user);
+    await fillSignup(user, { email: teacher.email, password: 'password123', code: CODE });
+    await user.click(screen.getByRole('button', { name: /^rekisteröidy$/i }));
+
+    const pending = await screen.findByRole('button', { name: 'Rekisteröidään...' });
+    expect(pending).toBeDisabled();
+
+    fireEvent.click(pending);
+    await waitFor(() => expect(authApi.signup).toHaveBeenCalledTimes(1));
   });
 });

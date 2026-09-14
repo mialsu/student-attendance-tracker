@@ -267,4 +267,157 @@ describe('AttendanceTracking Component', () => {
       screen.getByText(/Ala kirjoittaa opiskelijan nimeä nähdäksesi ehdotuksia/i)
     ).toBeInTheDocument();
   });
+
+  // AC4 / US-13, US-14. Before this block the list was mouse-only: measured on 2026-09-11, two
+  // ArrowDown presses left the active option at index 0, focus never left the input, Enter did
+  // not accept the highlighted row, and the input carried no combobox semantics at all. The
+  // walk's "with no mouse" test passed anyway because it types the whole name and dismisses the
+  // list with Escape, which is the one keyboard path that did work.
+  describe('the suggestion list, driven from the keyboard', () => {
+    const SUGGESTIONS = [
+      { id: 's1', name: 'Väinö Nieminen', total_attendance: 7 },
+      { id: 's2', name: 'Väinö Virtanen', total_attendance: 4 },
+      { id: 's3', name: 'Väinämö Koskinen', total_attendance: 1 },
+    ];
+
+    // `as unknown as` rather than the `as any` the tests above use: the lint gate is a ratchet,
+    // and four more `no-explicit-any` errors would have raised its baseline (`setup.ts:65` is the
+    // existing precedent for this shape).
+    type AutocompleteResult = ReturnType<typeof useStudentsHooks.useStudentAutocomplete>;
+    type CreateResult = ReturnType<typeof useAttendanceHooks.useCreateAttendance>;
+
+    const withSuggestions = (data: typeof SUGGESTIONS) =>
+      vi.mocked(useStudentsHooks.useStudentAutocomplete).mockReturnValue({
+        data,
+        isLoading: false,
+        error: null,
+      } as unknown as AutocompleteResult);
+
+    const withMutation = (mutateAsync = vi.fn()) => {
+      vi.mocked(useAttendanceHooks.useCreateAttendance).mockReturnValue({
+        mutateAsync,
+        isPending: false,
+      } as unknown as CreateResult);
+      return mutateAsync;
+    };
+
+    const open = async (data: typeof SUGGESTIONS = SUGGESTIONS) => {
+      withMutation();
+      withSuggestions(data);
+
+      const user = userEvent.setup();
+      render(<AttendanceTracking classId={mockClassId} />);
+      const name = screen.getByLabelText('Opiskelijan nimi');
+      await user.type(name, 'Vä');
+      if (data.length > 0) {
+        await waitFor(() => expect(screen.getAllByRole('option')).toHaveLength(data.length));
+      }
+      return { user, name };
+    };
+
+    const activeOptionName = (name: HTMLElement) => {
+      const id = name.getAttribute('aria-activedescendant');
+      return id ? document.getElementById(id)?.textContent ?? null : null;
+    };
+
+    it('presents the field as a combobox owning a listbox', async () => {
+      const { name } = await open();
+
+      expect(name).toHaveAttribute('role', 'combobox');
+      expect(name).toHaveAttribute('aria-expanded', 'true');
+      expect(name).toHaveAttribute('aria-autocomplete', 'list');
+
+      const listId = name.getAttribute('aria-controls');
+      expect(listId).toBeTruthy();
+      expect(document.getElementById(listId!)).toHaveAttribute('role', 'listbox');
+    });
+
+    it('nominates no option until a key asks for one', async () => {
+      const { name } = await open();
+      expect(name).not.toHaveAttribute('aria-activedescendant');
+    });
+
+    it('moves the active option down and up, and wraps at both ends', async () => {
+      const { user, name } = await open();
+
+      await user.keyboard('{ArrowDown}');
+      expect(activeOptionName(name)).toContain('Väinö Nieminen');
+
+      await user.keyboard('{ArrowDown}');
+      expect(activeOptionName(name)).toContain('Väinö Virtanen');
+
+      await user.keyboard('{ArrowUp}');
+      expect(activeOptionName(name)).toContain('Väinö Nieminen');
+
+      // Up from the first wraps to the last, down from the last back to the first.
+      await user.keyboard('{ArrowUp}');
+      expect(activeOptionName(name)).toContain('Väinämö Koskinen');
+      await user.keyboard('{ArrowDown}');
+      expect(activeOptionName(name)).toContain('Väinö Nieminen');
+    });
+
+    it('marks exactly one option selected as it moves', async () => {
+      const { user, name } = await open();
+      await user.keyboard('{ArrowDown}{ArrowDown}');
+
+      const selected = screen
+        .getAllByRole('option')
+        .filter((option) => option.getAttribute('aria-selected') === 'true');
+
+      expect(selected).toHaveLength(1);
+      expect(selected[0].textContent).toContain('Väinö Virtanen');
+      expect(activeOptionName(name)).toContain('Väinö Virtanen');
+    });
+
+    it('accepts the active option with Enter, and does not submit the form', async () => {
+      const mutateAsync = withMutation();
+      withSuggestions(SUGGESTIONS);
+
+      const user = userEvent.setup();
+      render(<AttendanceTracking classId={mockClassId} />);
+      const name = screen.getByLabelText('Opiskelijan nimi') as HTMLInputElement;
+      await user.type(name, 'Vä');
+      await waitFor(() => expect(screen.getAllByRole('option')).toHaveLength(3));
+
+      await user.keyboard('{ArrowDown}{ArrowDown}{Enter}');
+
+      expect(name.value).toBe('Väinö Virtanen');
+      expect(screen.queryAllByRole('option')).toHaveLength(0);
+      expect(name).toHaveAttribute('aria-expanded', 'false');
+      expect(mutateAsync).not.toHaveBeenCalled();
+    });
+
+    it('closes the list on Escape and leaves the typed text alone', async () => {
+      const { user, name } = await open();
+
+      await user.keyboard('{Escape}');
+
+      expect(screen.queryAllByRole('option')).toHaveLength(0);
+      expect(name).toHaveAttribute('aria-expanded', 'false');
+      expect((name as HTMLInputElement).value).toBe('Vä');
+    });
+
+    // The handoff's recurring defect: accessible-name computation joins descendant text with no
+    // separator, so a row carrying a name and a tally announces as "Väinö Nieminen7 läsnäoloa".
+    // The visible name stays the leading substring of the accessible one (WCAG 2.5.3).
+    it('names each option so the tally does not run into the name', async () => {
+      await open();
+
+      expect(
+        screen.getByRole('option', { name: 'Väinö Nieminen, 7 läsnäoloa' })
+      ).toBeInTheDocument();
+    });
+
+    // US-14. "Ei ehdotuksia" said only that the list was empty; it never told her that
+    // submitting would create someone.
+    it('says a new student will be created when nothing matches', async () => {
+      await open([]);
+
+      // The claim waits for the 300ms debounce to catch up with the field, so that it is never
+      // made about a stale or in-flight result.
+      await waitFor(() =>
+        expect(screen.getByText(/luodaan uusi opiskelija/i)).toBeInTheDocument()
+      );
+    });
+  });
 });

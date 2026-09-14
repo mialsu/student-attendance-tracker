@@ -8,16 +8,13 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
-import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
-const SIDEBAR_COOKIE_NAME = "sidebar:state";
-const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7;
 const SIDEBAR_WIDTH = "16rem";
 const SIDEBAR_WIDTH_MOBILE = "18rem";
 const SIDEBAR_WIDTH_ICON = "3rem";
-const SIDEBAR_KEYBOARD_SHORTCUT = "b";
 
 type SidebarContext = {
   state: "expanded" | "collapsed";
@@ -55,6 +52,9 @@ const SidebarProvider = React.forwardRef<
   // We use openProp and setOpenProp for control from outside the component.
   const [_open, _setOpen] = React.useState(defaultOpen);
   const open = openProp ?? _open;
+  // Upstream also wrote a `sidebar:state` cookie here. Dropped: nothing in this app collapses
+  // the desktop sidebar, so the cookie recorded a state that never changes, and this copy never
+  // read it back either (shadcn reads it server-side, which a Vite SPA has no equivalent of).
   const setOpen = React.useCallback(
     (value: boolean | ((value: boolean) => boolean)) => {
       const openState = typeof value === "function" ? value(open) : value;
@@ -63,9 +63,6 @@ const SidebarProvider = React.forwardRef<
       } else {
         _setOpen(openState);
       }
-
-      // This sets the cookie to keep the sidebar state.
-      document.cookie = `${SIDEBAR_COOKIE_NAME}=${openState}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE}`;
     },
     [setOpenProp, open],
   );
@@ -75,18 +72,11 @@ const SidebarProvider = React.forwardRef<
     return isMobile ? setOpenMobile((open) => !open) : setOpen((open) => !open);
   }, [isMobile, setOpen, setOpenMobile]);
 
-  // Adds a keyboard shortcut to toggle the sidebar.
-  React.useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === SIDEBAR_KEYBOARD_SHORTCUT && (event.metaKey || event.ctrlKey)) {
-        event.preventDefault();
-        toggleSidebar();
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [toggleSidebar]);
+  // Upstream's Cmd/Ctrl+B shortcut is deliberately NOT installed. The shell renders its trigger
+  // only while collapsed (AppSidebar), so on a desktop width that shortcut slid the whole
+  // navigation off-screen with nothing on the page able to bring it back — recoverable only by
+  // reloading. An undocumented keystroke that hides the nav is a defect, not a feature. If a
+  // desktop collapse is ever wanted, it needs a visible control (SidebarRail) in the same change.
 
   // We add a state so that we can do data-state="expanded" or "collapsed".
   // This makes it easier to style the sidebar with Tailwind classes.
@@ -156,6 +146,9 @@ const Sidebar = React.forwardRef<
         <SheetContent
           data-sidebar="sidebar"
           data-mobile="true"
+          // Radix warns unless a dialog either has a Description or says it has none. A list of
+          // navigation links needs no prose describing it, so this is the explicit "none".
+          aria-describedby={undefined}
           className="w-[--sidebar-width] bg-sidebar p-0 text-sidebar-foreground [&>button]:hidden"
           style={
             {
@@ -164,16 +157,26 @@ const Sidebar = React.forwardRef<
           }
           side={side}
         >
+          {/* Upstream renders no title here, which left the drawer a dialog with no accessible
+              name: a screen-reader user is told "dialog" and nothing else. Added rather than
+              inherited, and note that the browser walk does NOT prove this — axe's
+              `aria-dialog-name` is tagged `best-practice`, and e2e/assertions.ts runs only the
+              four WCAG tags, so the nameless version swept clean. `AppShell.test.tsx` asserts the
+              name instead. `sr-only` because the drawer already shows the brand visually. */}
+          <SheetTitle className="sr-only">Valikko</SheetTitle>
           <div className="flex h-full w-full flex-col">{children}</div>
         </SheetContent>
       </Sheet>
     );
   }
 
+  // `shell:` below, not upstream's `md:`: one breakpoint for the shell, defined once in
+  // src/lib/breakpoints.ts and read by use-mobile.tsx too. At `md` these classes agreed with the
+  // JS check only because both said 768; at 940 they would have disagreed between the two widths.
   return (
     <div
       ref={ref}
-      className="group peer hidden text-sidebar-foreground md:block"
+      className="group peer hidden text-sidebar-foreground shell:block"
       data-state={state}
       data-collapsible={state === "collapsed" ? collapsible : ""}
       data-variant={variant}
@@ -192,7 +195,7 @@ const Sidebar = React.forwardRef<
       />
       <div
         className={cn(
-          "fixed inset-y-0 z-10 hidden h-svh w-[--sidebar-width] transition-[left,right,width] duration-200 ease-linear md:flex",
+          "fixed inset-y-0 z-10 hidden h-svh w-[--sidebar-width] transition-[left,right,width] duration-200 ease-linear shell:flex",
           side === "left"
             ? "left-0 group-data-[collapsible=offcanvas]:left-[calc(var(--sidebar-width)*-1)]"
             : "right-0 group-data-[collapsible=offcanvas]:right-[calc(var(--sidebar-width)*-1)]",
