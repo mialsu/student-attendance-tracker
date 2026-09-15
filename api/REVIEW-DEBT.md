@@ -6,6 +6,22 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 
 <!-- Newest first. -->
 
+## 2026-09-15 — the SQLite branch of the statistics query is unreachable, and now also wrong
+- **What:** `get_attendance_statistics` branches on `db.bind.dialect.name`. Spec 0009 converted
+  the PostgreSQL branch to the configured timezone with `AT TIME ZONE`, which SQLite has no
+  equivalent for. The `else` branch still buckets by UTC day, so the two branches now disagree
+  about what a day is.
+- **Why it is not a live bug:** nothing reaches it. `conftest.py` requires a PostgreSQL
+  `TEST_DATABASE_URL` with no default, production is PostgreSQL 17, and the docstring's claim of
+  SQLite compatibility has outlived the SQLite it was written for — CLAUDE.md's *Test Database*
+  section says "PostgreSQL 17, never SQLite" in as many words.
+- **What green tests do not prove:** anything at all about that branch. No test can fail there,
+  which is exactly why the divergence could be introduced without a single red result.
+- **The fix:** delete the branch and the dialect check with it. That is proven-dead deletion,
+  which `/prune` owns and spec 0009 deliberately did not widen into. A comment at the site names
+  the divergence so a reader is not misled in the meantime.
+- **Disposition:** open, low priority, and a good first candidate for the next `/prune`.
+
 ## 2026-09-15 — every date this API reports is a UTC day, and no screen says so
 - **What:** `get_attendance_statistics` groups with `date_trunc('day', timestamp)` against a
   `timestamptz` column under a **UTC** session, so "a day" means a UTC day. Spec 0008's timeframe
@@ -26,13 +42,17 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 - **The two ways out:** aggregate with `AT TIME ZONE 'Europe/Helsinki'` and move the range bounds
   with it, which changes every figure the endpoint has ever returned and needs a decision about
   what happens to existing data; or keep UTC.
-- **Disposition: decided by the Owner, 2026-09-15 — UTC stays.** No code change, and the entry is
-  kept rather than deleted because the behaviour is still surprising and the next person to meet
-  it deserves the reasoning rather than a rediscovery. The Helsinki alternative was rejected on
-  cost against reach: it moves every figure the endpoint has ever returned, for the sake of
-  records logged between local midnight and 02:00 or 03:00, which a teacher's register rarely
-  holds. **Left unsettled on purpose:** whether a screen should say the dates are UTC. That is a
-  client question, and it belongs to spec 0008 slice 2 or 3 if it is worth doing at all.
+- **Disposition: CLOSED, 2026-09-15 — fixed by spec 0009.** The Owner's first answer that day was
+  "keep UTC"; he reversed it within the hour on a ground the technical framing had missed — this
+  repository is going public, and two screens disagreeing about one record is not a thing to
+  carry into a portfolio. The reversal is recorded rather than tidied away, because the second
+  reason was the better one and the entry is the evidence.
+  **What closed it:** `app_timezone` (default `Europe/Helsinki`) with two helpers in
+  `attendance_service` — `_local_midnight` for sargable range bounds, `_local_wall_clock` for
+  grouping. No migration and no backfill: every stored row was already a correct instant, and
+  only the interpretation changed. Watched failing three ways before it was trusted (unconverted
+  grouping, UTC range bounds, and the config validator removed). Tests run at both DST offsets,
+  so a hardcoded +2 or +3 fails one of them.
 
 ## 2026-09-15 — two endpoints now read `date_from`/`date_to` differently, and one of them is wrong
 - **What:** spec 0008 slice 1 gave `GET /classes/{id}/attendance/statistics` a timeframe typed
@@ -50,8 +70,12 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 - **The fix, when someone takes it:** the same `datetime.combine(date_to + 1 day, time.min)`
   bound, and a test at 23:59 on the end day. It is a behaviour change for any caller relying on
   today's exclusive end, which today means nobody.
-- **Disposition:** open. Small, and worth doing before any screen exposes a date filter on
-  *Läsnäolot*.
+- **Disposition: CLOSED, 2026-09-15 — fixed by spec 0009**, which rewrote the same comparison for
+  the timezone and would otherwise have left the two endpoints on different rules. `date_to` on
+  the list endpoint is now the start of the following local day, exclusive — the same half-open
+  rule the statistics endpoint uses. Its parameters stay typed `datetime`: no surface exposes
+  them and the contract had no reason to change. Watched failing first:
+  `tests/test_attendance.py::TestListEndDayIsWhole` is red against the old `<=`.
 
 ## 2026-09-15 — "Yhteensä läsnäoloja" will drop once on deploy, and that is the accepted cost
 - **What:** `get_attendance_statistics` computed `total_records` and `total_students` over **all**

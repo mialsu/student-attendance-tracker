@@ -2,11 +2,13 @@
 
 from datetime import date, datetime, time, timedelta, timezone
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import contains_eager
 
+from app.config import settings
 from app.core.exceptions import (
     BadRequestException,
     NotFoundError,
@@ -17,6 +19,27 @@ from app.models.student import Student
 from app.models.user import User
 from app.schemas.attendance import AttendanceRecordCreate
 from app.services import class_service, student_service
+
+
+def _local_midnight(day: date) -> datetime:
+    """The instant at which `day` begins in the configured timezone.
+
+    Used for range bounds rather than converting the column, so the comparison stays sargable and
+    the index on `AttendanceRecord.timestamp` is still used. The offset is resolved per date by
+    the tz database, so winter (+02) and summer (+03) need no arithmetic here and no re-check in
+    March (spec 0009).
+    """
+    return datetime.combine(day, time.min, tzinfo=ZoneInfo(settings.app_timezone))
+
+
+def _local_wall_clock(column):
+    """`column` converted from an instant to wall-clock time in the configured timezone.
+
+    For GROUPING, where the index is irrelevant anyway. PostgreSQL's `AT TIME ZONE`, which turns
+    a `timestamptz` into a naive local `timestamp` -- so `date_trunc` over the result buckets by
+    the teacher's day rather than by UTC's.
+    """
+    return func.timezone(settings.app_timezone, column)
 
 
 async def get_attendance_by_id(
@@ -90,16 +113,18 @@ async def list_attendance_for_class(
 
     # Apply date filters.
     #
-    # WARNING: these two do NOT mean what the identically-named parameters on
-    # `get_attendance_statistics` mean. Here they are `datetime` and the end is compared `<=`, so
-    # `date_to=2026-03-10` parses to midnight and drops that whole day's records. There the
-    # parameters are `date` and the window is half-open, so the end day is included in full.
-    # Confessed in REVIEW-DEBT.md (2026-09-15) rather than fixed: no surface exposes these two, so
-    # nothing is broken for a user today. Fix this before any screen does.
+    # `date_to` names a DAY, and the whole of it counts. It compared `<=` against a `datetime`
+    # until spec 0009, so an end date parsed to midnight and silently dropped every record of the
+    # day it named. The bound is now the start of the following local day, exclusive -- the same
+    # half-open rule `get_attendance_statistics` uses, so the two endpoints read the parameter
+    # identically. The type stays `datetime` because no surface exposes these two and changing
+    # the contract was not spec 0009's business; only the end boundary moved.
     if date_from:
         base_query = base_query.where(AttendanceRecord.timestamp >= date_from)
     if date_to:
-        base_query = base_query.where(AttendanceRecord.timestamp <= date_to)
+        base_query = base_query.where(
+            AttendanceRecord.timestamp < _local_midnight(date_to.date() + timedelta(days=1))
+        )
 
     # Get total count
     count_query = select(func.count()).select_from(base_query.subquery())
@@ -470,14 +495,10 @@ async def get_attendance_statistics(
     # that index; a `datetime` parameter would inherit `list_attendance_for_class`'s trap, where an
     # end date parses to midnight and silently drops that day (spec 0008, decisions 3 and 4).
     if date_from is not None:
-        where_conditions.append(
-            AttendanceRecord.timestamp
-            >= datetime.combine(date_from, time.min, tzinfo=timezone.utc)
-        )
+        where_conditions.append(AttendanceRecord.timestamp >= _local_midnight(date_from))
     if date_to is not None:
         where_conditions.append(
-            AttendanceRecord.timestamp
-            < datetime.combine(date_to + timedelta(days=1), time.min, tzinfo=timezone.utc)
+            AttendanceRecord.timestamp < _local_midnight(date_to + timedelta(days=1))
         )
 
     # Add date exclusions if provided
@@ -494,7 +515,7 @@ async def get_attendance_statistics(
             # Exclude records where DATE(timestamp) matches any excluded date
             for excluded_date in exclude_date_objs:
                 where_conditions.append(
-                    func.date(AttendanceRecord.timestamp) != excluded_date
+                    func.date(_local_wall_clock(AttendanceRecord.timestamp)) != excluded_date
                 )
 
     # Both totals now describe the same rows the charts below them draw, and they are one
@@ -514,7 +535,7 @@ async def get_attendance_statistics(
     if dialect == 'postgresql':
         # PostgreSQL: use date_trunc for efficient aggregation
         # Daily aggregation
-        date_col = func.date_trunc('day', AttendanceRecord.timestamp)
+        date_col = func.date_trunc('day', _local_wall_clock(AttendanceRecord.timestamp))
         daily_result = await db.execute(
             select(
                 date_col.label('date'),
@@ -533,7 +554,7 @@ async def get_attendance_statistics(
         ]
 
         # Monthly aggregation
-        month_col = func.date_trunc('month', AttendanceRecord.timestamp)
+        month_col = func.date_trunc('month', _local_wall_clock(AttendanceRecord.timestamp))
         monthly_result = await db.execute(
             select(
                 month_col.label('month'),
@@ -551,8 +572,14 @@ async def get_attendance_statistics(
             for row in monthly_result.all()
         ]
     else:
-        # SQLite: use date() and strftime() functions
-        # Daily aggregation
+        # SQLite: use date() and strftime() functions.
+        #
+        # NOT zone-converted, and it cannot be: `AT TIME ZONE` is PostgreSQL's. This branch
+        # therefore still buckets by UTC day and disagrees with the one above. It is unreachable
+        # -- `conftest.py` demands a PostgreSQL `TEST_DATABASE_URL` with no default and production
+        # is PostgreSQL 17 -- so nothing exercises it and no test can fail here. Confessed in
+        # REVIEW-DEBT.md (2026-09-15); the honest fix is deleting the branch, which is /prune's
+        # job and not spec 0009's.
         date_col = func.date(AttendanceRecord.timestamp)
         daily_result = await db.execute(
             select(

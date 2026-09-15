@@ -562,7 +562,9 @@ GET    /classes/{id}/attendance/summary - Get summary by student (course credit;
 GET    /classes/{id}/attendance/statistics - Daily/monthly aggregates (exclude_dates optional;
                                           date_from/date_to optional, both inclusive of their
                                           whole day — every figure including the two totals
-                                          describes the timeframe, spec 0008)
+                                          describes the timeframe, spec 0008). Every date is a
+                                          LOCAL day (APP_TIMEZONE, default Europe/Helsinki),
+                                          not a UTC one — spec 0009 and ADR-0008
 ```
 
 **Admin — there is none.** The three `/api/admin/codes` endpoints and the superadmin role that

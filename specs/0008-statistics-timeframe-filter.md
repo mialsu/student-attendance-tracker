@@ -249,7 +249,15 @@ Slice 1 is the only one that changes a production figure, and it does so the mom
 
 ## Open Questions
 
-2. **Which clock is a "day"? — RESOLVED 2026-09-15 by the Owner: it stays UTC.** No code change;
+2. **Which clock is a "day"? — SUPERSEDED by spec 0009, same day.** First answered "keep UTC",
+   then reversed within the hour once the Owner named a reason the technical framing had missed:
+   this repository is going public, and two screens disagreeing about one record is not a thing
+   to carry into a portfolio. `specs/0009-local-day-boundaries.md` is the answer — a day is a
+   Finnish day, decided by the `app_timezone` setting. The original resolution is kept below
+   because the reversal is the record, and because the rejected reasoning is still the right
+   reasoning for a project that is *not* going public.
+
+   ~~RESOLVED 2026-09-15 by the Owner: it stays UTC.~~ No code change;
    the endpoint keeps the behaviour it has always had, and slice 1's range keeps agreeing with the
    buckets exactly. The rejected alternative was aggregating `AT TIME ZONE 'Europe/Helsinki'` and
    moving the range bounds with it, which would have changed every figure the endpoint has ever

@@ -6,7 +6,7 @@ utility — there is no external tracker, and GitHub Issues is deliberately unus
 
 ## Conventions
 
-- One spec per feature: `specs/NNNN-<slug>.md`, numbered sequentially (next free: `0009`).
+- One spec per feature: `specs/NNNN-<slug>.md`, numbered sequentially (next free: `0010`).
 - Tracer slices and open questions are sections *inside* the spec, not separate ticket
   files — devkit's METHOD folds slices into the local spec for solo work.
 - If a feature ever genuinely needs per-ticket files, use

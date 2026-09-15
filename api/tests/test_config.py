@@ -7,6 +7,7 @@ a credential is loud instead of silent.
 """
 
 import pytest
+from pydantic import ValidationError
 
 from app.config import Settings
 
@@ -116,6 +117,30 @@ class TestDocsCredentialsRequired:
         s = settings_for(environment="development", debug=True)
         assert s.docs_username != "admin"
         assert s.docs_password != "changeme"
+
+
+class TestApplicationTimezone:
+    """Spec 0009 AC-8 — every reported date depends on this, so an unusable zone stops the app.
+
+    `app/config.py` is an import-time singleton, so a `ValidationError` here means the process
+    never starts. The alternative is worse than a crash: an app that serves every date shifted
+    by an unknown amount and says nothing.
+    """
+
+    def test_it_defaults_to_the_teachers_zone(self):
+        assert settings_for().app_timezone == "Europe/Helsinki"
+
+    def test_a_resolvable_zone_is_accepted(self):
+        assert settings_for(app_timezone="UTC").app_timezone == "UTC"
+
+    @pytest.mark.parametrize(
+        "bad", ["Europe/Helsinky", "EET+3", "", "Mars/Olympus_Mons"]
+    )
+    def test_an_unresolvable_zone_refuses_to_start(self, bad):
+        with pytest.raises(ValidationError) as exc:
+            settings_for(app_timezone=bad)
+
+        assert "APP_TIMEZONE" in str(exc.value)
 
 
 class TestCookieScope:

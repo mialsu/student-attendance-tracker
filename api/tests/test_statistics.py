@@ -1,7 +1,7 @@
 """Tests for attendance statistics endpoint."""
 
 import pytest
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from httpx import AsyncClient
 from app.models.class_ import Class
 
@@ -21,14 +21,14 @@ class TestAttendanceStatistics:
         yesterday = today - timedelta(days=1)
 
         # Create attendance for 2 different days
-        for date in [today, yesterday]:
+        for day in [today, yesterday]:
             for i in range(3):
                 response = await client.post(
                     f"/api/classes/{class_id}/attendance",
                     headers=auth_headers,
                     json={
                         "student_name": f"Student {i}",
-                        "timestamp": date.isoformat(),
+                        "timestamp": day.isoformat(),
                     },
                 )
                 assert response.status_code == 201
@@ -65,13 +65,13 @@ class TestAttendanceStatistics:
         two_days_ago = today - timedelta(days=2)
 
         dates = [today, yesterday, two_days_ago]
-        for date in dates:
+        for day in dates:
             response = await client.post(
                 f"/api/classes/{class_id}/attendance",
                 headers=auth_headers,
                 json={
                     "student_name": "Test Student",
-                    "timestamp": date.isoformat(),
+                    "timestamp": day.isoformat(),
                 },
             )
             assert response.status_code == 201
@@ -391,12 +391,15 @@ class TestStatisticsTimeframe:
         self, client: AsyncClient, auth_headers: dict, test_class: Class
     ):
         class_id = test_class.id
+        # Instants are UTC; the comment is the Helsinki wall clock that matters. April is +03,
+        # so local midnight on the 10th is 2026-04-09T21:00:00Z. These two straddle the END of
+        # the 10th. They read 23:59:59Z / 00:00:00Z until spec 0009 made a day a Finnish day.
         await self._log(
-            client, auth_headers, class_id, "Last Second", "2026-04-10T23:59:59Z"
-        )
+            client, auth_headers, class_id, "Last Second", "2026-04-10T20:59:59Z"
+        )  # 2026-04-10 23:59:59 local
         await self._log(
-            client, auth_headers, class_id, "Next Midnight", "2026-04-11T00:00:00Z"
-        )
+            client, auth_headers, class_id, "Next Midnight", "2026-04-10T21:00:00Z"
+        )  # 2026-04-11 00:00:00 local
 
         data = await self._stats(
             client, auth_headers, class_id, date_from="2026-04-10", date_to="2026-04-10"
@@ -410,12 +413,13 @@ class TestStatisticsTimeframe:
         self, client: AsyncClient, auth_headers: dict, test_class: Class
     ):
         class_id = test_class.id
+        # As above: UTC instants, Helsinki meaning. These straddle the START of the 10th.
         await self._log(
-            client, auth_headers, class_id, "First Second", "2026-04-10T00:00:00Z"
-        )
+            client, auth_headers, class_id, "First Second", "2026-04-09T21:00:00Z"
+        )  # 2026-04-10 00:00:00 local
         await self._log(
-            client, auth_headers, class_id, "Day Before", "2026-04-09T23:59:59Z"
-        )
+            client, auth_headers, class_id, "Day Before", "2026-04-09T20:59:59Z"
+        )  # 2026-04-09 23:59:59 local
 
         data = await self._stats(client, auth_headers, class_id, date_from="2026-04-10")
 
@@ -480,3 +484,123 @@ class TestStatisticsTimeframe:
         )
 
         assert response.status_code == 422
+
+
+# Winter is UTC+2 and summer UTC+3 in Europe/Helsinki, so the same assertion run at both offsets
+# is what separates a real conversion from a hardcoded number. Each row is (the local day, an
+# instant 00:30 INSIDE it, an instant 23:30 on the day BEFORE it), all expressed in UTC.
+DST_CASES = [
+    pytest.param("2026-01-15", "2026-01-14T22:30:00Z", "2026-01-14T21:30:00Z", id="winter +02"),
+    pytest.param("2026-07-15", "2026-07-14T21:30:00Z", "2026-07-14T20:30:00Z", id="summer +03"),
+]
+
+
+@pytest.mark.asyncio
+class TestLocalDayBoundaries:
+    """Spec 0009 — a day is a Finnish day, at both DST offsets.
+
+    `AttendanceTracking` stamps the date the teacher picked with the current clock time, so a
+    record logged between local midnight and 02:00/03:00 used to shift back a day — including one
+    she had deliberately dated to another day. The client renders `timestamp` in the browser's
+    zone, so *Läsnäolot* said one day while *Tilastot* said another about the same record.
+    """
+
+    async def _log(self, client, auth_headers, class_id, name: str, instant: str):
+        response = await client.post(
+            f"/api/classes/{class_id}/attendance",
+            headers=auth_headers,
+            json={"student_name": name, "timestamp": instant},
+        )
+        assert response.status_code == 201
+
+    async def _stats(self, client, auth_headers, class_id, **params):
+        response = await client.get(
+            f"/api/classes/{class_id}/attendance/statistics",
+            headers=auth_headers,
+            params=params,
+        )
+        assert response.status_code == 200, response.text
+        return response.json()
+
+    # AC-1 — watched failing against `date_trunc('day', timestamp)` with no conversion.
+    @pytest.mark.parametrize("local_day,just_after,just_before", DST_CASES)
+    async def test_a_record_just_after_local_midnight_belongs_to_that_day(
+        self, client, auth_headers, test_class, local_day, just_after, just_before
+    ):
+        await self._log(client, auth_headers, test_class.id, "After Midnight", just_after)
+
+        data = await self._stats(client, auth_headers, test_class.id)
+
+        assert [row["date"] for row in data["daily_stats"]] == [local_day]
+
+    @pytest.mark.parametrize("local_day,just_after,just_before", DST_CASES)
+    async def test_a_record_just_before_local_midnight_belongs_to_the_previous_day(
+        self, client, auth_headers, test_class, local_day, just_after, just_before
+    ):
+        await self._log(client, auth_headers, test_class.id, "Before Midnight", just_before)
+
+        data = await self._stats(client, auth_headers, test_class.id)
+
+        previous_day = (date.fromisoformat(local_day) - timedelta(days=1)).isoformat()
+        assert [row["date"] for row in data["daily_stats"]] == [previous_day]
+
+    # AC-2 — the month follows the same zone as the day.
+    async def test_the_month_follows_the_local_day(
+        self, client, auth_headers, test_class
+    ):
+        # 2026-02-28T22:30:00Z is 1 March 00:30 in Helsinki: a March record, not a February one.
+        await self._log(
+            client, auth_headers, test_class.id, "March Arrival", "2026-02-28T22:30:00Z"
+        )
+
+        data = await self._stats(client, auth_headers, test_class.id)
+
+        assert [row["year_month"] for row in data["monthly_stats"]] == ["2026-03"]
+        assert [row["date"] for row in data["daily_stats"]] == ["2026-03-01"]
+
+    # AC-3 — watched failing against UTC midnight bounds.
+    @pytest.mark.parametrize("local_day,just_after,just_before", DST_CASES)
+    async def test_the_range_bounds_at_local_midnight(
+        self, client, auth_headers, test_class, local_day, just_after, just_before
+    ):
+        await self._log(client, auth_headers, test_class.id, "Inside", just_after)
+        await self._log(client, auth_headers, test_class.id, "Outside", just_before)
+
+        data = await self._stats(
+            client, auth_headers, test_class.id, date_from=local_day, date_to=local_day
+        )
+
+        assert [row["date"] for row in data["daily_stats"]] == [local_day]
+        assert data["total_records"] == 1
+        assert data["total_students"] == 1
+
+    # AC-4 — an excluded day is the local day, matching the buckets it filters.
+    @pytest.mark.parametrize("local_day,just_after,just_before", DST_CASES)
+    async def test_exclude_dates_removes_the_local_day(
+        self, client, auth_headers, test_class, local_day, just_after, just_before
+    ):
+        await self._log(client, auth_headers, test_class.id, "Hidden", just_after)
+        await self._log(client, auth_headers, test_class.id, "Kept", just_before)
+
+        data = await self._stats(
+            client, auth_headers, test_class.id, exclude_dates=local_day
+        )
+
+        previous_day = (date.fromisoformat(local_day) - timedelta(days=1)).isoformat()
+        assert [row["date"] for row in data["daily_stats"]] == [previous_day]
+        # Without the count this passes for the wrong reason: under UTC grouping both records
+        # land on `previous_day` and the exclusion removes nothing at all.
+        assert data["total_records"] == 1
+
+    # AC-5 — the totals count the rows the buckets draw, at the boundary too.
+    @pytest.mark.parametrize("local_day,just_after,just_before", DST_CASES)
+    async def test_the_totals_agree_with_the_buckets_at_the_boundary(
+        self, client, auth_headers, test_class, local_day, just_after, just_before
+    ):
+        await self._log(client, auth_headers, test_class.id, "One", just_after)
+        await self._log(client, auth_headers, test_class.id, "Two", just_before)
+
+        data = await self._stats(client, auth_headers, test_class.id, date_from=local_day)
+
+        counted_in_buckets = sum(row["count"] for row in data["daily_stats"])
+        assert data["total_records"] == counted_in_buckets == 1

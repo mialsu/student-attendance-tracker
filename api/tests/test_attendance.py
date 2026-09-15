@@ -728,6 +728,54 @@ class TestDateFiltering:
 
 
 @pytest.mark.asyncio
+@pytest.mark.asyncio
+class TestListEndDayIsWhole:
+    """Spec 0009 AC-7 — `date_to` on the list endpoint includes that whole local day.
+
+    It compared `timestamp <= date_to` against a `datetime`, so an end date parsed to midnight
+    and silently dropped every record of the day it named. Confessed on 2026-09-15 and fixed here
+    rather than in spec 0008, because this spec rewrites the same comparison for the timezone and
+    leaving the two endpoints on different rules is the defect it exists to end.
+
+    The parameter stays typed `datetime` -- no surface exposes it and spec 0009 has no reason to
+    change the contract. Only the end boundary moved.
+    """
+
+    async def _log(self, client, auth_headers, class_id, name: str, instant: str):
+        response = await client.post(
+            f"/api/classes/{class_id}/attendance",
+            headers=auth_headers,
+            json={"student_name": name, "timestamp": instant},
+        )
+        assert response.status_code == 201
+
+    async def test_date_to_keeps_the_whole_of_its_local_day(
+        self, client: AsyncClient, auth_headers: dict, test_class: Class
+    ):
+        # April is +03 in Helsinki, so local midnight on the 10th is 2026-04-09T21:00:00Z.
+        await self._log(
+            client, auth_headers, test_class.id, "Morning", "2026-04-10T06:00:00Z"
+        )  # 2026-04-10 09:00 local
+        await self._log(
+            client, auth_headers, test_class.id, "Last Second", "2026-04-10T20:59:59Z"
+        )  # 2026-04-10 23:59:59 local -- dropped entirely before spec 0009
+        await self._log(
+            client, auth_headers, test_class.id, "Next Day", "2026-04-10T21:00:00Z"
+        )  # 2026-04-11 00:00:00 local
+
+        response = await client.get(
+            f"/api/classes/{test_class.id}/attendance"
+            f"?date_from=2026-04-10T00:00:00%2B03:00&date_to=2026-04-10T00:00:00%2B03:00"
+        , headers=auth_headers)
+
+        assert response.status_code == 200, response.text
+        names = sorted(r["student_name"] for r in response.json()["items"])
+        assert names == ["Last Second", "Morning"], (
+            "date_to must cover its whole local day: 'Last Second' is 23:59:59 on the 10th and "
+            "'Next Day' is 00:00 on the 11th."
+        )
+
+
 class TestAttendancePermissions:
     """Tests for attendance access permissions."""
 

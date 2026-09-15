@@ -122,11 +122,12 @@ included (spec 0008, decision 5).
 _Avoid_: period, interval.
 (**Not** `span`: it already means an OpenTelemetry span in `app/main.py` and
 `app/core/logging.py`, and banning it would fail any later diff that touches tracing.)
-_Note_: **a day is a UTC day**, decided by the Owner on 2026-09-15. The server buckets by UTC
-(`date_trunc('day', timestamp)` under a UTC session) and the range follows it, so a Kurssi logged
-at 01:00 Helsinki time falls under the previous day. The alternative, aggregating
-`AT TIME ZONE 'Europe/Helsinki'`, was rejected: it moves every figure the endpoint has ever
-returned. See `REVIEW-DEBT.md` (2026-09-15) and spec 0008's open question 2 for the reasoning.
+_Note_: **a day is a Finnish day**, since spec 0009 (2026-09-15). Which zone decides is the
+`app_timezone` setting, `Europe/Helsinki` by default; the server converts with `AT TIME ZONE`
+before grouping and bounds ranges at local midnight, so *Läsnäolot* and *Tilastot* now agree
+about which day a record belongs to. They did not before: the server grouped by UTC day while
+the client rendered in the browser's zone, and a record logged between local midnight and
+02:00/03:00 appeared under different days on the two screens.
 
 ## How this file is enforced
 
