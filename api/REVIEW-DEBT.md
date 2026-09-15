@@ -23,12 +23,16 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 - **Found by:** `/code-review`'s spec axis on 2026-09-15, not by a test. Nothing fails.
 - **What green tests do not prove:** that any date on the screen is the date the teacher would
   write down. They prove only that the server agrees with itself.
-- **The two ways out, neither taken:** aggregate with `AT TIME ZONE 'Europe/Helsinki'` and move
-  the range bounds with it, which changes every figure the endpoint has ever returned and needs a
-  decision about what happens to existing data; or keep UTC and say so on the screen. How late
-  attendance actually gets logged decides which is worth doing, and only the Owner knows that.
-- **Disposition:** open, for the Owner. Recorded as spec 0008 open question 2 and as an
-  `_Unresolved_` marker on **Timeframe** in `CONTEXT.md`.
+- **The two ways out:** aggregate with `AT TIME ZONE 'Europe/Helsinki'` and move the range bounds
+  with it, which changes every figure the endpoint has ever returned and needs a decision about
+  what happens to existing data; or keep UTC.
+- **Disposition: decided by the Owner, 2026-09-15 — UTC stays.** No code change, and the entry is
+  kept rather than deleted because the behaviour is still surprising and the next person to meet
+  it deserves the reasoning rather than a rediscovery. The Helsinki alternative was rejected on
+  cost against reach: it moves every figure the endpoint has ever returned, for the sake of
+  records logged between local midnight and 02:00 or 03:00, which a teacher's register rarely
+  holds. **Left unsettled on purpose:** whether a screen should say the dates are UTC. That is a
+  client question, and it belongs to spec 0008 slice 2 or 3 if it is worth doing at all.
 
 ## 2026-09-15 — two endpoints now read `date_from`/`date_to` differently, and one of them is wrong
 - **What:** spec 0008 slice 1 gave `GET /classes/{id}/attendance/statistics` a timeframe typed

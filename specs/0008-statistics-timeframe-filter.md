@@ -249,7 +249,16 @@ Slice 1 is the only one that changes a production figure, and it does so the mom
 
 ## Open Questions
 
-2. **Which clock is a "day"? — opened 2026-09-15 by `/code-review`, undecided.** The server
+2. **Which clock is a "day"? — RESOLVED 2026-09-15 by the Owner: it stays UTC.** No code change;
+   the endpoint keeps the behaviour it has always had, and slice 1's range keeps agreeing with the
+   buckets exactly. The rejected alternative was aggregating `AT TIME ZONE 'Europe/Helsinki'` and
+   moving the range bounds with it, which would have changed every figure the endpoint has ever
+   returned for the sake of records logged between local midnight and 02:00 or 03:00 — a window a
+   teacher's register rarely lands in. What the decision does **not** settle is whether a screen
+   should say so; that is a client question and belongs to slice 2 or 3 if it is worth doing at
+   all. The original statement of the problem follows, because the reasoning is the record.
+
+   The server
    buckets attendance by **UTC** day (`date_trunc('day', timestamp)` under a UTC session) and
    slice 1's range follows it, so the two agree with each other. They do not necessarily agree
    with the teacher: a Kurssi logged at 01:00 Helsinki time on 11 March is 22:00 UTC on the 10th,
