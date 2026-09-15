@@ -112,6 +112,21 @@ _Note_: **expired** is not **revoked**. Revoked is the Owner's deliberate act on
 happens to every code on its own. The duplicate guard treats only a *live* code as blocking, so an
 address whose code expired can simply be sent another one.
 
+**Timeframe**:
+A closed range of whole days a Teacher chooses on *Tilastot*, to ask "how did September go?" of a
+Kurssi that has run for years. Carried as `date_from` and `date_to`, both typed `date` and **both
+inclusive of their whole day** — the API compares half-open internally (`>= date_from`,
+`< date_to + 1 day`) so the index on `timestamp` still applies, but that is a storage detail and
+never the word's meaning. Every figure on the screen describes the timeframe, the summary counts
+included (spec 0008, decision 5).
+_Avoid_: period, interval.
+(**Not** `span`: it already means an OpenTelemetry span in `app/main.py` and
+`app/core/logging.py`, and banning it would fail any later diff that touches tracing.)
+_Unresolved_: **which clock a day belongs to.** The server buckets by **UTC** day and the range
+follows it, so a Kurssi logged at 01:00 Helsinki time falls in the previous day. Nobody has
+decided whether that is right; the Owner's teacher works in Finnish local time. See
+`REVIEW-DEBT.md` (2026-09-15) and spec 0008's open question 2.
+
 ## How this file is enforced
 
 - `_Avoid_:` is **machine-checked** by `scripts/drift-check.sh` on every diff.

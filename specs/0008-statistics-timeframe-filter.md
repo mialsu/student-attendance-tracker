@@ -249,6 +249,18 @@ Slice 1 is the only one that changes a production figure, and it does so the mom
 
 ## Open Questions
 
+2. **Which clock is a "day"? — opened 2026-09-15 by `/code-review`, undecided.** The server
+   buckets attendance by **UTC** day (`date_trunc('day', timestamp)` under a UTC session) and
+   slice 1's range follows it, so the two agree with each other. They do not necessarily agree
+   with the teacher: a Kurssi logged at 01:00 Helsinki time on 11 March is 22:00 UTC on the 10th,
+   and lands in the previous day — in the daily table, in the chart, and now in the timeframe.
+   **This is pre-existing**, not something slice 1 introduced; the aggregation has always been
+   UTC-day-grained and no screen has ever said so. The spec never decided the clock, and the
+   Owner's teacher works in Finnish local time. Deciding it means choosing between
+   `AT TIME ZONE 'Europe/Helsinki'` on the aggregation (and the range with it) or leaving UTC and
+   saying so on the screen. Not slice 1's to settle, and it touches every figure the endpoint has
+   ever returned. Confessed in `api/REVIEW-DEBT.md`.
+
 1. **The Finnish copy is unratified.** `Aikaväli`, `Alkaen`, `Päättyen`, `Tyhjennä aikaväli`, and
    the empty-range sentence "Aikavälillä 1.9.2026 – 30.9.2026 ei ole kirjattuja läsnäoloja." are
    drafts by the agent. Copy voice has no skill owner in this project — METHOD's reuse table
@@ -260,4 +272,37 @@ Slice 1 is the only one that changes a production figure, and it does so the mom
 *(Dated entries, added as the build teaches us the spec was wrong. Diverging is normal; diverging
 unrecorded is the defect.)*
 
-None yet.
+**2026-09-15 — the route seam is `tests/test_statistics.py`, not `tests/test_attendance.py`.**
+*Testing Decisions* named `test_attendance.py` and cited "the statistics tests already in that
+file". There are none there: the endpoint has had a dedicated `tests/test_statistics.py` since it
+was written, with seven tests. Slice 1's route tests went into that file. The shaping session read
+the endpoint's code but not its test file, which is the same class of mistake the spec's own
+`Invariants touched` note warns about with line numbers.
+
+**2026-09-15 — the endpoint issues five statements, not four.** Decision 14 predicted four and
+`BUDGET_STATISTICS` opened at **5**, measured. Two reasons, and neither is a regression: the count
+is taken at the route, so it includes the authenticating user lookup and the ownership check that
+every other row in `test_query_budget.py` also pays for, and the spec's four counted only the
+service's own queries. Measured as written, it would have been six; folding `total_records` and
+`total_students` into a single `SELECT count(...), count(distinct ...)` over the shared `WHERE`
+clause took it to five, since a second round trip over identical conditions bought nothing.
+Flatness is proven separately by `test_statistics_stays_flat_in_the_number_of_records`, which
+holds at 5 while the row count grows by 100.
+
+**2026-09-15 — AC-1 is narrower than it reads, for the one caller that exists.** AC-1 says the
+response is "unchanged from today's for the same data, counts included" when neither parameter is
+sent, and US-29 promises "every existing caller keeps working untouched". Both hold only when
+`exclude_dates` is *also* absent. `ClassStatistics` sends `excludeDates=['2026-02-27']` on every
+request, and for that caller `total_records` and `total_students` both drop — which is decisions 5
+and 6 working as intended, and the one-time fall in "Yhteensä läsnäoloja" the Owner undertook to
+warn the teacher about. The two criteria were written as though the range were the only new
+filter. `tests/test_statistics.py` pins the real behaviour in
+`test_no_parameters_returns_everything` (no exclusions, unchanged) and in the two exclusion tests
+that were flipped to match.
+
+**2026-09-15 — decision 14 overclaims, and the ledger is right rather than the spec.** It says
+adding the budget row "closes the open confession at `api/REVIEW-DEBT.md` (2026-09-11)". It does
+not. That entry's point is that `test_query_budget.py` guards a **hand-written** list, so an
+endpoint nobody thought to add is not watched at all; taking one name off that list leaves
+`/api/auth/*` unwatched and still nothing noticing a new route arriving without a budget. The
+ledger entry was narrowed rather than closed, and says why.

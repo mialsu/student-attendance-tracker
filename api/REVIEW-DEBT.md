@@ -6,6 +6,72 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 
 <!-- Newest first. -->
 
+## 2026-09-15 — every date this API reports is a UTC day, and no screen says so
+- **What:** `get_attendance_statistics` groups with `date_trunc('day', timestamp)` against a
+  `timestamptz` column under a **UTC** session, so "a day" means a UTC day. Spec 0008's timeframe
+  bounds with `datetime.combine(..., tzinfo=timezone.utc)` and therefore agrees with the buckets
+  exactly — the endpoint is self-consistent, and `test_end_day_is_inclusive_to_its_last_second`
+  proves the boundary lands where the code says.
+- **What it does not agree with:** the teacher. She works in Finnish local time, UTC+3 in summer
+  and UTC+2 in winter. A Kurssi logged at 01:00 Helsinki on 11 March is 22:00 UTC on the 10th, and
+  appears under 10 March in the daily table, in the chart, and now inside or outside a timeframe
+  she picked by Finnish dates.
+- **Pre-existing, and that is the point.** Slice 1 did not introduce this; the aggregation has
+  been UTC-day-grained since it was written, and no screen has ever said so. The timeframe makes
+  it *reachable* — picking "1.9. – 30.9." is the first time a teacher states a date boundary and
+  can be surprised by which side a record falls on.
+- **Found by:** `/code-review`'s spec axis on 2026-09-15, not by a test. Nothing fails.
+- **What green tests do not prove:** that any date on the screen is the date the teacher would
+  write down. They prove only that the server agrees with itself.
+- **The two ways out, neither taken:** aggregate with `AT TIME ZONE 'Europe/Helsinki'` and move
+  the range bounds with it, which changes every figure the endpoint has ever returned and needs a
+  decision about what happens to existing data; or keep UTC and say so on the screen. How late
+  attendance actually gets logged decides which is worth doing, and only the Owner knows that.
+- **Disposition:** open, for the Owner. Recorded as spec 0008 open question 2 and as an
+  `_Unresolved_` marker on **Timeframe** in `CONTEXT.md`.
+
+## 2026-09-15 — two endpoints now read `date_from`/`date_to` differently, and one of them is wrong
+- **What:** spec 0008 slice 1 gave `GET /classes/{id}/attendance/statistics` a timeframe typed
+  `date`, compared half-open (`>= date_from`, `< date_to + 1 day`), so `date_to` includes that
+  whole day. `list_attendance_for_class` has accepted the same two parameter names since long
+  before, typed `datetime`, compared `timestamp <= date_to` — so `date_to=2026-03-10` there parses
+  to midnight and silently drops every record of 10 March.
+- **Why it is not fixed here:** no surface exposes the list endpoint's two parameters. Nothing is
+  broken for a user today, and spec 0008 put the fix out of scope deliberately rather than widen a
+  statistics slice into the register's query contract.
+- **What the green tests do not prove:** that the two endpoints agree. They do not, and a reader
+  who learns the parameter on one will be wrong about the other. The statistics behaviour is
+  pinned by `tests/test_statistics.py::TestStatisticsTimeframe::test_end_day_is_inclusive_to_its_last_second`,
+  watched failing against exactly the `<=` comparison the list endpoint still has.
+- **The fix, when someone takes it:** the same `datetime.combine(date_to + 1 day, time.min)`
+  bound, and a test at 23:59 on the end day. It is a behaviour change for any caller relying on
+  today's exclusive end, which today means nobody.
+- **Disposition:** open. Small, and worth doing before any screen exposes a date filter on
+  *Läsnäolot*.
+
+## 2026-09-15 — "Yhteensä läsnäoloja" will drop once on deploy, and that is the accepted cost
+- **What:** `get_attendance_statistics` computed `total_records` and `total_students` over **all**
+  data while the daily and monthly aggregations honoured `exclude_dates`. The top two summary
+  cards and the charts below them therefore described different row sets. Spec 0008 decision 5
+  moved both counts inside the shared `WHERE` clause; decision 6 accepted the consequence.
+- **The consequence:** `client/src/.../ClassStatistics` still passes a hardcoded
+  `excludeDates = ['2026-02-27']` under a `TODO`, hiding one bulk log from the charts. With the
+  counts now filtered, that day leaves the total too — so on the deploy that carries slice 1,
+  "Yhteensä läsnäoloja" falls once, to the figure the charts have been drawing all along. Nothing
+  is lost; the number was wrong before and is right after.
+- **Owner-facing, and this is the part a test cannot hold:** the Owner undertook to warn the
+  teacher who uses this app daily **before** it ships. A number dropping unannounced on a screen
+  someone trusts is worse than the disagreement it fixes.
+- **Two tests changed to say so**, rather than being deleted:
+  `test_get_statistics_with_exclude_dates` and `test_get_statistics_exclude_multiple_dates` in
+  `tests/test_statistics.py` asserted the old totals ("Total should still show ALL data"). Both
+  now assert the filtered figures and carry a dated comment explaining the switch.
+- **Still not fixed:** the hardcoded `excludeDates` constant and its `TODO`, which spec 0008 left
+  out of scope. While it stands, every teacher silently loses 27 February from both the charts and
+  now the totals, with nothing on screen saying so.
+- **Disposition:** open, and it is the Owner's call rather than a code fix — the constant should
+  either become a real feature or go.
+
 ## 2026-09-12 — the nginx staleness is fixed by deleting the fix, and the clever version is why
 - **What:** the deploy now recreates the nginx container on **every** deploy
   (`up -d --force-recreate --no-deps nginx`) and health-checks the public endpoint afterwards.
@@ -57,10 +123,17 @@ cut (`/confess`), read first by any architecture or review session, dispositione
   all, and nothing fails when a new endpoint is added without a budget. The four routes it holds
   are the four someone thought of in September; `/api/classes`, `/api/auth/*` and the statistics
   route were never on it. Coverage does not help — these lines were all covered.
-- **Disposition:** partly closed. `/api/classes` now has a ceiling and was watched failing at 7
-  against 3 before the fix. **Open:** the remaining unbudgeted endpoints, and the absence of
-  anything that notices a new route arriving without a budget. A cheap version is a test that
-  walks the OpenAPI paths and fails on any list route missing from the parametrize list.
+- **Disposition:** partly closed, and narrowed again on 2026-09-15. `/api/classes` now has a
+  ceiling and was watched failing at 7 against 3 before the fix. The **statistics route**, named
+  above as one of the three never on the list, joined it with spec 0008 slice 1:
+  `BUDGET_STATISTICS = 5`, plus `test_statistics_stays_flat_in_the_number_of_records`, both
+  watched failing against a planted per-day query (31 statements against the ceiling, and 31 -> 43
+  as rows grew).
+  **Still open, and this is the half that matters:** `/api/auth/*` remains unbudgeted, and nothing
+  yet notices a *new* route arriving without a budget. Spec 0008 decision 14 says adding the
+  statistics row "closes the open confession", which is an overclaim — it removes one name from a
+  list this entry says should not be hand-written at all. A cheap real version is still a test
+  that walks the OpenAPI paths and fails on any list route missing from the parametrize list.
 
 ## 2026-09-11 — every nginx.conf change since the bind mount existed may never have taken effect
 - **What:** `deployment/production/docker-compose.yml` mounts `./nginx.conf:/etc/nginx/nginx.conf:ro`

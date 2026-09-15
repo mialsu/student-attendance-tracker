@@ -1,13 +1,17 @@
 """Attendance service - Business logic for attendance tracking."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from uuid import UUID
 
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import contains_eager
 
-from app.core.exceptions import BadRequestException, NotFoundError
+from app.core.exceptions import (
+    BadRequestException,
+    NotFoundError,
+    UnprocessableEntityException,
+)
 from app.models.attendance import AttendanceRecord
 from app.models.student import Student
 from app.models.user import User
@@ -84,7 +88,14 @@ async def list_attendance_for_class(
         search = f"%{student_name.lower()}%"
         base_query = base_query.where(func.lower(Student.name).like(search))
 
-    # Apply date filters
+    # Apply date filters.
+    #
+    # WARNING: these two do NOT mean what the identically-named parameters on
+    # `get_attendance_statistics` mean. Here they are `datetime` and the end is compared `<=`, so
+    # `date_to=2026-03-10` parses to midnight and drops that whole day's records. There the
+    # parameters are `date` and the window is half-open, so the end day is included in full.
+    # Confessed in REVIEW-DEBT.md (2026-09-15) rather than fixed: no surface exposes these two, so
+    # nothing is broken for a user today. Fix this before any screen does.
     if date_from:
         base_query = base_query.where(AttendanceRecord.timestamp >= date_from)
     if date_to:
@@ -407,6 +418,8 @@ async def get_attendance_statistics(
     class_id: UUID,
     teacher: User,
     exclude_dates: list[str] | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
 ) -> dict:
     """
     Get daily and monthly attendance statistics for a class.
@@ -423,6 +436,8 @@ async def get_attendance_statistics(
         class_id: Class UUID
         teacher: Teacher reading the statistics
         exclude_dates: Optional list of dates to exclude (format: "YYYY-MM-DD")
+        date_from: Optional first day to include, inclusive
+        date_to: Optional last day to include, inclusive of that whole day
 
     Returns:
         Dictionary with statistics including daily and monthly aggregations
@@ -430,30 +445,43 @@ async def get_attendance_statistics(
     Raises:
         NotFoundError: If class not found
         ForbiddenException: If user doesn't own the class
+        UnprocessableEntityException: If date_from falls after date_to
     """
     await class_service.verify_class_ownership(db, class_id, teacher)
 
-    # Total records count (ALL data, not filtered)
-    total_result = await db.execute(
-        select(func.count(AttendanceRecord.id))
-        .where(AttendanceRecord.class_id == class_id)
-    )
-    total_records = total_result.scalar() or 0
+    # Refused here rather than at the route, for the reason this function already carries in the
+    # note above: a guard one line above the call site makes the function unsafe to call from
+    # anywhere else. An inverted range would otherwise build an empty half-open window and report
+    # zero attendances as though that were the answer. Ownership is checked first on purpose --
+    # a teacher who may not read this Class learns nothing about which parameters it validates.
+    if date_from is not None and date_to is not None and date_from > date_to:
+        raise UnprocessableEntityException(
+            detail="date_from must not be later than date_to"
+        )
 
-    # Total unique students count (ALL data, not filtered)
-    students_result = await db.execute(
-        select(func.count(func.distinct(AttendanceRecord.student_id)))
-        .where(AttendanceRecord.class_id == class_id)
-    )
-    total_students = students_result.scalar() or 0
-
-    # Build WHERE clause for statistics (with exclusions)
+    # One WHERE clause, used by every query below. Until spec 0008 the two totals were computed
+    # over ALL data while the aggregations honoured `exclude_dates`, so the top two cards and the
+    # charts beneath them described different things. Nobody decided that; it accumulated.
     where_conditions = [AttendanceRecord.class_id == class_id]
 
-    # Add date exclusions if provided (only affects charts/tables)
+    # The timeframe is half-open internally -- `>= date_from`, `< date_to + 1 day` -- so the index
+    # on `timestamp` is still usable, while `date_to` stays inclusive of its whole day as a teacher
+    # reads it. Comparing `func.date(timestamp)` on both sides would read more directly and give up
+    # that index; a `datetime` parameter would inherit `list_attendance_for_class`'s trap, where an
+    # end date parses to midnight and silently drops that day (spec 0008, decisions 3 and 4).
+    if date_from is not None:
+        where_conditions.append(
+            AttendanceRecord.timestamp
+            >= datetime.combine(date_from, time.min, tzinfo=timezone.utc)
+        )
+    if date_to is not None:
+        where_conditions.append(
+            AttendanceRecord.timestamp
+            < datetime.combine(date_to + timedelta(days=1), time.min, tzinfo=timezone.utc)
+        )
+
+    # Add date exclusions if provided
     if exclude_dates:
-        # Convert string dates to date objects for comparison
-        from datetime import datetime
         exclude_date_objs = []
         for date_str in exclude_dates:
             try:
@@ -468,6 +496,17 @@ async def get_attendance_statistics(
                 where_conditions.append(
                     func.date(AttendanceRecord.timestamp) != excluded_date
                 )
+
+    # Both totals now describe the same rows the charts below them draw, and they are one
+    # statement rather than two: the WHERE clause is identical, so a second round trip bought
+    # nothing. `tests/test_query_budget.py::BUDGET_STATISTICS` holds the resulting ceiling.
+    totals_result = await db.execute(
+        select(
+            func.count(AttendanceRecord.id),
+            func.count(func.distinct(AttendanceRecord.student_id)),
+        ).where(and_(*where_conditions))
+    )
+    total_records, total_students = totals_result.one()
 
     # Check database dialect
     dialect = db.bind.dialect.name

@@ -559,7 +559,10 @@ POST   /classes/{id}/attendance         - Log attendance (student_name, quantity
 DELETE /attendance/{id}                 - Delete attendance record
 GET    /classes/{id}/attendance/summary - Get summary by student (course credit; legacy= reveals
                                           students whose first attendance is over 5 years old)
-GET    /classes/{id}/attendance/statistics - Daily/monthly aggregates (exclude_dates optional)
+GET    /classes/{id}/attendance/statistics - Daily/monthly aggregates (exclude_dates optional;
+                                          date_from/date_to optional, both inclusive of their
+                                          whole day — every figure including the two totals
+                                          describes the timeframe, spec 0008)
 ```
 
 **Admin — there is none.** The three `/api/admin/codes` endpoints and the superadmin role that

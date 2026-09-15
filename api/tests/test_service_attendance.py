@@ -1,6 +1,6 @@
 """Direct tests for attendance service functions."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,7 +11,12 @@ from app.models.student import Student
 from app.models.user import User
 from app.schemas.attendance import AttendanceRecordCreate
 from app.services import attendance_service, student_service
-from app.core.exceptions import NotFoundError, ForbiddenException, BadRequestException
+from app.core.exceptions import (
+    NotFoundError,
+    ForbiddenException,
+    BadRequestException,
+    UnprocessableEntityException,
+)
 
 
 @pytest.mark.asyncio
@@ -228,6 +233,38 @@ class TestGetAttendanceStatisticsOwnership:
 
         with pytest.raises(NotFoundError):
             await attendance_service.get_attendance_statistics(db, uuid4(), test_user)
+
+    async def test_inverted_range_is_refused_at_the_service(
+        self, db: AsyncSession, test_class: Class, test_user: User
+    ):
+        """An inverted timeframe is refused by the function, not by its one route.
+
+        Spec 0008 first put this guard in `app/api/attendance.py`, one line above the call --
+        the exact shape this class's docstring records being fixed in 2026-09-04. Without the
+        guard here, a second caller would get an empty half-open window and read zero
+        attendances as though that were the answer.
+        """
+        with pytest.raises(UnprocessableEntityException):
+            await attendance_service.get_attendance_statistics(
+                db,
+                test_class.id,
+                test_user,
+                date_from=date(2026, 3, 13),
+                date_to=date(2026, 3, 10),
+            )
+
+    async def test_ownership_is_checked_before_the_range(
+        self, db: AsyncSession, test_class: Class, other_teacher: User
+    ):
+        """A teacher who may not read this Class learns nothing about its validation rules."""
+        with pytest.raises(ForbiddenException):
+            await attendance_service.get_attendance_statistics(
+                db,
+                test_class.id,
+                other_teacher,
+                date_from=date(2026, 3, 13),
+                date_to=date(2026, 3, 10),
+            )
 
 
 @pytest.mark.asyncio

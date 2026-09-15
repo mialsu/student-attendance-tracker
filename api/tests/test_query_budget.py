@@ -24,7 +24,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 import pytest_asyncio
-from sqlalchemy import event
+from sqlalchemy import event, select
 
 from app.models.attendance import AttendanceRecord
 from app.models.class_ import Class
@@ -41,6 +41,12 @@ BUDGET_STUDENTS_LIST = 4  # fixed 2026-09-09: counts folded into the paginated q
 BUDGET_AUTOCOMPLETE = 3  # fixed 2026-09-09: one grouped query, flat in the match count
 BUDGET_ATTENDANCE_LIST = 4  # fixed 2026-09-09: the student rides the join already paid for
 BUDGET_SUMMARY = 6  # what the shape looks like when it is right
+
+# The statistics endpoint, added 2026-09-15 with spec 0008's timeframe filter. It was the fourth
+# endpoint this file's enumerated list left unwatched -- the open confession in REVIEW-DEBT.md of
+# 2026-09-11. It aggregates in SQL rather than in Python, so its cost is a fixed set of queries:
+# ownership, two counts, and the daily and monthly aggregations.
+BUDGET_STATISTICS = 5  # auth, ownership, one combined counts query, daily and monthly
 
 # The class list, added 2026-09-11 with spec 0006's sidebar. It was the fourth N+1 and the one
 # this file never watched: `list_classes` ran a COUNT per class in a Python loop, so the cost
@@ -103,6 +109,11 @@ async def populated_class(db, test_class):
         ),
         ("attendance_list", "/api/classes/{cid}/attendance?limit=100", BUDGET_ATTENDANCE_LIST),
         ("summary", "/api/classes/{cid}/attendance/summary?limit=25", BUDGET_SUMMARY),
+        (
+            "statistics",
+            "/api/classes/{cid}/attendance/statistics?date_from=2000-01-01",
+            BUDGET_STATISTICS,
+        ),
     ],
 )
 async def test_endpoint_stays_within_its_query_budget(
@@ -119,6 +130,61 @@ async def test_endpoint_stays_within_its_query_budget(
     assert len(statements) <= budget, (
         f"{label} issued {len(statements)} statements against a ceiling of {budget}. "
         f"If you made this worse, fix the loop. If you made it better, lower the ceiling."
+    )
+
+
+
+async def test_statistics_stays_flat_in_the_number_of_records(
+    client, auth_headers, db, db_engine, populated_class
+):
+    """The statistics endpoint aggregates in SQL, so more rows must not mean more statements.
+
+    The parametrized ceiling above is measured at one size, which cannot tell a fixed cost from
+    a cheap loop. This doubles the rows in the same class and asserts the count does not move --
+    the shape that would have caught the three N+1 loops of 2026-09-09 while they were small.
+    """
+    url = f"/api/classes/{populated_class.id}/attendance/statistics"
+
+    with count_statements(db_engine) as before:
+        first = await client.get(url, headers=auth_headers)
+    assert first.status_code == 200
+
+    # Same students, more days: the row count grows, the number of distinct days grows with it.
+    now = datetime.now(timezone.utc)
+    existing = (
+        await db.execute(select(Student).where(Student.class_id == populated_class.id))
+    ).scalars().all()
+    for offset, student in enumerate(existing):
+        for extra in range(4):
+            db.add(
+                AttendanceRecord(
+                    class_id=populated_class.id,
+                    student_id=student.id,
+                    timestamp=now - timedelta(days=offset + extra + 10),
+                )
+            )
+    await db.commit()
+
+    with count_statements(db_engine) as after:
+        second = await client.get(url, headers=auth_headers)
+    assert second.status_code == 200
+
+    grew_by = second.json()["total_records"] - first.json()["total_records"]
+    print(
+        f"\nQUERY BUDGET statistics flatness: {len(before)} -> {len(after)} statements "
+        f"while records grew by {grew_by}"
+    )
+    assert grew_by > 0, "the fixture did not actually add records; the test proves nothing"
+    # This is also the only row that exercises the UNFILTERED path: the parametrized ceiling
+    # above requests a range, so without this assertion an endpoint that only behaved when
+    # given `date_from` would go unwatched.
+    assert len(before) <= BUDGET_STATISTICS and len(after) <= BUDGET_STATISTICS, (
+        f"statistics without a range issued {len(before)} statements against a ceiling of "
+        f"{BUDGET_STATISTICS}."
+    )
+    assert len(after) == len(before), (
+        f"statistics issued {len(before)} statements and then {len(after)} after {grew_by} more "
+        f"records. A count that follows the row count is a loop, whatever the ceiling says."
     )
 
 
