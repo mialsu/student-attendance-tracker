@@ -1,6 +1,8 @@
 # 0006 — UI redesign ("Läsnä")
 
-Status: ready-for-agent — all four opened questions resolved 2026-09-10; one new question (5) open
+Status: **closed 2026-09-15** — shipped in `c497a9a`, live at `app-attendance.kotoio.fi`, all ten
+acceptance criteria carry a verdict (see *Acceptance Criteria*). All five questions resolved;
+question 5 was resolved 2026-09-10 and this line went on calling it open until now.
 Created: 2026-09-10
 Branch: `feature/0006-ui-redesign`
 Prototype: `prototype/` (branch `prototype/new-ui`) — `index.html` + `DESIGN_SYSTEM.md` are the visual source of truth.
@@ -188,21 +190,34 @@ and the styling of the components on top of shadcn/ui + Tailwind.
 
 ## Acceptance Criteria
 
-*(devkit addition — each criterion is falsifiable and names how it's proven. `/verify-live` fills
-verdicts.)*
+*(devkit addition — each criterion is falsifiable and names how it's proven. The verdict column
+was filled on 2026-09-15 by the two bases named under the table, **not** by a `/verify-live` pass.)*
 
-| # | Criterion | Proven by | Serves |
-|---|---|---|---|
-| AC1 | Every documented foreground/background pair meets AA in **both** `:root` and the unreachable `.dark` | `tokens-contrast.test.ts` (re-pinned) **and** `e2e/states.spec.ts` — axe with `color-contrast` over every swept state, the only enforcer that sees composites like `bg-primary/10` | 16, 32 |
-| ~~AC2~~ | ~~Theme toggle flips, persists, honours `prefers-color-scheme`~~ | — | **dropped 2026-09-10** with US-3–5 |
-| AC3 | All existing client behaviour tests pass unchanged after the reskin | full `npm run test:run` | 33 |
-| AC4 | Autocomplete is fully keyboard-operable and signals "no match → new student" | behaviour test (extends auth-flow pattern) | 12, 13, 14 |
-| AC5 | Deleting a student requires a confirmation naming the student and its history loss | behaviour test | 18, 19 |
-| AC6 | At **320px** — the Owner's declared floor and WCAG 1.4.10's reflow width, not the spec's original "≤400px": one column, off-canvas nav opens/closes, `documentElement.scrollWidth <= clientWidth` in every swept state | `e2e/states.spec.ts` (`expectNoHorizontalScroll`, already the `A11Y-7` enforcer) + `/verify-live` | 25, 26 |
-| AC7 | Every interactive control has a visible focus ring; status uses colour **and** icon/label; reduced-motion respected | `surfaces.a11y.test.tsx` (extended) + `/verify-live` | 16, 27, 28, 29 |
-| AC8 | The auth aside contains no sales copy; all UI strings remain Finnish | `/verify-live` (visual read) | 2 |
-| AC9 | Statistics render via Recharts with a day/month toggle and a "no data" state | behaviour test + `/verify-live` | 22, 23 |
-| AC10 | A failed load on `/dashboard`, *Läsnäolot* and *Tilastot* renders an **error** state and never the empty state | behaviour test per surface (reject the query at the `src/api` seam) + `e2e/states.spec.ts` gains §3's fourth state | 34 |
+| # | Criterion | Proven by | Serves | Verdict |
+|---|---|---|---|---|
+| AC1 | Every documented foreground/background pair meets AA in **both** `:root` and the unreachable `.dark` | `tokens-contrast.test.ts` (re-pinned) **and** `e2e/states.spec.ts` — axe with `color-contrast` over every swept state, the only enforcer that sees composites like `bg-primary/10` | 16, 32 | WORKS (gates) |
+| ~~AC2~~ | ~~Theme toggle flips, persists, honours `prefers-color-scheme`~~ | — | **dropped 2026-09-10** with US-3–5 | — |
+| AC3 | All existing client behaviour tests pass unchanged after the reskin | full `npm run test:run` | 33 | WORKS (gates) |
+| AC4 | Autocomplete is fully keyboard-operable and signals "no match → new student" | behaviour test (extends auth-flow pattern) | 12, 13, 14 | WORKS (gates) |
+| AC5 | Deleting a student requires a confirmation naming the student and its history loss | behaviour test | 18, 19 | WORKS (gates) |
+| AC6 | At **320px** — the Owner's declared floor and WCAG 1.4.10's reflow width, not the spec's original "≤400px": one column, off-canvas nav opens/closes, `documentElement.scrollWidth <= clientWidth` in every swept state | `e2e/states.spec.ts` (`expectNoHorizontalScroll`, already the `A11Y-7` enforcer) + `/verify-live` | 25, 26 | WORKS (gates + Owner) |
+| AC7 | Every interactive control has a visible focus ring; status uses colour **and** icon/label; reduced-motion respected | `surfaces.a11y.test.tsx` (extended) + `/verify-live` | 16, 27, 28, 29 | WORKS (gates + Owner) |
+| AC8 | The auth aside contains no sales copy; all UI strings remain Finnish | `/verify-live` (visual read) | 2 | WORKS (Owner) |
+| AC9 | Statistics render via Recharts with a day/month toggle and a "no data" state | behaviour test + `/verify-live` | 22, 23 | WORKS (gates + Owner) |
+| AC10 | A failed load on `/dashboard`, *Läsnäolot* and *Tilastot* renders an **error** state and never the empty state | behaviour test per surface (reject the query at the `src/api` seam) + `e2e/states.spec.ts` gains §3's fourth state | 34 | WORKS (gates) |
+
+**Verdicts recorded 2026-09-15.** Two bases, and they are not the same thing:
+
+- **gates** — the named enforcer ran green on `c497a9a`, the commit in production. Frontend CI run
+  `34822314534`: Gates, Browser walk, Security and Deploy all succeeded, so `gate:tests`,
+  `gate:a11y` and the Playwright sweep (`e2e/states.spec.ts`, both viewport projects) are covered.
+- **Owner** — the Owner exercised the deployed app at `https://app-attendance.kotoio.fi` and
+  accepted it. **No `/verify-live` pass was run.** AC8 rests on this alone, since its only stated
+  enforcer was a visual read; AC6, AC7 and AC9 carry a green test enforcer underneath it.
+
+The spec is closed on the Owner's call. What that leaves unproven is narrow and worth naming: the
+keyboard walk of AC7 and the 320px reflow of AC6 were verified by their automated enforcers and by
+use, not by a deliberate no-mouse pass.
 
 ## Tracer Slices
 
