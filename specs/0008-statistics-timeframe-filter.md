@@ -194,8 +194,8 @@ Verdicts are filled by `/verify-live`, per criterion. A task's verdict is the **
 | AC-12 | `Alkaen` offers no day after a chosen `Päättyen` and the reverse; neither offers a future day | `test:` hook seam | US-19, US-20 | WORKS (gates) |
 | AC-13 | A failed load renders the error state, not the empty-range state, with a timeframe set | `test:` hook seam | US-26 | WORKS (gates) |
 | AC-14 | Changing the *Päivät* / *Kuukaudet* toggle leaves the chosen dates in place | `test:` hook seam | US-12, US-13 | WORKS (gates) |
-| AC-15 | The filter and the empty-range state hold at 320px with no horizontal scroll and axe clean, with the calendar popover both closed and open | `live:` e2e | US-23, US-24 | BLOCKED — see *Verification status* |
-| AC-16 | Every control in the filter is reachable by keyboard with a visible focus ring, and the calendar is operable without a mouse | `live:` | US-22, US-25 | BLOCKED — see *Verification status* |
+| AC-15 | The filter and the empty-range state hold at 320px with no horizontal scroll and axe clean, with the calendar popover both closed and open | `live:` e2e | US-23, US-24 | WORKS (gates) — and it caught a real contrast defect |
+| AC-16 | Every control in the filter is reachable by keyboard with a visible focus ring, and the calendar is operable without a mouse | `live:` | US-22, US-25 | WORKS (gates) |
 
 **Invariants touched:** `INV-1`, which does not move. `verify_class_ownership` already runs as
 `get_attendance_statistics`'s first act, before any filtering, so a range parameter cannot reach
@@ -292,34 +292,36 @@ Slice 1 is the only one that changes a production figure, and it does so the mom
 
 ## Verification status
 
-**Slices 2 and 3 built 2026-09-16.** AC-9 – AC-14 are proven by gates that were each watched fail
-first; AC-15 and AC-16 are written, typecheck, and have **not been run**.
+**Slices 2 and 3 built and verified 2026-09-16.** AC-9 – AC-16 all hold; every one was watched
+fail first.
 
-Everything the client gates cover is green on this branch: `typecheck` (4 findings, exactly the
-`.harness-baseline` figure, none of them in the new files), `eslint` (16, likewise), the a11y
-config (0), `dependency-cruiser` (no violations, 110 modules), the full vitest suite (18 files),
-both drift gates, and `npm run build`.
+Client gates, all at their `.harness-baseline` figures with nothing new added: `typecheck` 4,
+`eslint` 16, a11y config 0, `dependency-cruiser` clean (110 modules), the full vitest suite
+(18 files), both drift gates, and `npm run build`.
 
-**AC-15 and AC-16 are BLOCKED on this machine, not on the code.** Playwright's Chromium cannot
-start: `chrome-headless-shell` fails with `error while loading shared libraries: libasound.so.2`,
-and installing it needs root, which this session does not have. Nothing was skipped, silenced or
-marked `test.skip` to get a green run — the walk simply has not executed, which is why these two
-rows say BLOCKED rather than WORKS. To close them:
+**The browser walk runs and passes: 78/78, at both viewports, six consecutive full runs.** It was
+initially blocked — Playwright's Chromium would not start for want of `libasound.so.2`, and
+installing that needs root. Resolved without root by fetching the Ubuntu package with
+`apt-get download libasound2t64`, extracting it with `dpkg-deb -x` and pointing
+`LD_LIBRARY_PATH` at it. The durable fix is one command with a real terminal:
 
 ```bash
-sudo npx playwright install-deps chromium   # or: sudo apt-get install -y libasound2t64
-cd client && npx playwright test e2e/states.spec.ts e2e/timeframe.spec.ts
+sudo apt-get install -y libasound2t64        # Ubuntu 24.04; then the walk needs no LD_LIBRARY_PATH
+cd client && npx playwright test
 ```
 
-The three new swept states are `Tilastot — the timeframe, calendar open`, `Tilastot — the timeframe
-set, with figures` and `Tilastot — an empty timeframe`; `e2e/timeframe.spec.ts` holds the four
-keyboard tests. The first run of these is their first execution, so treat it the way this project
-treats the deploy jobs — the one part not proven by breaking it.
+**The walk earned its keep on the way in, which is the part worth recording.** The three new swept
+states are `Tilastot — the timeframe, calendar open`, `— the timeframe set, with figures` and
+`— an empty timeframe`; `e2e/timeframe.spec.ts` holds four keyboard tests. Between them they found
+**two real defects that every other gate passed**, both written up as deltas below: a WCAG 1.4.3
+contrast failure in the shared `calendar.tsx` primitive, and three races in the new tests
+themselves. Neither would have been visible without a state that opens a calendar — which is
+exactly `states.spec.ts`'s own argument for being a table of states rather than a set of journeys.
 
 AC-1 – AC-8 are slice 1's and were **not** re-verified here: they need `TEST_DATABASE_URL` and the
-API suite, which is a different scope from the one this session was asked for. Their rows are left
-empty rather than filled from slice 1's commit message, because a verdict copied from a commit
-message is not a verdict.
+API suite, a different scope from the one this session was asked for. Their rows are left empty
+rather than filled from slice 1's commit message, because a verdict copied from a commit message is
+not a verdict.
 
 ## Spec Deltas
 
@@ -403,3 +405,47 @@ on `Date.toJSON`, which is UTC — so a range picked as 1.9.2026 under UTC+3 wou
 `2026-08-31` while asking the server for `2026-09-01`. The key now carries `toApiDate`'s output, so
 the cache and the request agree about which day a `Date` is. Same bug as decision 10, one layer
 over.
+
+**2026-09-16 — the walk found a WCAG contrast failure in `calendar.tsx`, and spec 0008 is only the
+messenger.** `day_outside` was `text-muted-foreground opacity-50`, which renders muted foreground
+at half opacity over white: **2.25:1**, against a 4.5:1 requirement. An outside day is an *enabled*
+button — a past day belonging to the previous month is clickable — so the inactive-control
+exemption does not cover it. The `opacity-50` is gone; `text-muted-foreground` alone is a gated
+pair (`tokens-contrast.test.ts` pins it on both `background` and `card`), so the distinction stays
+and is now under a gate.
+
+**This is pre-existing and not the filter's fault.** `AttendanceTracking` has shipped the same
+calendar since before this spec; the popover had simply never been *open* in a swept state, so no
+gate had ever looked at it. The fix went into the shared primitive rather than onto this surface,
+for the reason `REVIEW-DEBT.md`'s heading-order entry gives about `card.tsx` — and because decision
+9 wants both pickers to be one control, so `showOutsideDays={false}` on only the new one would have
+made them two. `day_disabled` keeps its `opacity-50` deliberately: a disabled control is exempt
+from 1.4.3, which is why axe reported only the outside day.
+
+**2026-09-16 — three races in the new keyboard tests, and two wrong fixes before the right one.**
+The walk is configured `retries: 0`, so a flake is a defect rather than something to re-run. All
+three were mine, in the test code, not in the app:
+
+1. **No wait for the surface to render.** `page.goto` resolves on the navigation, not on React
+   having rendered, so `tabTo` pressed Tab thirty times at an empty page. This was the root cause
+   and the last one found.
+2. **`evaluateAll` does not auto-wait.** Unlike a locator assertion it returns `[]` for a selector
+   matching nothing *yet* — silently. The diagnostic said `saw: ` with an empty list, which is what
+   finally pointed at (1).
+3. **A focus loop racing a React state update.** `while not focused: press ArrowRight`, re-reading
+   `document.activeElement` immediately, reads the *previous* tab, presses again and overshoots —
+   and a Radix tab list **wraps**, so overshooting the last tab returns to the first. Now it steps
+   with an awaited focus assertion per press.
+
+Worth recording as a method note: the first two attempts chased symptoms (the popover animation,
+then the focus loop) because the failure only ever appeared under a full run's load. Reading the
+actual assertion message instead of re-theorising is what found it. Stability is now six
+consecutive 78/78 full runs, and removing the one wait line reproduces 2–3 failures per run on
+demand.
+
+**2026-09-16 — Radix Tabs is a roving tabstop, which AC-16 was written as though it were not.**
+The first version of the keyboard helper tabbed *toward* the *Tilastot* tab and failed on all eight
+tests with "not reachable by keyboard within 30 Tab presses". That was the test being wrong, not
+the app: only the selected tab is in the tab order, per the ARIA authoring practices, so one Tab
+reaches the strip and arrows move within it. A test demanding otherwise would have demanded three
+tab stops for three tabs, which would itself be the accessibility defect.

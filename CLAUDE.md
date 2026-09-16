@@ -1134,12 +1134,21 @@ Closes #123
 
 **Next Development:** Ready for new feature requests or enhancements.
 
-⚠ **Spec 0008's two `live:` criteria (AC-15, AC-16) have never executed.** The browser walk gained
-three swept states and a new `client/e2e/timeframe.spec.ts`, and Playwright cannot start on the
-development machine — `libasound.so.2` is missing and installing it needs root. Nothing was skipped
-to get a green run; the rows say BLOCKED. `sudo npx playwright install-deps chromium`, then
-`cd client && npx playwright test e2e/states.spec.ts e2e/timeframe.spec.ts`. Details in
-`client/REVIEW-DEBT.md` (2026-09-16).
+⚠ **The browser walk needs one system library that is not installed.** Playwright's Chromium will
+not start without `libasound.so.2` — ALSA sound, which a headless browser never uses but links
+against anyway. On Ubuntu 24.04: `sudo apt-get install -y libasound2t64`. Without it `npm run check`
+fails at the `e2e` step, loudly and by name. It can also be satisfied without root
+(`apt-get download libasound2t64`, `dpkg-deb -x`, then `LD_LIBRARY_PATH`), which is how spec 0008's
+`live:` criteria were verified on 2026-09-16 — see `client/REVIEW-DEBT.md`.
+
+**The walk is worth the trouble: it found two defects on 2026-09-16 that every other gate passed.**
+A WCAG 1.4.3 contrast failure in the shared `client/src/components/ui/calendar.tsx` (outside days
+at **2.25:1** — an alpha composite, which `tokens-contrast.test.ts` structurally cannot see), and
+three races in the new tests themselves. The contrast bug had shipped since before spec 0008 and
+sat unseen because **no swept state had ever opened a calendar popover** — `AttendanceTracking`'s
+picker is on screen in a swept state but closed, and a closed popover renders no days. That is the
+standing argument for `e2e/states.spec.ts` being a table of states rather than a set of journeys:
+adding a state is the only thing that finds a defect nobody is looking for.
 
 **Deployment Cost Breakdown:**
 - **Frontend**: Free (Vercel Hobby tier, non-commercial)

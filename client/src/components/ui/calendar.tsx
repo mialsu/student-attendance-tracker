@@ -34,8 +34,21 @@ function Calendar({ className, classNames, showOutsideDays = true, ...props }: C
         day_selected:
           "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground",
         day_today: "bg-accent text-accent-foreground",
+        // `opacity-50` was here and was a real WCAG 1.4.3 failure, found on 2026-09-16 by the
+        // first swept state that ever opened a calendar (spec 0008's filter). Muted foreground at
+        // half opacity over white measures **2.25:1** against a 4.5:1 requirement, and an outside
+        // day is an ENABLED button — a past day from the previous month is clickable, so the
+        // inactive-control exemption does not apply to it. `text-muted-foreground` alone is a
+        // gated pair (`tokens-contrast.test.ts`: muted-foreground on background and on card, both
+        // at 4.5:1), so dropping the opacity keeps outside days distinguishable by colour while
+        // putting that distinction back under a gate. Exactly the composite-over-a-token bug
+        // REVIEW-DEBT.md already records for `bg-primary/10`: no unit test can see an alpha
+        // composite, only axe over a rendered state can.
+        //
+        // `day_disabled` below keeps its `opacity-50` deliberately: a disabled control is exempt
+        // from 1.4.3, and axe does not flag one — which is why only the outside day was reported.
         day_outside:
-          "day-outside text-muted-foreground opacity-50 aria-selected:bg-accent/50 aria-selected:text-muted-foreground aria-selected:opacity-30",
+          "day-outside text-muted-foreground aria-selected:bg-accent/50 aria-selected:text-muted-foreground aria-selected:opacity-30",
         day_disabled: "text-muted-foreground opacity-50",
         day_range_middle: "aria-selected:bg-accent aria-selected:text-accent-foreground",
         day_hidden: "invisible",

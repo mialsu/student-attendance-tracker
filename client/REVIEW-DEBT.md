@@ -6,7 +6,55 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 
 <!-- Newest first. -->
 
-## 2026-09-16 — spec 0008's two `live:` criteria are written and have never executed
+## 2026-09-16 — the calendar's outside days measured 2.25:1, and no gate had ever looked at a calendar
+- **What:** `calendar.tsx`'s `day_outside` was `text-muted-foreground opacity-50` — muted
+  foreground at half opacity over white, **2.25:1** against WCAG 1.4.3's 4.5:1. An outside day
+  (a day from the neighbouring month, shown as padding) is an **enabled** button when it is in the
+  past, so the inactive-control exemption does not apply. **FIXED** the same day by dropping the
+  `opacity-50`; `text-muted-foreground` on its own is a gated pair.
+- **Where:** `src/components/ui/calendar.tsx`. Two surfaces render it: `AttendanceTracking`'s date
+  picker, which has shipped since long before spec 0008, and the new *Tilastot* filter.
+- **Why nothing caught it for so long:** `tokens-contrast.test.ts` asserts *token pairs* and has no
+  way to express an alpha composite — the identical blind spot this ledger records for the
+  register's `bg-primary/10` badge. Only axe over a rendered state can see one, and **no swept
+  state had ever opened a calendar popover.** `AttendanceTracking`'s picker is on screen in a swept
+  state but closed, and a closed popover renders no days. Spec 0008's
+  `Tilastot — the timeframe, calendar open` is the first state to open one, and it failed on its
+  first execution.
+- **What green tests do NOT prove, still:** a **selected** outside day. `day_outside` also carries
+  `aria-selected:opacity-30` and `aria-selected:bg-accent/50`, and no swept state selects a day
+  from a neighbouring month, so that composite is unmeasured. Same shape as the entry below about
+  hover, focus and active states. Left deliberately rather than changed on speculation — what was
+  measured is what was fixed.
+- **Disposition:** the measured failure is FIXED. The selected-outside-day composite is OPEN.
+
+## 2026-09-16 — three races in the new keyboard tests, and two wrong fixes before the right one
+- **What:** `e2e/timeframe.spec.ts` flaked on arrival — 1 failure in one full run, then 2–6 per run
+  after a first "fix". All three causes were in the test code, none in the app. **FIXED**; six
+  consecutive 78/78 full runs, and removing one line reproduces the flake on demand.
+- **The three:**
+  1. **No wait for the surface to render.** `page.goto` resolves on navigation, not on React having
+     rendered, so `tabTo` pressed Tab thirty times at an empty page. Root cause, found last.
+  2. **`evaluateAll` does not auto-wait.** Unlike a locator assertion it returns `[]` for a
+     selector that matches nothing *yet*, with no error. This is the one worth remembering: it
+     converts "too early" into "the element does not exist", and a helper built on it fails with a
+     message that blames the wrong thing.
+  3. **A focus loop racing a React state update.** `while not focused: press ArrowRight` re-read
+     `document.activeElement` immediately after the press, read the *previous* tab, pressed again
+     and overshot — and a Radix tab list **wraps**, so overshooting the last tab returns to the
+     first. Now it steps with an awaited focus assertion per press.
+- **What green tests do NOT prove here:** that the rest of the walk is free of the same shape.
+  These three were found because new tests exercised new paths; nothing systematically checks the
+  existing specs for an unguarded keystroke after an animated open, or for a bare `evaluateAll`.
+  `grep -n "evaluateAll" e2e/` is the cheap audit and has not been run as a gate.
+- **The method note, which is the real debt:** both wrong fixes came from re-theorising about a
+  failure that only appeared under a full run's load, instead of reading the assertion message.
+  The message said `saw: ` with an empty list and pointed straight at cause (1) the first time it
+  was actually read.
+- **Disposition:** FIXED. The audit of the other specs is OPEN.
+
+
+## 2026-09-16 — spec 0008's two `live:` criteria could not run for want of a sound library — CLOSED the same day
 - **What:** slices 2 and 3 added three swept states to `e2e/states.spec.ts` (`Tilastot — the
   timeframe, calendar open`, `— the timeframe set, with figures`, `— an empty timeframe`) and a new
   `e2e/timeframe.spec.ts` with four keyboard tests. **None of them has run.** Playwright's
@@ -23,17 +71,24 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 - **What was NOT done to get a green run:** nothing was skipped, silenced, `test.skip`-ed or
   removed. The two AC rows say BLOCKED and this entry exists instead. A `test.skip` here would also
   have tripped the drift gate's escape-hatch check, correctly.
-- **To close it:**
+- **Disposition — CLOSED 2026-09-16, the same day.** `ldd` named exactly one missing library, and
+  nothing about a *headless* browser needs ALSA sound — it is a link-time dependency, not a
+  runtime one. Satisfied without root:
   ```bash
-  sudo npx playwright install-deps chromium   # or: sudo apt-get install -y libasound2t64
-  cd client && npx playwright test e2e/states.spec.ts e2e/timeframe.spec.ts
+  apt-get download libasound2t64                 # no root needed
+  dpkg-deb -x libasound2t64_*.deb  <somewhere>
+  export LD_LIBRARY_PATH=<somewhere>/usr/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH
   ```
-  Treat that first run the way this project treats the deploy jobs — its first execution *is* its
-  verification. The most likely failures are honest ones: the calendar overflowing 320px, or
-  `initialFocus` not putting focus in the grid.
-- **Disposition:** OPEN. Everything the gates *can* prove on this branch is green — typecheck at
-  baseline (4), eslint at baseline (16), a11y 0, boundaries clean, 18 vitest files, both drift
-  gates, and the build.
+  **The walk then ran: 78/78 at both viewports, six consecutive full runs.** AC-15 and AC-16 are
+  `WORKS` in spec 0008's table, not BLOCKED.
+- **What is still owed, and it is small:** the library lives in a session scratchpad, so the walk
+  needs that `LD_LIBRARY_PATH` until someone runs the one-line durable fix with a real terminal —
+  `sudo apt-get install -y libasound2t64` on Ubuntu 24.04. Until then `npm run check` fails at the
+  `e2e` step on a fresh shell, and it fails *loudly* with the library name, which is the right
+  failure mode.
+- **What it found on the way in:** two real defects no other gate saw — the `calendar.tsx` contrast
+  failure and the three test races, both entries below. That is the return on adding a swept state,
+  and the file header of `states.spec.ts` predicted it.
 
 ## 2026-09-16 — a failed load with a timeframe set cannot be cleared
 - **What:** the error branch of `ClassStatistics` owns the whole surface and renders no filter, so a
