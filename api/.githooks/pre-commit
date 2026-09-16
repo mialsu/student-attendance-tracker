@@ -32,6 +32,17 @@ fi
 # because a missing tool should not mean a missing gate. Anything added to `check-fast` belongs
 # here too.
 echo "pre-commit: \`just\` not found — running the same gates directly." >&2
+
+# `just` is optional; the venv is NOT -- every line below is in it. Say so by name, because the
+# bare failure is `./venv/bin/lint-imports: No such file or directory`, which reads like a broken
+# repo rather than an unbuilt clone. ./scripts/bootstrap.sh builds it however this machine can.
+if [ ! -x ./venv/bin/lint-imports ]; then
+  echo "pre-commit: api/venv is missing or incomplete — the api gates cannot run." >&2
+  echo "            run ./scripts/bootstrap.sh from the repo root (idempotent)," >&2
+  echo "            or ./scripts/bootstrap.sh --check to see what is missing." >&2
+  exit 1
+fi
+
 ./venv/bin/lint-imports
 ./scripts/drift-check.sh --cached
 ./scripts/drift-extra.sh --cached

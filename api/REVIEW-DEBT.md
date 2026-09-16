@@ -6,6 +6,51 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 
 <!-- Newest first. -->
 
+## 2026-09-16 — a clone could commit with no gates at all, and nothing said so
+- **What:** `core.hooksPath` lives in the untracked `.git/config`, so it does not arrive with a
+  `git pull`. A clone where the one-off had never been run executed **no** pre-commit gate, and an
+  uninstalled hook is silent — you commit, see no complaint, and assume the gates ran. That is the
+  exact hazard the root `.githooks/pre-commit` header warns about, arriving by a different door.
+  Found on one clone of a multi-machine setup; **the state of any given clone is not knowable from
+  another one**, which is the whole problem.
+- **Why `just install-hooks` was not the answer:** it is reached *through* `just`, which need not
+  be installed. The api hook does carry a no-`just` fallback, but every line of it calls
+  `./venv/bin/{lint-imports,ruff,mypy}` — so on a clone with no `api/venv` installing the hook
+  would have **blocked every api commit** instead of gating it. The venv, not `just`, is the real
+  prerequisite, and `api/venv` is gitignored so it does not travel either. Same for
+  `client/node_modules`.
+- **The first fix was prose, and prose was the wrong shape.** It named a machine and recorded what
+  was installed there. With more than one development machine that rots immediately: the facts
+  worth recording (which interpreter, which tools, how long the gates take) are **exactly** the
+  ones that differ between machines, and a committed document cannot say "this machine" and stay
+  true. A hostname in a public repository is also nobody's business.
+- **Fixed 2026-09-16 with `scripts/bootstrap.sh`**, which **detects instead of documenting**:
+  - sets `core.hooksPath`, builds `api/venv`, runs `npm ci` — only for whatever is actually absent
+  - `--check` reports without changing anything and exits 1 if setup is incomplete, so it works in
+    CI or as a habit before a first commit on a machine
+  - prefers `uv` (no root needed) and falls back to `python -m venv`, because `ensurepip` comes
+    from an OS package that is **not** installed everywhere. It **pins the interpreter**: an
+    unpinned `uv venv` picks the first python it finds, and a 3.8 fails the resolve on
+    OpenTelemetry's `Python>=3.10` with a message that does not mention the cause.
+  - idempotent, so re-running is a no-op and it can be recommended without qualification
+  - the api hook now **names it** when the venv is missing, instead of dying as
+    `./venv/bin/lint-imports: No such file or directory`, which reads like a broken repo
+- **Watched fail, every branch of it:** `--check` on a clone with `core.hooksPath` unset and the
+  venv moved away reports both and exits 1; the repair path fixes both and exits 0; a second run is
+  a no-op; the hook's new message fires with the venv absent and exits 1. And the gates themselves:
+  an unused import in `app/config.py` took ruff to 96 against baseline 91, and a planted `TS2322`
+  took the client typecheck to 5 against baseline 4 — both times `git commit` exited 1 with HEAD
+  unmoved.
+- **What this does not prove, and it is the dependency debt speaking:** `requirements.txt` is
+  almost all `>=` with no lockfile, so a bootstrap resolves to whatever is newest that day. Both
+  ratchets happened to land **exactly** at baseline, which is luck rather than design — a newer
+  ruff shipping one new rule would fail the gate on unchanged code and look like the commit's
+  fault. Two machines bootstrapped weeks apart can therefore disagree, and the gate would blame
+  whoever committed next.
+- **Disposition:** fixed, and deliberately with no per-machine record to maintain. The honest check
+  on any clone is `./scripts/bootstrap.sh --check`, followed by watching the hook refuse a planted
+  violation. The `>=` dependency debt is unchanged and recorded separately.
+
 ## 2026-09-16 — a third copy of the port-5433 footgun survives in `scripts/run-tests-docker.sh`, and two docs still recommend it
 - **What:** `scripts/run-tests-docker.sh:41` hardcodes
   `export TEST_DATABASE_URL="postgresql+asyncpg://attendance_user:test_password_123@localhost:5433/attendance_tracker_test"`
