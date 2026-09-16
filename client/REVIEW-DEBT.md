@@ -6,6 +6,66 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 
 <!-- Newest first. -->
 
+## 2026-09-16 — spec 0008's two `live:` criteria are written and have never executed
+- **What:** slices 2 and 3 added three swept states to `e2e/states.spec.ts` (`Tilastot — the
+  timeframe, calendar open`, `— the timeframe set, with figures`, `— an empty timeframe`) and a new
+  `e2e/timeframe.spec.ts` with four keyboard tests. **None of them has run.** Playwright's
+  Chromium will not start on this machine: `chrome-headless-shell` dies with
+  `error while loading shared libraries: libasound.so.2`, and installing that needs root.
+- **Where:** `e2e/states.spec.ts`, `e2e/timeframe.spec.ts`. Spec 0008 AC-15 and AC-16, both marked
+  `BLOCKED` in its table rather than filled.
+- **What green tests do NOT prove here:** the 320px reflow and axe pass for the filter and for the
+  **open calendar popover**, and every keyboard claim — reachability, focus-ring visibility, the
+  calendar's roving arrow focus, and Enter committing a day. jsdom can see none of it: a
+  `position: fixed` popover has no geometry there, which is the documented reason
+  `expectOverlayWithinViewport` exists at all. `ClassStatistics.test.tsx` reaches the same days
+  with `user.click`, which needs no focus, so it would pass with the calendar entirely unfocusable.
+- **What was NOT done to get a green run:** nothing was skipped, silenced, `test.skip`-ed or
+  removed. The two AC rows say BLOCKED and this entry exists instead. A `test.skip` here would also
+  have tripped the drift gate's escape-hatch check, correctly.
+- **To close it:**
+  ```bash
+  sudo npx playwright install-deps chromium   # or: sudo apt-get install -y libasound2t64
+  cd client && npx playwright test e2e/states.spec.ts e2e/timeframe.spec.ts
+  ```
+  Treat that first run the way this project treats the deploy jobs — its first execution *is* its
+  verification. The most likely failures are honest ones: the calendar overflowing 320px, or
+  `initialFocus` not putting focus in the grid.
+- **Disposition:** OPEN. Everything the gates *can* prove on this branch is green — typecheck at
+  baseline (4), eslint at baseline (16), a11y 0, boundaries clean, 18 vitest files, both drift
+  gates, and the build.
+
+## 2026-09-16 — a failed load with a timeframe set cannot be cleared
+- **What:** the error branch of `ClassStatistics` owns the whole surface and renders no filter, so a
+  teacher whose request fails *while a range is set* has no way to clear that range from the screen.
+  Her only action is the retry, and the retry re-sends the same range.
+- **Where:** `src/pages/ClassStatistics.tsx`, the `if (error)` branch.
+- **Why it is like this:** the error state showing the retry and nothing else is `DESIGN.md` §3's
+  shape for all three read surfaces, and offering a date picker for a request that never arrived
+  invites her to debug her own range when the server is the problem. That reasoning is a judgement,
+  not a decision anyone took: spec 0008's AC-13 only requires that the error state wins over the
+  empty-range state, and says nothing about the filter.
+- **What green tests do NOT prove here:** that there is a way out. The test asserts the error state
+  renders instead of the empty-range one; no test asserts the teacher can recover her filter.
+- **Disposition:** OPEN, recorded as a spec delta on 0008 too. It self-corrects on any successful
+  retry, and a page reload clears the range by design (decision 11), so the cost is bounded.
+
+## 2026-09-16 — two Finnish sentences in the new empty state had no native reader
+- **What:** the Owner ratified the both-ends copy on 2026-09-16 — "Aikavälillä 1.9.2026 – 30.9.2026
+  ei ole kirjattuja läsnäoloja." — along with `Aikaväli`, `Alkaen`, `Päättyen`,
+  `Tyhjennä aikaväli`, `Ei läsnäoloja valitulla aikavälillä` and `Päivät valitulla aikavälillä`.
+  The sign-off did **not** cover a range with only one end set, which the UI allows. The agent
+  wrote those two: "Aikavälillä 1.9.2026 **alkaen** ei ole…" and "Aikavälillä 30.9.2026 **asti** ei
+  ole…".
+- **Where:** `emptyRangeMessage` in `src/pages/ClassStatistics.tsx`, whose docstring says so.
+- **What green tests do NOT prove here:** that the Finnish is idiomatic. The test asserts the exact
+  string the component builds, so it pins the copy against accidental change and says nothing about
+  whether it reads well. This is the fourth entry in this ledger of the same shape — see the three
+  2026-09-11/12 copy entries.
+- **Disposition:** OPEN, one question for the Owner. Low stakes and easy to change: one function,
+  one test constant.
+
+
 ## 2026-09-12 — every Card title is an h3, so three surfaces skip a heading level — CLOSED the same day
 - **What:** `/settings` renders `<h1>Asetukset</h1>` and then two `CardTitle`s. `CardTitle` is an
   **h3** (`src/components/ui/card.tsx:19`), so the document outline goes h1 → h3 with no h2. A

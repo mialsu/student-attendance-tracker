@@ -188,14 +188,14 @@ Verdicts are filled by `/verify-live`, per criterion. A task's verdict is the **
 | AC-6 | A request with `date_from` after `date_to` returns 422 | `test:` | US-19 | |
 | AC-7 | The endpoint stays within `BUDGET_STATISTICS`, and the count is flat in the number of rows — watched failing on a planted query | `test:` query budget | US-27 | |
 | AC-8 | `INV-1` still refuses a second Teacher on this route, with and without range parameters | `test:` authorization | US-30 | |
-| AC-9 | `getStatistics` sends `date_from=2026-09-01` for a date picked as 1.9.2026 under a UTC+3 clock, and sends neither parameter when the range is unset — watched failing against `toISOString` | `test:` src/api | US-21, US-28 | |
-| AC-10 | Picking either end re-queries and the surface renders the filtered figures in all four cards, the table and the chart | `test:` hook seam | US-1, US-6 | |
-| AC-11 | A timeframe holding no attendance renders the new state naming both dates, with a working clear action; a Kurssi with no attendance at all still renders the original empty state | `test:` hook seam | US-15, US-16, US-17, US-18 | |
-| AC-12 | `Alkaen` offers no day after a chosen `Päättyen` and the reverse; neither offers a future day | `test:` hook seam | US-19, US-20 | |
-| AC-13 | A failed load renders the error state, not the empty-range state, with a timeframe set | `test:` hook seam | US-26 | |
-| AC-14 | Changing the *Päivät* / *Kuukaudet* toggle leaves the chosen dates in place | `test:` hook seam | US-12, US-13 | |
-| AC-15 | The filter and the empty-range state hold at 320px with no horizontal scroll and axe clean, with the calendar popover both closed and open | `live:` e2e | US-23, US-24 | |
-| AC-16 | Every control in the filter is reachable by keyboard with a visible focus ring, and the calendar is operable without a mouse | `live:` | US-22, US-25 | |
+| AC-9 | `getStatistics` sends `date_from=2026-09-01` for a date picked as 1.9.2026 under a UTC+3 clock, and sends neither parameter when the range is unset — watched failing against `toISOString` | `test:` src/api | US-21, US-28 | WORKS (gates) |
+| AC-10 | Picking either end re-queries and the surface renders the filtered figures in all four cards, the table and the chart | `test:` hook seam | US-1, US-6 | WORKS (gates) |
+| AC-11 | A timeframe holding no attendance renders the new state naming both dates, with a working clear action; a Kurssi with no attendance at all still renders the original empty state | `test:` hook seam | US-15, US-16, US-17, US-18 | WORKS (gates) |
+| AC-12 | `Alkaen` offers no day after a chosen `Päättyen` and the reverse; neither offers a future day | `test:` hook seam | US-19, US-20 | WORKS (gates) |
+| AC-13 | A failed load renders the error state, not the empty-range state, with a timeframe set | `test:` hook seam | US-26 | WORKS (gates) |
+| AC-14 | Changing the *Päivät* / *Kuukaudet* toggle leaves the chosen dates in place | `test:` hook seam | US-12, US-13 | WORKS (gates) |
+| AC-15 | The filter and the empty-range state hold at 320px with no horizontal scroll and axe clean, with the calendar popover both closed and open | `live:` e2e | US-23, US-24 | BLOCKED — see *Verification status* |
+| AC-16 | Every control in the filter is reachable by keyboard with a visible focus ring, and the calendar is operable without a mouse | `live:` | US-22, US-25 | BLOCKED — see *Verification status* |
 
 **Invariants touched:** `INV-1`, which does not move. `verify_class_ownership` already runs as
 `get_attendance_statistics`'s first act, before any filtering, so a range parameter cannot reach
@@ -278,11 +278,48 @@ Slice 1 is the only one that changes a production figure, and it does so the mom
    saying so on the screen. Not slice 1's to settle, and it touches every figure the endpoint has
    ever returned. Confessed in `api/REVIEW-DEBT.md`.
 
-1. **The Finnish copy is unratified.** `Aikaväli`, `Alkaen`, `Päättyen`, `Tyhjennä aikaväli`, and
-   the empty-range sentence "Aikavälillä 1.9.2026 – 30.9.2026 ei ole kirjattuja läsnäoloja." are
-   drafts by the agent. Copy voice has no skill owner in this project — METHOD's reuse table
+1. **The Finnish copy — RESOLVED 2026-09-16 by the Owner: ship the drafts as written.**
+   `Aikaväli`, `Alkaen`, `Päättyen`, `Tyhjennä aikaväli` and the empty-range sentence
+   "Aikavälillä 1.9.2026 – 30.9.2026 ei ole kirjattuja läsnäoloja." are ratified unchanged, as is
+   the table subtitle "Päivät valitulla aikavälillä" (decision 13). Asked before slice 2 was
+   written rather than after, because the strings thread through the component, the tests and the
+   swept states, and re-ratifying copy after three files quote it is the expensive order.
+
+   ~~drafts by the agent. Copy voice has no skill owner in this project — METHOD's reuse table
    assigns it to the Owner with `/code-review` as the backstop. Sign off or rewrite before slice 2
-   lands.
+   lands.~~ One gap the sign-off did not cover, extended by the agent and recorded as a delta
+   below: the sentence for a range with only ONE end set.
+
+## Verification status
+
+**Slices 2 and 3 built 2026-09-16.** AC-9 – AC-14 are proven by gates that were each watched fail
+first; AC-15 and AC-16 are written, typecheck, and have **not been run**.
+
+Everything the client gates cover is green on this branch: `typecheck` (4 findings, exactly the
+`.harness-baseline` figure, none of them in the new files), `eslint` (16, likewise), the a11y
+config (0), `dependency-cruiser` (no violations, 110 modules), the full vitest suite (18 files),
+both drift gates, and `npm run build`.
+
+**AC-15 and AC-16 are BLOCKED on this machine, not on the code.** Playwright's Chromium cannot
+start: `chrome-headless-shell` fails with `error while loading shared libraries: libasound.so.2`,
+and installing it needs root, which this session does not have. Nothing was skipped, silenced or
+marked `test.skip` to get a green run — the walk simply has not executed, which is why these two
+rows say BLOCKED rather than WORKS. To close them:
+
+```bash
+sudo npx playwright install-deps chromium   # or: sudo apt-get install -y libasound2t64
+cd client && npx playwright test e2e/states.spec.ts e2e/timeframe.spec.ts
+```
+
+The three new swept states are `Tilastot — the timeframe, calendar open`, `Tilastot — the timeframe
+set, with figures` and `Tilastot — an empty timeframe`; `e2e/timeframe.spec.ts` holds the four
+keyboard tests. The first run of these is their first execution, so treat it the way this project
+treats the deploy jobs — the one part not proven by breaking it.
+
+AC-1 – AC-8 are slice 1's and were **not** re-verified here: they need `TEST_DATABASE_URL` and the
+API suite, which is a different scope from the one this session was asked for. Their rows are left
+empty rather than filled from slice 1's commit message, because a verdict copied from a commit
+message is not a verdict.
 
 ## Spec Deltas
 
@@ -323,3 +360,46 @@ not. That entry's point is that `test_query_budget.py` guards a **hand-written**
 endpoint nobody thought to add is not watched at all; taking one name off that list leaves
 `/api/auth/*` unwatched and still nothing noticing a new route arriving without a budget. The
 ledger entry was narrowed rather than closed, and says why.
+
+**2026-09-16 — the one-ended empty-timeframe sentence is the agent's, not the Owner's.** Open
+question 1 ratified "Aikavälillä 1.9.2026 – 30.9.2026 ei ole kirjattuja läsnäoloja." — the
+BOTH-ends form. A range with only one end set is reachable from the UI (decision 9 offers two
+independent pickers, and AC-2 requires each end to work alone), and no sentence was written for it.
+The agent extended the ratified one by the obvious Finnish construction — "Aikavälillä 1.9.2026
+**alkaen** ei ole kirjattuja läsnäoloja." and "Aikavälillä 30.9.2026 **asti** ei ole kirjattuja
+läsnäoloja." — and `emptyRangeMessage` in `ClassStatistics.tsx` says in its docstring that these two
+are unratified. Recorded here rather than quietly shipped, because the sign-off was asked for
+precisely so the agent would not be writing the teacher's Finnish.
+
+**2026-09-16 — the error state shows no filter, which AC-13 does not say either way.** Decision 12
+gives the empty timeframe a clear action; nothing decided whether the ERROR state keeps the filter
+on screen. It does not: the error branch owns the whole surface, as `DESIGN.md` §3 has it, and the
+retry is the action there. The reasoning is in a comment at the branch — offering a date picker for
+a request that never arrived invites the teacher to debug her own range. Worth knowing because it
+has a consequence: a teacher whose request fails *while a range is set* cannot clear that range
+without a retry succeeding first. Judged acceptable rather than overlooked; reopen it if the Owner
+disagrees.
+
+**2026-09-16 — the all-time empty state shows no filter either, and that is what makes AC-11
+testable.** A Kurssi with no attendance at all has nothing to filter, so that branch renders no
+pickers. The consequence is a structural one worth naming: it is impossible to *reach* the
+empty-timeframe state from the all-time empty state, because there is no control there to pick a
+date with. `ClassStatistics.test.tsx` therefore mocks the hook as a *function of the range* —
+figures with no range, nothing with one — which is also the only honest model of the case the state
+exists for: a Kurssi that has attendance, filtered to a month that does not. A fixed mock return
+value cannot express it.
+
+**2026-09-16 — `getStatistics`' signature changed shape, which decision 7 implied but did not
+say.** It was `getStatistics(classId, excludeDates?: string[])` and is now
+`getStatistics(classId, params?: GetStatisticsParams)`. Decision 7 promised the *response* shape
+was unchanged and that omitted parameters mean unfiltered; both hold. The *client function's*
+parameter list is a different thing and it did move, so the one caller (`useAttendanceStatistics`)
+moved with it. Three ends in a positional list would have been the alternative, and a third
+positional `Date | undefined` is the kind of signature a later caller gets wrong silently.
+
+**2026-09-16 — the queryKey carries serialized days, not `Date` objects.** Decision 11 says the
+range "joins the `queryKey`" and stops there. Putting the `Date`s in directly would key the cache
+on `Date.toJSON`, which is UTC — so a range picked as 1.9.2026 under UTC+3 would cache under
+`2026-08-31` while asking the server for `2026-09-01`. The key now carries `toApiDate`'s output, so
+the cache and the request agree about which day a `Date` is. Same bug as decision 10, one layer
+over.

@@ -28,6 +28,7 @@ import {
   ROUTES,
   signedIn,
   statistics,
+  statisticsByRange,
 } from './mocks';
 import {
   expectNoAxeViolations,
@@ -52,6 +53,34 @@ const classUrl = `/class/${KURSSI.id}`;
 async function openTab(page: Page, name: string, ready: RegExp | string): Promise<void> {
   await page.getByRole('tab', { name }).click();
   await expect(page.getByText(ready).first()).toBeVisible();
+}
+
+/**
+ * Open *Tilastot* and wait for the aggregates, which is where the timeframe filter lives.
+ *
+ * Waiting on the loading text to go is what the two aggregates states already do, and it is the
+ * right wait here too: the filter renders in the loaded branch, so its presence is the signal.
+ */
+async function openTilastot(page: Page): Promise<void> {
+  await page.getByRole('tab', { name: 'Tilastot' }).click();
+  await expect(page.getByText('Ladataan tilastoja...')).toBeHidden();
+  await expect(page.getByLabel('Alkaen')).toBeVisible();
+}
+
+/**
+ * Pick a day from one end's calendar, by its number in the open grid.
+ *
+ * **The tenth, and it is chosen rather than arbitrary.** The calendar opens on the current month
+ * and refuses future days, so the day has to be one that has already happened whenever the walk
+ * runs — and it has to be unambiguous in the grid, which rules out the first few and last few days
+ * where a neighbouring month's padding shows the same numbers. The 10th satisfies both for any
+ * month, on any day from the 10th onward. `exact` is what makes the strictness real: without it
+ * Playwright's string form matches a substring, so "10" would also find 1 and 30.
+ */
+async function pickDay(page: Page, end: string, day = '10'): Promise<void> {
+  await page.getByLabel(end).click();
+  await page.getByRole('gridcell', { name: day, exact: true }).click();
+  await page.keyboard.press('Escape');
 }
 
 const STATES: SweptState[] = [
@@ -297,6 +326,89 @@ const STATES: SweptState[] = [
       await expect(page.getByText('Ladataan tilastoja...')).toBeHidden();
       await page.getByRole('radio', { name: 'Kuukaudet' }).click();
       await expect(page.getByText('Läsnäolot kuukausittain (kaavio)')).toBeVisible();
+    },
+  },
+  {
+    /*
+     * Spec 0008 AC-15, and the half no component test can judge: an OPEN calendar popover at
+     * 320px. `ClassStatistics.test.tsx` renders the same popover in jsdom, where it has no
+     * geometry at all — a `position: fixed` panel measures nothing there, so nothing in that file
+     * can see a calendar hanging off the edge of a phone.
+     *
+     * It is also the state `expectOverlayWithinViewport` was written for. Radix's PopoverContent
+     * is a `[role="dialog"]`, so the calendar's box is measured the way the create-course dialog's
+     * is — and unlike document overflow, which a fixed element contributes nothing to, that check
+     * can actually fail here.
+     */
+    name: 'Tilastot — the timeframe, calendar open',
+    arrange: async (page) => {
+      await signedIn(page);
+      await oneKurssi(page);
+      await register(page);
+      await statistics(page);
+    },
+    reach: async (page) => {
+      await page.goto(classUrl);
+      await openTilastot(page);
+      await page.getByLabel('Alkaen').click();
+      // The popover animates in, and axe must not sample it mid-transition — the same
+      // nondeterminism the drawer and the create-course dialog document above.
+      await expect(page.getByRole('dialog')).toHaveCSS('opacity', '1');
+      await expect(page.getByRole('gridcell', { name: '10', exact: true })).toBeVisible();
+    },
+  },
+  {
+    /*
+     * The filter carrying a timeframe, with figures behind it. Worth its own state rather than a
+     * click inside the aggregates one: a set range adds the *Tyhjennä aikaväli* action and puts a
+     * date into both triggers, so it is a different layout to reflow at 320px and a different set
+     * of colours for axe to read.
+     */
+    name: 'Tilastot — the timeframe set, with figures',
+    arrange: async (page) => {
+      await signedIn(page);
+      await oneKurssi(page);
+      await register(page);
+      // Answers every request with the same figures, range or not, so this state is the filter
+      // rather than the filtering.
+      await statistics(page);
+    },
+    reach: async (page) => {
+      await page.goto(classUrl);
+      await openTilastot(page);
+      await pickDay(page, 'Alkaen');
+      await expect(page.getByRole('button', { name: 'Tyhjennä aikaväli' })).toBeVisible();
+      await expect(page.getByText('Päivät valitulla aikavälillä')).toBeVisible();
+    },
+  },
+  {
+    /*
+     * The fifth state, and `DESIGN.md` §3's new *Tilastot* row. The one that had to exist: with
+     * the four totals filtered (spec 0008 decision 5), an empty September is `total_records === 0`
+     * exactly like a Kurssi that has never been used — so without this branch the teacher holding
+     * hundreds of records gets told to go and log some. That is the defect §3 calls "an empty
+     * state lying about an error", and spec 0006 already fixed it once on this same surface.
+     */
+    name: 'Tilastot — an empty timeframe',
+    arrange: async (page) => {
+      await signedIn(page);
+      await oneKurssi(page);
+      await register(page);
+      // Figures with no range, nothing with one — so the filter is operable before it empties.
+      await statisticsByRange(page);
+    },
+    reach: async (page) => {
+      await page.goto(classUrl);
+      await openTilastot(page);
+      await pickDay(page, 'Alkaen');
+      // Not pinned to a formatted date: the walk's clock decides the month, and AC-9's own test
+      // owns the serialization. What matters here is that the sentence names a timeframe at all.
+      await expect(page.getByText(/ei ole kirjattuja läsnäoloja/)).toBeVisible();
+      // The advice for a teacher who has never logged anything must be GONE, which is the half
+      // that holds the fix — the same assertion the three `— refused` states make.
+      await expect(page.getByText('Kirjaa opiskelijoiden läsnäoloja nähdäksesi tilastot.')).toBeHidden();
+      // And the way out is on screen (US-17).
+      await expect(page.getByRole('button', { name: 'Tyhjennä aikaväli' })).toBeVisible();
     },
   },
   {

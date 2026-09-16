@@ -1125,8 +1125,21 @@ Closes #123
 3. ✅ **Bulk Logging**: Create 1-50 attendance records in one API call
 4. ✅ **Autocomplete**: Fast student name suggestions ordered by frequency
 5. ✅ **No Duplicate Students**: Fixed StudentLogs bug completely
+6. ✅ **Timeframe filter on *Tilastot*** (spec 0008): two date pickers, `Alkaen` / `Päättyen`,
+   empty by default. Every figure on the surface describes the chosen timeframe — the four summary
+   cards included, which is a **change in what "Yhteensä läsnäoloja" counts** and drops that figure
+   once on deploy, to what the charts have been drawing all along. The Owner undertook to warn the
+   teacher. *Tilastot* has **two** empty states now, and the order they are checked in matters —
+   `client/DESIGN.md` §3 is the record. Every date is a local day (spec 0009, ADR-0008).
 
-**Next Development:** Ready for new feature requests or enhancements
+**Next Development:** Ready for new feature requests or enhancements.
+
+⚠ **Spec 0008's two `live:` criteria (AC-15, AC-16) have never executed.** The browser walk gained
+three swept states and a new `client/e2e/timeframe.spec.ts`, and Playwright cannot start on the
+development machine — `libasound.so.2` is missing and installing it needs root. Nothing was skipped
+to get a green run; the rows say BLOCKED. `sudo npx playwright install-deps chromium`, then
+`cd client && npx playwright test e2e/states.spec.ts e2e/timeframe.spec.ts`. Details in
+`client/REVIEW-DEBT.md` (2026-09-16).
 
 **Deployment Cost Breakdown:**
 - **Frontend**: Free (Vercel Hobby tier, non-commercial)

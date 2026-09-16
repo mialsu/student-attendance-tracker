@@ -66,7 +66,7 @@ One teacher, one Kurssi, in production since November 2025. Every surface below 
 | `/dashboard` | "the Kurssi she owns, and a way to make another" — since slice 5 each course is a **link** carrying its Student and attendance counts, and a dashed card in the grid opens the create dialog | 0006/5 | built |
 | `/class/:id` → *Kirjaa läsnäolo* | the core loop: record who turned up, 1–50 at a time, with name autocomplete | — | built |
 | `/class/:id` → *Läsnäolot* | the tally per Student, the course-credit tick, and correcting mistakes (rename, merge, delete) | — | built |
-| `/class/:id` → *Tilastot* | four totals, the per-day table, and **one** bar chart carrying a day/month toggle | 0006/6 | built |
+| `/class/:id` → *Tilastot* | a timeframe filter (*Alkaen* / *Päättyen*), four totals, the per-day table, and **one** bar chart carrying a day/month toggle. Every figure on it describes the chosen timeframe | 0006/6, 0008 | built |
 | `/settings` | change email, change password. Two stacked cards since slice 7, not the two tabs it shipped with — both forms on screen at once | 0006/7 | built |
 | `*` → 404 | the wrong address | 0006/8 | built |
 | `/` | not a surface — renders `null` and redirects by session (`Index.tsx`) | — | built |
@@ -147,13 +147,32 @@ accessibility check available here is also the width decision.
 | `/dashboard` — luo uusi kurssi | n/a | the submit becomes "Luodaan..." and disables | toast, `detail` from the API or "Kurssin luominen epäonnistui"; a blank name is refused before the request with "Kurssin nimi on pakollinen" | toast "Kurssi luotu", the dialog closes, the fields clear |
 | *Kirjaa läsnäolo* | n/a — the form is always the form | the submit button becomes "Kirjataan…" and disables | toast, `detail` from the API or "Läsnäolon kirjaaminen epäonnistui" | toast, and the field clears |
 | *Läsnäolot* | "Ei opiskelijoita vielä" (desktop) / "Ei läsnäoloja kirjattu vielä tälle kurssille" (narrow); searching yields "Ei hakutuloksia haulla …" | Card header stays, body becomes a spinner | "Opiskelijoiden lataaminen epäonnistui" + the retry | rows, tally, and the *Suoritus* tick |
-| *Tilastot* | "Ei läsnäoloja näytettäväksi" + "Kirjaa opiskelijoiden läsnäoloja nähdäksesi tilastot." — the empty branch owns the whole surface, so there is no chart frame and no toggle to press | "Ladataan tilastoja…" | "Tilastojen lataaminen epäonnistui" + the retry | four totals, the per-day table, and one chart whose granularity the *Kaavion jakso* toggle sets — **Päivät** by default, **Kuukaudet** the other. Both granularities are swept, because each draws a different dataset and `A11Y-7` has to hold for both |
+| *Tilastot* | **Two empties since spec 0008, and the order they are checked in is the point.** With no timeframe set: "Ei läsnäoloja näytettäväksi" + "Kirjaa opiskelijoiden läsnäoloja nähdäksesi tilastot." — the empty branch owns the whole surface, so there is no chart frame, no toggle and no filter to press. With a timeframe set: "Ei läsnäoloja valitulla aikavälillä" + a sentence naming her own dates back ("Aikavälillä 1.9.2026 – 30.9.2026 ei ole kirjattuja läsnäoloja."), the filter still on screen above it and its *Tyhjennä aikaväli* the way out | "Ladataan tilastoja…" | "Tilastojen lataaminen epäonnistui" + the retry. **Checked before both empties**, which a timeframe makes load-bearing rather than cosmetic — see the note under this table | the *Aikaväli* filter (*Alkaen* / *Päättyen*, empty by default, cross-disabling, no future days), four totals, the per-day table, and one chart whose granularity the *Kaavion jakso* toggle sets — **Päivät** by default, **Kuukaudet** the other. Both granularities are swept, because each draws a different dataset and `A11Y-7` has to hold for both. Every figure describes the timeframe, the four totals included |
 | `/settings` | n/a | each submit becomes "Tallennetaan..." and disables — **both**, independently, because the two cards are on screen together | toast, `detail` from the API or the surface's own wording | toast, and the confirming field clears |
 | `/auth` — kirjautuminen | n/a | the submit becomes "Kirjaudutaan..." and disables | toast: "Väärä sähköposti tai salasana" | redirect to the dashboard |
 | `/auth` — rekisteröityminen | n/a | the submit becomes "Rekisteröidään..." and disables | toast: "Rekisteröinti epäonnistui"; the two client-side refusals are inline — "Sähköpostin tulee olla oikeassa muodossa", "Salasanat eivät täsmää" | redirect to the dashboard |
 | `/class/:id` | n/a | full-surface spinner | redirect to `/dashboard`, silently | the three tabs |
 | 404 | n/a | n/a | n/a | "Sivua ei löytynyt", one line under it, and one link back to `/` — Finnish and on tokens since slice 8 |
 | the shell's course list | "Ei kursseja" | one `SidebarMenuSkeleton` row | "Kursseja ei voitu ladata" — muted, and deliberately **not** `role="alert"` | the Kurssi list, each row a link with its Student count |
+
+**The fifth state, added 2026-09-16 by spec 0008.** *Tilastot* is the one surface with two empty
+states, because filtering the four totals made "no records" ambiguous. Before the timeframe,
+`total_records === 0` could only mean a Kurssi nobody had used; after it, the same zero also means
+*she picked a month with nothing in it* — and the advice for the first case is actively wrong for
+the second, which is the same class of defect as the hole closed below. What separates them is
+whether a range is set, and **nothing else**: the client cannot tell "empty here" from "empty
+everywhere" without a second count, so the copy deliberately asserts nothing about data outside the
+range (spec 0008 decision 12).
+
+The error branch runs **before both**, and a timeframe is why that ordering now carries weight: a
+failed request also leaves `total_records` at 0, so either empty branch would happily dress a
+refusal as a range that holds nothing. `ClassStatistics.test.tsx` asserts the order with a mock
+carrying data *and* an error at once, and it was watched red with the branches swapped.
+
+Both new states are swept — `Tilastot — an empty timeframe` and `Tilastot — the timeframe, calendar
+open`, the second because an open popover has no geometry in jsdom and a calendar hanging off the
+edge of a 320px screen is invisible to every component test. `e2e/timeframe.spec.ts` owns the
+keyboard half.
 
 **The hole is CLOSED — 2026-09-10, spec 0006 slice 1.** For the record of what it was: none of the
 three read surfaces consulted its query's `error`. `StudentLogs.tsx`, `TeacherDashboard.tsx` and
