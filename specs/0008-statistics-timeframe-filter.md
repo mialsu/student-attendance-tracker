@@ -55,7 +55,7 @@ way out, rather than the advice meant for a teacher who has never logged anythin
 4. As a teacher, I want *Tilastot* to open showing everything, so that I see the whole Kurssi without configuring anything first.
 5. As a teacher, I want to clear the timeframe in one action, so that getting back to the whole picture is not a second date-picking exercise.
 6. As a teacher, I want the four summary figures to describe the timeframe I chose, so that the number I read and the chart beside it cannot disagree.
-7. As a teacher, I want "Yhteensä läsnäoloja" to count the timeframe only, so that I can report a term's attendance without doing arithmetic against the chart.
+7. As a teacher, I want "Läsnäoloja yhteensä" to count the timeframe only, so that I can report a term's attendance without doing arithmetic against the chart.
 8. As a teacher, I want "Opiskelijoita" to count the students who attended in the timeframe, so that I can see who was active that term rather than ever.
 9. As a teacher, I want the first and last attendance dates to fall inside the timeframe, so that they describe what I am looking at.
 10. As a teacher, I want the per-day table to list only days in the timeframe, so that I can read a month without scrolling past two years.
@@ -105,7 +105,7 @@ both sides would read more directly and give up that index.
 use, so all four cards describe one thing.
 
 **6. A consequence of 5, accepted by the Owner.** The counts now honour `exclude_dates` as well as
-the range. With the hardcoded `2026-02-27` exclusion still in place, "Yhteensä läsnäoloja" drops
+the range. With the hardcoded `2026-02-27` exclusion still in place, "Läsnäoloja yhteensä" drops
 once on deploy, to the figure the charts have been drawing all along. The Owner will warn the
 teacher before it ships. This is recorded again under *Out of Scope*.
 
@@ -180,14 +180,14 @@ Verdicts are filled by `/verify-live`, per criterion. A task's verdict is the **
 
 | # | Criterion | Proven by | Serves | Verdict |
 |---|---|---|---|---|
-| AC-1 | With neither parameter, the response is unchanged from today's for the same data, counts included | `test:` | US-4, US-29 | |
-| AC-2 | `date_from` alone, `date_to` alone, and both together each restrict `daily_stats` and `monthly_stats` to the timeframe | `test:` | US-1, US-2, US-3, US-10, US-11 | |
-| AC-3 | `total_records` and `total_students` count only records inside the timeframe | `test:` | US-6, US-7, US-8 | |
-| AC-4 | `first_date` and `last_date` fall inside the timeframe whenever one is set | `test:` | US-9 | |
-| AC-5 | A record at 23:59 on `date_to` is counted; one at 00:00 the next day is not — watched failing against a `<=` comparison | `test:` | US-14 | |
-| AC-6 | A request with `date_from` after `date_to` returns 422 | `test:` | US-19 | |
-| AC-7 | The endpoint stays within `BUDGET_STATISTICS`, and the count is flat in the number of rows — watched failing on a planted query | `test:` query budget | US-27 | |
-| AC-8 | `INV-1` still refuses a second Teacher on this route, with and without range parameters | `test:` authorization | US-30 | |
+| AC-1 | With neither parameter, the response is unchanged from today's for the same data, counts included | `test:` | US-4, US-29 | WORKS (gates) |
+| AC-2 | `date_from` alone, `date_to` alone, and both together each restrict `daily_stats` and `monthly_stats` to the timeframe | `test:` | US-1, US-2, US-3, US-10, US-11 | WORKS (gates) |
+| AC-3 | `total_records` and `total_students` count only records inside the timeframe | `test:` | US-6, US-7, US-8 | WORKS (gates) |
+| AC-4 | `first_date` and `last_date` fall inside the timeframe whenever one is set | `test:` | US-9 | WORKS (gates) |
+| AC-5 | A record at 23:59 on `date_to` is counted; one at 00:00 the next day is not — watched failing against a `<=` comparison | `test:` | US-14 | WORKS (gates) |
+| AC-6 | A request with `date_from` after `date_to` returns 422 | `test:` | US-19 | WORKS (gates) |
+| AC-7 | The endpoint stays within `BUDGET_STATISTICS`, and the count is flat in the number of rows — watched failing on a planted query | `test:` query budget | US-27 | WORKS (gates) |
+| AC-8 | `INV-1` still refuses a second Teacher on this route, with and without range parameters | `test:` authorization | US-30 | WORKS (gates) |
 | AC-9 | `getStatistics` sends `date_from=2026-09-01` for a date picked as 1.9.2026 under a UTC+3 clock, and sends neither parameter when the range is unset — watched failing against `toISOString` | `test:` src/api | US-21, US-28 | WORKS (gates) |
 | AC-10 | Picking either end re-queries and the surface renders the filtered figures in all four cards, the table and the chart | `test:` hook seam | US-1, US-6 | WORKS (gates) |
 | AC-11 | A timeframe holding no attendance renders the new state naming both dates, with a working clear action; a Kurssi with no attendance at all still renders the original empty state | `test:` hook seam | US-15, US-16, US-17, US-18 | WORKS (gates) |
@@ -232,7 +232,7 @@ Slice 1 is the only one that changes a production figure, and it does so the mom
   names differently. It goes to `REVIEW-DEBT.md` as a confession, with the note that no surface
   exposes it today.
 - **The hardcoded `excludeDates = ['2026-02-27']`** and its `TODO`. Untouched. Its interaction with
-  decision 5 — the one-time drop in "Yhteensä läsnäoloja" — is the accepted cost, and both the
+  decision 5 — the one-time drop in "Läsnäoloja yhteensä" — is the accepted cost, and both the
   constant and the drop go to `REVIEW-DEBT.md`.
 - **Timeframe presets** ("tämä kuukausi", "viime kuukausi", a term selector). Two pickers first;
   presets are worth revisiting once the Owner has watched which ranges actually get picked.
@@ -318,10 +318,27 @@ contrast failure in the shared `calendar.tsx` primitive, and three races in the 
 themselves. Neither would have been visible without a state that opens a calendar — which is
 exactly `states.spec.ts`'s own argument for being a table of states rather than a set of journeys.
 
-AC-1 – AC-8 are slice 1's and were **not** re-verified here: they need `TEST_DATABASE_URL` and the
-API suite, a different scope from the one this session was asked for. Their rows are left empty
-rather than filled from slice 1's commit message, because a verdict copied from a commit message is
-not a verdict.
+**AC-1 – AC-8 verified 2026-09-16** against the API suite, and filled from that run rather than
+from slice 1's commit message. Each assertion was also watched fail against a planted defect,
+because a passing test proves the code works and not that the test would notice if it stopped:
+
+| Planted in `app/services/attendance_service.py` | Caught by | Covers |
+|---|---|---|
+| the end bound flipped to `<= _local_midnight(date_to)` | 8 tests, incl. `test_end_day_is_inclusive_to_its_last_second` | AC-2, AC-3, AC-4, AC-5 |
+| the inverted-range guard deleted | `test_inverted_range_is_refused`, alone | AC-6 |
+| INV-1's single ownership site neutered (`class_service.py`) | the statistics route **with and without** range parameters | AC-8 |
+
+AC-1 rests on `test_no_parameters_returns_everything`; AC-7 on the `statistics-…date_from=2000-01-01-5`
+budget row plus `test_statistics_stays_flat_in_the_number_of_records`. Every mutation was reverted
+and `git status` confirmed clean after each.
+
+**The suite: 540 tests, all passing, coverage TOTAL 90%.** One caveat on how it was run, because
+`just` is not installed on this machine and there is no `api/venv`: it ran inside the
+`attendance-backend-local` container against the disposable database on port 5439. That container
+carries `OTEL_EXPORTER_OTLP_ENDPOINT`, which makes tracing live and fails
+`test_logging.py::test_trace_id_is_absent_when_tracing_is_off` — a harness artifact, not a defect.
+Clearing the OTel variables reproduces CI's environment and the file passes 12/12. Recorded in
+`api/REVIEW-DEBT.md`.
 
 ## Spec Deltas
 
@@ -350,7 +367,7 @@ response is "unchanged from today's for the same data, counts included" when nei
 sent, and US-29 promises "every existing caller keeps working untouched". Both hold only when
 `exclude_dates` is *also* absent. `ClassStatistics` sends `excludeDates=['2026-02-27']` on every
 request, and for that caller `total_records` and `total_students` both drop — which is decisions 5
-and 6 working as intended, and the one-time fall in "Yhteensä läsnäoloja" the Owner undertook to
+and 6 working as intended, and the one-time fall in "Läsnäoloja yhteensä" the Owner undertook to
 warn the teacher about. The two criteria were written as though the range were the only new
 filter. `tests/test_statistics.py` pins the real behaviour in
 `test_no_parameters_returns_everything` (no exclusions, unchanged) and in the two exclusion tests
@@ -449,3 +466,13 @@ tests with "not reachable by keyboard within 30 Tab presses". That was the test 
 the app: only the selected tab is in the tab order, per the ARIA authoring practices, so one Tab
 reaches the strip and arrows move within it. A test demanding otherwise would have demanded three
 tab stops for three tabs, which would itself be the accessibility defect.
+
+**2026-09-16 — the first summary card is "Läsnäoloja yhteensä", not "Yhteensä läsnäoloja".**
+Open question 1 above ratified the copy on this spec's Finnish strings, and this label was not
+among the ones it listed — the card predates this spec, so the sign-off passed over it. The Owner
+corrected the word order on review: noun first, which is also how its three neighbours read
+(`Opiskelijoita`, `Ensimmäinen läsnäolo`, `Viimeisin läsnäolo`). Changed in
+`client/src/pages/ClassStatistics.tsx` and in every document that named the card, this spec
+included, so the old form now appears only in this entry. **Nothing else had to change:** no test,
+no `e2e` spec and no swept state selected on that string — the card is reached by position and by
+its value, which is why a copy fix here cost one line rather than a sweep.

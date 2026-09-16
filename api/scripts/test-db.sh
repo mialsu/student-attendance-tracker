@@ -22,7 +22,11 @@
 set -euo pipefail
 
 NAME=attendance-test-db
-PORT=5439                       # deliberately not 5433: see trap 1 above
+# Deliberately not 5433 (see trap 1 above). Overridable because 5439 is only free on *this*
+# machine: a hardcoded port is the defect trap 1 describes, and picking a different default
+# would repeat it rather than fix it. Set TEST_DB_PORT to move it; the in-use guard below still
+# refuses to guess.
+PORT="${TEST_DB_PORT:-5439}"
 USER=attendance_user
 PASS=test_password_123
 DB=attendance_tracker_test
@@ -35,14 +39,28 @@ case "${1:-}" in
 
   up)
     if docker ps --format '{{.Names}}' | grep -qx "$NAME"; then
-      echo "export TEST_DATABASE_URL=${URL}"
-      echo "# ${NAME} already running on ${PORT}" >&2
+      # Report the port it is ACTUALLY published on, not the one just asked for. With PORT
+      # overridable these can differ, and printing the requested one hands back a URL that
+      # connects to nothing -- or to whatever else holds that port.
+      running_port="$(docker port "$NAME" 5432 2>/dev/null | head -n1 | sed 's/.*://')"
+      if [ -z "$running_port" ]; then
+        echo "${NAME} is running but publishes no port for 5432 -- remove it and retry:" >&2
+        echo "  ./scripts/test-db.sh down" >&2
+        exit 1
+      fi
+      if [ "$running_port" != "$PORT" ]; then
+        echo "# ${NAME} is already running on ${running_port}, not the requested ${PORT}." >&2
+        echo "# Using ${running_port}. ./scripts/test-db.sh down first to move it." >&2
+      else
+        echo "# ${NAME} already running on ${running_port}" >&2
+      fi
+      echo "export TEST_DATABASE_URL=postgresql+asyncpg://${USER}:${PASS}@127.0.0.1:${running_port}/${DB}"
       exit 0
     fi
 
     if ss -lnt 2>/dev/null | grep -q ":${PORT} "; then
       echo "port ${PORT} is already in use by something else — refusing to guess." >&2
-      echo "Free it, or edit PORT in $0." >&2
+      echo "Free it, or pick another port:  TEST_DB_PORT=5445 $0 up" >&2
       exit 1
     fi
 

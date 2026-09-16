@@ -208,7 +208,7 @@ const ClassStatistics = ({ classId }: ClassStatisticsProps) => {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Yhteensä läsnäoloja
+              Läsnäoloja yhteensä
             </CardTitle>
           </CardHeader>
           <CardContent>

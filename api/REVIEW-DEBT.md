@@ -6,6 +6,86 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 
 <!-- Newest first. -->
 
+## 2026-09-16 — a third copy of the port-5433 footgun survives in `scripts/run-tests-docker.sh`, and two docs still recommend it
+- **What:** `scripts/run-tests-docker.sh:41` hardcodes
+  `export TEST_DATABASE_URL="postgresql+asyncpg://attendance_user:test_password_123@localhost:5433/attendance_tracker_test"`
+  and then runs the suite, whose fixtures call `Base.metadata.drop_all`. Port 5433 on this machine
+  is `platform-postgres`, a different project's container.
+- **Why this is a new entry and not the old one:** the 2026-09-01 entry above
+  (*the documented way to get a test database pointed at another project's container*) enumerates
+  where the hazard lived — root `CLAUDE.md`, the `justfile`'s `test` recipe, and
+  `deployment/local/docker-compose.yml`'s `db-test` — and declares the repo side **fixed**. This
+  script was not in that list and was not corrected. `api/docs/TEST_QUICK_START.md:11` and
+  `api/scripts/README.md:89` both still present it as the way to run the suite.
+- **Why it has not fired:** three accidents, none of them a safeguard. It calls bare `pytest`,
+  which is not on this machine (no `api/venv`), so it dies before connecting. It first runs
+  `docker compose --profile test up -d db-test`, which cannot bind 5433 while `platform-postgres`
+  holds it, and `set -e` stops the script there. And the URL names database
+  `attendance_tracker_test`, which another project's container is unlikely to have.
+  **Checked 2026-09-16: nothing is currently bound on 5433** — `platform-postgres` is not running —
+  so today the compose step would succeed and bind it, and only the missing `pytest` stands between
+  the script and a live `drop_all` against whatever later takes that port.
+- **What green tests do not prove:** nothing executes this script, so no gate reads that line. The
+  drift gate is a diff gate and the file has not changed since it was written.
+- **Disposition: FIXED 2026-09-16, and the fix was not the obvious one.** Swapping 5433 for 5439
+  would have moved the defect rather than removed it — no port is free on every machine, which is
+  the Owner's point and the reason the original hardcode was wrong in the first place. So:
+  - `scripts/run-tests-docker.sh` no longer owns a connection string at all. It calls
+    `scripts/test-db.sh up` and uses what that exports, leaving **one** place in the repo where a
+    test database port is decided. It also exports the four extra variables `conftest.py` needs,
+    unsets the OTel variables (see the entry below), refuses to start alongside another pytest
+    session, destroys the database on exit via a trap, and fails by name when `pytest` is missing
+    from `PATH` instead of dying as `command not found`.
+  - `scripts/test-db.sh` reads `PORT="${TEST_DB_PORT:-5439}"`, so a machine where 5439 is taken
+    can move it without editing a file. Its port-in-use guard still refuses to guess.
+  - `deployment/local/docker-compose.yml`'s `db-test` publishes `"${TEST_DB_PORT:-5439}:5432"`,
+    which closes the **"still open"** clause of the 2026-09-01 entry above: that service could
+    never start on this machine while it was pinned to 5433.
+  - `docs/TEST_QUICK_START.md` carried **two more copies** nobody had counted — a hand-written
+    `export TEST_DATABASE_URL=...5433...` under *Option 2*, and 5433 documented as the port. Both
+    corrected; Option 2 now tells you to `eval "$(./scripts/test-db.sh up)"` and says why writing
+    the URL by hand is the hazard.
+- **One collision worth knowing:** `db-test` and `test-db.sh` now default to the same port, because
+  they are two ways to do one thing and should never both run. If `db-test` is up, `test-db.sh`
+  refuses rather than guessing — a loud stop, which is the right failure.
+- **What is still not proven:** the rewritten script has **not** been run end to end on this
+  machine, because there is no `api/venv` and it calls `pytest` from `PATH`. What was proven:
+  `bash -n` on both scripts, the `TEST_DB_PORT` override starting a container on 5445 and the
+  default on 5439, the already-running branch reporting the port it is *actually* on, and the
+  missing-`pytest` path failing **before** it touches docker. Its first real run is its
+  verification.
+
+## 2026-09-16 — running the suite in the local backend container turns one tracing test red, and it is not a defect
+- **What:** with no `just` and no `api/venv` on this machine, the practical way to run pytest is
+  inside the running `attendance-backend-local` container (the `api/` directory is bind-mounted at
+  `/app`, so it tests the live working tree). That container's environment sets
+  `OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318`, so `app/core/telemetry.py` does **not** take
+  its early return and tracing is live for the test process.
+- **The symptom:** `tests/test_logging.py::test_trace_id_is_absent_when_tracing_is_off` fails on
+  line 94 — a span context is valid, so the log line carries a `trace_id` the test requires to be
+  absent. Its own docstring states the assumption it is run under: "The suite runs with no OTLP
+  endpoint, so no span context is valid." The test is right and the harness is wrong.
+- **Measured 2026-09-16:** 540 collected, 1 failed / 539 passed that way; with the four OTel
+  variables cleared, `tests/test_logging.py` passes 12/12 and the suite is green. Coverage TOTAL
+  90%.
+- **Why it is worth an entry:** it is a **false red**, which costs more than a false green does
+  here — it points a session at the tracing code, which is fine, on a branch whose actual subject
+  is date handling. CI never sees it (the workflow's `env:` block sets no OTel variables), so it
+  cannot be caught there either.
+- **What green tests do not prove:** that the suite is environment-independent. Exactly one test
+  reads process-wide tracing state, and nothing warns you when the ambient environment supplies it.
+- **How to run it correctly:** add `-e OTEL_EXPORTER_OTLP_ENDPOINT= -e OTEL_SERVICE_NAME=
+  -e OTEL_EXPORTER_OTLP_PROTOCOL= -e OTEL_RESOURCE_ATTRIBUTES=` to the `docker exec`, alongside the
+  `env:` block of the `pytest` step in `.github/workflows/backend.yml`. Aim both `DATABASE_URL` and
+  `TEST_DATABASE_URL` at the disposable database from `scripts/test-db.sh` (port 5439), never 5433,
+  and never at `attendance-db-local` — the fixtures call `drop_all`.
+- **The better fix, not taken here:** the test could neutralise the ambient environment itself
+  (monkeypatch the OTel variables, or assert against a tracer provider it controls) rather than
+  depending on what the shell happens to carry. That is a change to a passing-in-CI test and was
+  out of scope for a verification pass.
+- **Disposition:** open. Low priority, zero production impact, but it will burn the next session
+  that runs the suite this way.
+
 ## 2026-09-15 — the SQLite branch of the statistics query is unreachable, and now also wrong
 - **What:** `get_attendance_statistics` branches on `db.bind.dialect.name`. Spec 0009 converted
   the PostgreSQL branch to the configured timezone with `AT TIME ZONE`, which SQLite has no
@@ -77,7 +157,7 @@ cut (`/confess`), read first by any architecture or review session, dispositione
   them and the contract had no reason to change. Watched failing first:
   `tests/test_attendance.py::TestListEndDayIsWhole` is red against the old `<=`.
 
-## 2026-09-15 — "Yhteensä läsnäoloja" will drop once on deploy, and that is the accepted cost
+## 2026-09-15 — "Läsnäoloja yhteensä" will drop once on deploy, and that is the accepted cost
 - **What:** `get_attendance_statistics` computed `total_records` and `total_students` over **all**
   data while the daily and monthly aggregations honoured `exclude_dates`. The top two summary
   cards and the charts below them therefore described different row sets. Spec 0008 decision 5
@@ -85,7 +165,7 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 - **The consequence:** `client/src/.../ClassStatistics` still passes a hardcoded
   `excludeDates = ['2026-02-27']` under a `TODO`, hiding one bulk log from the charts. With the
   counts now filtered, that day leaves the total too — so on the deploy that carries slice 1,
-  "Yhteensä läsnäoloja" falls once, to the figure the charts have been drawing all along. Nothing
+  "Läsnäoloja yhteensä" falls once, to the figure the charts have been drawing all along. Nothing
   is lost; the number was wrong before and is right after.
 - **Owner-facing, and this is the part a test cannot hold:** the Owner undertook to warn the
   teacher who uses this app daily **before** it ships. A number dropping unannounced on a screen

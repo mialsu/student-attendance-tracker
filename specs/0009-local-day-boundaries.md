@@ -106,17 +106,16 @@ list endpoint's end day against its current `<=`.
 
 | # | Criterion | Proven by | Serves | Verdict |
 |---|---|---|---|---|
-| AC-1 | A record at 00:30 local appears under that local day in `daily_stats`, not the previous one — watched failing against unconverted `date_trunc` | `test:` | US-1 | |
-| AC-2 | `monthly_stats` use the same zone: a record at 00:30 local on 1 March falls in March, not February | `test:` | US-2 | |
-| AC-3 | `date_from`/`date_to` bound at local midnight: a record at 00:30 local on `date_from` is included, one at 23:30 local the day before is not — watched failing against UTC bounds | `test:` | US-3 | |
-| AC-4 | `exclude_dates` removes the local day, matching the buckets it filters | `test:` | US-4 | |
-| AC-5 | Both totals count the same rows the buckets do, at the boundary | `test:` | US-5 | |
-| AC-6 | The same boundary assertions hold in January (`+02`) and July (`+03`) — a hardcoded offset fails one | `test:` | US-6 | |
-| AC-7 | `list_attendance_for_class` includes the whole of `date_to`'s local day and excludes the next — watched failing against the current `<=` | `test:` | US-7 | |
-| AC-8 | An unresolvable `APP_TIMEZONE` fails at import, not at request time | `test:` | US-8 | |
-| AC-9 | The statistics endpoint stays within `BUDGET_STATISTICS` and flat in the row count | `test:` query budget | US-9 | |
-| AC-10 | `INV-1` still refuses a second Teacher on both endpoints | `test:` authorization | US-10 | |
-
+| AC-1 | A record at 00:30 local appears under that local day in `daily_stats`, not the previous one — watched failing against unconverted `date_trunc` | `test:` | US-1 | WORKS (gates) |
+| AC-2 | `monthly_stats` use the same zone: a record at 00:30 local on 1 March falls in March, not February | `test:` | US-2 | WORKS (gates) |
+| AC-3 | `date_from`/`date_to` bound at local midnight: a record at 00:30 local on `date_from` is included, one at 23:30 local the day before is not — watched failing against UTC bounds | `test:` | US-3 | WORKS (gates) |
+| AC-4 | `exclude_dates` removes the local day, matching the buckets it filters | `test:` | US-4 | WORKS (gates) |
+| AC-5 | Both totals count the same rows the buckets do, at the boundary | `test:` | US-5 | WORKS (gates) |
+| AC-6 | The same boundary assertions hold in January (`+02`) and July (`+03`) — a hardcoded offset fails one | `test:` | US-6 | WORKS (gates) |
+| AC-7 | `list_attendance_for_class` includes the whole of `date_to`'s local day and excludes the next — watched failing against the current `<=` | `test:` | US-7 | WORKS (gates) |
+| AC-8 | An unresolvable `APP_TIMEZONE` fails at import, not at request time | `test:` | US-8 | WORKS (gates) |
+| AC-9 | The statistics endpoint stays within `BUDGET_STATISTICS` and flat in the row count | `test:` query budget | US-9 | WORKS (gates) |
+| AC-10 | `INV-1` still refuses a second Teacher on both endpoints | `test:` authorization | US-10 | WORKS (gates) |
 ## User Stories
 
 1. As a teacher, I want a session logged just after midnight to appear on the day I logged it for, so that the chart matches what I remember.
@@ -160,6 +159,37 @@ middle, which is the defect itself.
 
 None. Both decisions this spec needed — the approach and its position before spec 0008's slices 2
 and 3 — were taken by the Owner on 2026-09-15.
+
+## Verification status
+
+**AC-1 – AC-10 verified 2026-09-16** against the API suite: 540 tests, all passing, coverage
+TOTAL 90%. The assertions live in `tests/test_statistics.py::TestLocalDayBoundaries` (parametrized
+`winter +02` / `summer +03`), `tests/test_config.py::TestApplicationTimezone`,
+`tests/test_attendance.py::TestListEndDayIsWhole`, `tests/test_query_budget.py` and
+`tests/test_authorization.py`.
+
+Each was watched fail against the three defects this spec named under *Plant the failures*, so the
+column records a discriminating test rather than a green one:
+
+| Planted | Caught by | Covers |
+|---|---|---|
+| `date_trunc` over the raw column, no `AT TIME ZONE`, at both the day and month sites | 6 tests | AC-1, AC-2, AC-3 |
+| the same, seen at both offsets | the `winter +02` / `summer +03` pair failing together | AC-6 |
+| the list endpoint's end bound back to its pre-0009 `<= date_to` | `test_date_to_keeps_the_whole_of_its_local_day` | AC-7 |
+| the `APP_TIMEZONE` resolvability validator deleted | all four params of `test_an_unresolvable_zone_refuses_to_start` | AC-8 |
+| INV-1's single ownership site neutered | the statistics route with and without range parameters | AC-10 |
+
+AC-4 and AC-5 rest on `test_exclude_dates_removes_the_local_day` and
+`test_the_totals_agree_with_the_buckets_at_the_boundary`, both parametrized across the two offsets;
+AC-9 on the `statistics` budget row and `test_statistics_stays_flat_in_the_number_of_records`. Every
+mutation was reverted and `git status` confirmed clean after each.
+
+How the suite was run, since `just` is not installed here and there is no `api/venv`: inside the
+`attendance-backend-local` container against the disposable database on port 5439. That container
+sets `OTEL_EXPORTER_OTLP_ENDPOINT`, which turns tracing on and fails
+`test_logging.py::test_trace_id_is_absent_when_tracing_is_off` — a harness artifact, not a defect;
+clearing the OTel variables restores CI's environment and the file passes 12/12. See
+`api/REVIEW-DEBT.md`.
 
 ## Spec Deltas
 

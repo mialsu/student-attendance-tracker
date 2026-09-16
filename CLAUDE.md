@@ -1127,7 +1127,7 @@ Closes #123
 5. ✅ **No Duplicate Students**: Fixed StudentLogs bug completely
 6. ✅ **Timeframe filter on *Tilastot*** (spec 0008): two date pickers, `Alkaen` / `Päättyen`,
    empty by default. Every figure on the surface describes the chosen timeframe — the four summary
-   cards included, which is a **change in what "Yhteensä läsnäoloja" counts** and drops that figure
+   cards included, which is a **change in what "Läsnäoloja yhteensä" counts** and drops that figure
    once on deploy, to what the charts have been drawing all along. The Owner undertook to warn the
    teacher. *Tilastot* has **two** empty states now, and the order they are checked in matters —
    `client/DESIGN.md` §3 is the record. Every date is a local day (spec 0009, ADR-0008).
