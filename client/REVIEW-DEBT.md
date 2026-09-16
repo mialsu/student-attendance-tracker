@@ -81,11 +81,13 @@ cut (`/confess`), read first by any architecture or review session, dispositione
   ```
   **The walk then ran: 78/78 at both viewports, six consecutive full runs.** AC-15 and AC-16 are
   `WORKS` in spec 0008's table, not BLOCKED.
-- **What is still owed, and it is small:** the library lives in a session scratchpad, so the walk
-  needs that `LD_LIBRARY_PATH` until someone runs the one-line durable fix with a real terminal —
-  `sudo apt-get install -y libasound2t64` on Ubuntu 24.04. Until then `npm run check` fails at the
-  `e2e` step on a fresh shell, and it fails *loudly* with the library name, which is the right
-  failure mode.
+- **Nothing is owed. The Owner installed the package the same day** —
+  `libasound2t64 1.2.11-1ubuntu0.3`, confirmed by `dpkg -l` — so the workaround above is history
+  rather than a standing requirement. Re-verified with the environment variable explicitly unset
+  (`env -u LD_LIBRARY_PATH`): the walk is 78/78 over three more full runs, and **the whole
+  `npm run check` passes end to end**, every gate at baseline, the `.harness-baseline` file
+  untouched. The `sudo apt-get install -y libasound2t64` line is now a setup note in `CLAUDE.md`
+  for a fresh clone, not debt.
 - **What it found on the way in:** two real defects no other gate saw — the `calendar.tsx` contrast
   failure and the three test races, both entries below. That is the return on adding a swept state,
   and the file header of `states.spec.ts` predicted it.

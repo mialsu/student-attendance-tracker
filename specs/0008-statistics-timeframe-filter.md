@@ -299,16 +299,16 @@ Client gates, all at their `.harness-baseline` figures with nothing new added: `
 `eslint` 16, a11y config 0, `dependency-cruiser` clean (110 modules), the full vitest suite
 (18 files), both drift gates, and `npm run build`.
 
-**The browser walk runs and passes: 78/78, at both viewports, six consecutive full runs.** It was
-initially blocked — Playwright's Chromium would not start for want of `libasound.so.2`, and
-installing that needs root. Resolved without root by fetching the Ubuntu package with
-`apt-get download libasound2t64`, extracting it with `dpkg-deb -x` and pointing
-`LD_LIBRARY_PATH` at it. The durable fix is one command with a real terminal:
+**`cd client && npm run check` passes end to end, the browser walk included** — 78/78 at both
+viewports, and stable over nine full runs.
 
-```bash
-sudo apt-get install -y libasound2t64        # Ubuntu 24.04; then the walk needs no LD_LIBRARY_PATH
-cd client && npx playwright test
-```
+It was briefly blocked: Playwright's Chromium would not start for want of `libasound.so.2`, and
+installing that needs root. It was first verified by satisfying the library without root
+(`apt-get download libasound2t64`, `dpkg-deb -x`, `LD_LIBRARY_PATH`), and the **Owner then
+installed the package properly the same day**. Re-verified with the variable explicitly unset, so
+the pass does not depend on the workaround. A fresh clone needs
+`sudo apt-get install -y libasound2t64` and `npx playwright install chromium`; both are setup notes
+in `CLAUDE.md` now.
 
 **The walk earned its keep on the way in, which is the part worth recording.** The three new swept
 states are `Tilastot — the timeframe, calendar open`, `— the timeframe set, with figures` and

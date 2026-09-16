@@ -1134,12 +1134,14 @@ Closes #123
 
 **Next Development:** Ready for new feature requests or enhancements.
 
-⚠ **The browser walk needs one system library that is not installed.** Playwright's Chromium will
-not start without `libasound.so.2` — ALSA sound, which a headless browser never uses but links
-against anyway. On Ubuntu 24.04: `sudo apt-get install -y libasound2t64`. Without it `npm run check`
-fails at the `e2e` step, loudly and by name. It can also be satisfied without root
-(`apt-get download libasound2t64`, `dpkg-deb -x`, then `LD_LIBRARY_PATH`), which is how spec 0008's
-`live:` criteria were verified on 2026-09-16 — see `client/REVIEW-DEBT.md`.
+**`cd client && npm run check` passes end to end, e2e included** — verified 2026-09-16, every gate
+at its `.harness-baseline` figure and the walk 78/78 at both viewports.
+
+One setup step a fresh clone needs, because it is a system package and not an npm one: Playwright's
+Chromium will not start without `libasound.so.2` — ALSA sound, which a headless browser never uses
+but links against anyway. `sudo apt-get install -y libasound2t64` on Ubuntu 24.04; it is installed
+on the Owner's machine as of 2026-09-16. Without it the `e2e` step fails loudly and by name, which
+is the right failure mode. `npx playwright install chromium` is the other one-off per clone.
 
 **The walk is worth the trouble: it found two defects on 2026-09-16 that every other gate passed.**
 A WCAG 1.4.3 contrast failure in the shared `client/src/components/ui/calendar.tsx` (outside days
