@@ -24,6 +24,11 @@ httpx>=0.25.0
 faker>=20.0.0
 aiosqlite>=0.19.0  # For in-memory test database
 
+# Timezones -- zoneinfo falls back to this when the OS carries no tz database. python:3.12-slim
+# does ship one (verified by running the image), but that is Debian's choice and not this
+# project's; spec 0009 makes every reported date depend on it, so it is declared here.
+tzdata>=2024.1
+
 # Development
 python-dotenv>=1.0.0
 

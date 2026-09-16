@@ -6,6 +6,123 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 
 <!-- Newest first. -->
 
+## 2026-09-16 — the calendar's outside days measured 2.25:1, and no gate had ever looked at a calendar
+- **What:** `calendar.tsx`'s `day_outside` was `text-muted-foreground opacity-50` — muted
+  foreground at half opacity over white, **2.25:1** against WCAG 1.4.3's 4.5:1. An outside day
+  (a day from the neighbouring month, shown as padding) is an **enabled** button when it is in the
+  past, so the inactive-control exemption does not apply. **FIXED** the same day by dropping the
+  `opacity-50`; `text-muted-foreground` on its own is a gated pair.
+- **Where:** `src/components/ui/calendar.tsx`. Two surfaces render it: `AttendanceTracking`'s date
+  picker, which has shipped since long before spec 0008, and the new *Tilastot* filter.
+- **Why nothing caught it for so long:** `tokens-contrast.test.ts` asserts *token pairs* and has no
+  way to express an alpha composite — the identical blind spot this ledger records for the
+  register's `bg-primary/10` badge. Only axe over a rendered state can see one, and **no swept
+  state had ever opened a calendar popover.** `AttendanceTracking`'s picker is on screen in a swept
+  state but closed, and a closed popover renders no days. Spec 0008's
+  `Tilastot — the timeframe, calendar open` is the first state to open one, and it failed on its
+  first execution.
+- **What green tests do NOT prove, still:** a **selected** outside day. `day_outside` also carries
+  `aria-selected:opacity-30` and `aria-selected:bg-accent/50`, and no swept state selects a day
+  from a neighbouring month, so that composite is unmeasured. Same shape as the entry below about
+  hover, focus and active states. Left deliberately rather than changed on speculation — what was
+  measured is what was fixed.
+- **Disposition:** the measured failure is FIXED. The selected-outside-day composite is OPEN.
+
+## 2026-09-16 — three races in the new keyboard tests, and two wrong fixes before the right one
+- **What:** `e2e/timeframe.spec.ts` flaked on arrival — 1 failure in one full run, then 2–6 per run
+  after a first "fix". All three causes were in the test code, none in the app. **FIXED**; six
+  consecutive 78/78 full runs, and removing one line reproduces the flake on demand.
+- **The three:**
+  1. **No wait for the surface to render.** `page.goto` resolves on navigation, not on React having
+     rendered, so `tabTo` pressed Tab thirty times at an empty page. Root cause, found last.
+  2. **`evaluateAll` does not auto-wait.** Unlike a locator assertion it returns `[]` for a
+     selector that matches nothing *yet*, with no error. This is the one worth remembering: it
+     converts "too early" into "the element does not exist", and a helper built on it fails with a
+     message that blames the wrong thing.
+  3. **A focus loop racing a React state update.** `while not focused: press ArrowRight` re-read
+     `document.activeElement` immediately after the press, read the *previous* tab, pressed again
+     and overshot — and a Radix tab list **wraps**, so overshooting the last tab returns to the
+     first. Now it steps with an awaited focus assertion per press.
+- **What green tests do NOT prove here:** that the rest of the walk is free of the same shape.
+  These three were found because new tests exercised new paths; nothing systematically checks the
+  existing specs for an unguarded keystroke after an animated open, or for a bare `evaluateAll`.
+  `grep -n "evaluateAll" e2e/` is the cheap audit and has not been run as a gate.
+- **The method note, which is the real debt:** both wrong fixes came from re-theorising about a
+  failure that only appeared under a full run's load, instead of reading the assertion message.
+  The message said `saw: ` with an empty list and pointed straight at cause (1) the first time it
+  was actually read.
+- **Disposition:** FIXED. The audit of the other specs is OPEN.
+
+
+## 2026-09-16 — spec 0008's two `live:` criteria could not run for want of a sound library — CLOSED the same day
+- **What:** slices 2 and 3 added three swept states to `e2e/states.spec.ts` (`Tilastot — the
+  timeframe, calendar open`, `— the timeframe set, with figures`, `— an empty timeframe`) and a new
+  `e2e/timeframe.spec.ts` with four keyboard tests. **None of them has run.** Playwright's
+  Chromium will not start on this machine: `chrome-headless-shell` dies with
+  `error while loading shared libraries: libasound.so.2`, and installing that needs root.
+- **Where:** `e2e/states.spec.ts`, `e2e/timeframe.spec.ts`. Spec 0008 AC-15 and AC-16, both marked
+  `BLOCKED` in its table rather than filled.
+- **What green tests do NOT prove here:** the 320px reflow and axe pass for the filter and for the
+  **open calendar popover**, and every keyboard claim — reachability, focus-ring visibility, the
+  calendar's roving arrow focus, and Enter committing a day. jsdom can see none of it: a
+  `position: fixed` popover has no geometry there, which is the documented reason
+  `expectOverlayWithinViewport` exists at all. `ClassStatistics.test.tsx` reaches the same days
+  with `user.click`, which needs no focus, so it would pass with the calendar entirely unfocusable.
+- **What was NOT done to get a green run:** nothing was skipped, silenced, `test.skip`-ed or
+  removed. The two AC rows say BLOCKED and this entry exists instead. A `test.skip` here would also
+  have tripped the drift gate's escape-hatch check, correctly.
+- **Disposition — CLOSED 2026-09-16, the same day.** `ldd` named exactly one missing library, and
+  nothing about a *headless* browser needs ALSA sound — it is a link-time dependency, not a
+  runtime one. Satisfied without root:
+  ```bash
+  apt-get download libasound2t64                 # no root needed
+  dpkg-deb -x libasound2t64_*.deb  <somewhere>
+  export LD_LIBRARY_PATH=<somewhere>/usr/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH
+  ```
+  **The walk then ran: 78/78 at both viewports, six consecutive full runs.** AC-15 and AC-16 are
+  `WORKS` in spec 0008's table, not BLOCKED.
+- **Nothing is owed. The Owner installed the package the same day** —
+  `libasound2t64 1.2.11-1ubuntu0.3`, confirmed by `dpkg -l` — so the workaround above is history
+  rather than a standing requirement. Re-verified with the environment variable explicitly unset
+  (`env -u LD_LIBRARY_PATH`): the walk is 78/78 over three more full runs, and **the whole
+  `npm run check` passes end to end**, every gate at baseline, the `.harness-baseline` file
+  untouched. The `sudo apt-get install -y libasound2t64` line is now a setup note in `CLAUDE.md`
+  for a fresh clone, not debt.
+- **What it found on the way in:** two real defects no other gate saw — the `calendar.tsx` contrast
+  failure and the three test races, both entries below. That is the return on adding a swept state,
+  and the file header of `states.spec.ts` predicted it.
+
+## 2026-09-16 — a failed load with a timeframe set cannot be cleared
+- **What:** the error branch of `ClassStatistics` owns the whole surface and renders no filter, so a
+  teacher whose request fails *while a range is set* has no way to clear that range from the screen.
+  Her only action is the retry, and the retry re-sends the same range.
+- **Where:** `src/pages/ClassStatistics.tsx`, the `if (error)` branch.
+- **Why it is like this:** the error state showing the retry and nothing else is `DESIGN.md` §3's
+  shape for all three read surfaces, and offering a date picker for a request that never arrived
+  invites her to debug her own range when the server is the problem. That reasoning is a judgement,
+  not a decision anyone took: spec 0008's AC-13 only requires that the error state wins over the
+  empty-range state, and says nothing about the filter.
+- **What green tests do NOT prove here:** that there is a way out. The test asserts the error state
+  renders instead of the empty-range one; no test asserts the teacher can recover her filter.
+- **Disposition:** OPEN, recorded as a spec delta on 0008 too. It self-corrects on any successful
+  retry, and a page reload clears the range by design (decision 11), so the cost is bounded.
+
+## 2026-09-16 — two Finnish sentences in the new empty state had no native reader
+- **What:** the Owner ratified the both-ends copy on 2026-09-16 — "Aikavälillä 1.9.2026 – 30.9.2026
+  ei ole kirjattuja läsnäoloja." — along with `Aikaväli`, `Alkaen`, `Päättyen`,
+  `Tyhjennä aikaväli`, `Ei läsnäoloja valitulla aikavälillä` and `Päivät valitulla aikavälillä`.
+  The sign-off did **not** cover a range with only one end set, which the UI allows. The agent
+  wrote those two: "Aikavälillä 1.9.2026 **alkaen** ei ole…" and "Aikavälillä 30.9.2026 **asti** ei
+  ole…".
+- **Where:** `emptyRangeMessage` in `src/pages/ClassStatistics.tsx`, whose docstring says so.
+- **What green tests do NOT prove here:** that the Finnish is idiomatic. The test asserts the exact
+  string the component builds, so it pins the copy against accidental change and says nothing about
+  whether it reads well. This is the fourth entry in this ledger of the same shape — see the three
+  2026-09-11/12 copy entries.
+- **Disposition:** OPEN, one question for the Owner. Low stakes and easy to change: one function,
+  one test constant.
+
+
 ## 2026-09-12 — every Card title is an h3, so three surfaces skip a heading level — CLOSED the same day
 - **What:** `/settings` renders `<h1>Asetukset</h1>` and then two `CardTitle`s. `CardTitle` is an
   **h3** (`src/components/ui/card.tsx:19`), so the document outline goes h1 → h3 with no h2. A

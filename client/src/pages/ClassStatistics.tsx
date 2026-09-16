@@ -9,6 +9,7 @@ import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/
 import type { ChartConfig } from '@/components/ui/chart';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { QueryErrorState } from '@/components/QueryErrorState';
+import { StatisticsRangeFilter } from '@/components/StatisticsRangeFilter';
 
 interface ClassStatisticsProps {
   classId: string;
@@ -21,6 +22,24 @@ const chartConfig = {
   },
 } satisfies ChartConfig;
 
+/**
+ * The empty-timeframe sentence, naming the dates the teacher picked back to her.
+ *
+ * The both-ends form is the Owner's ratified copy (spec 0008 open question 1, signed off
+ * 2026-09-16). The one-ended forms are extensions of it rather than separately ratified copy —
+ * recorded as a spec delta, because a range with one open end is reachable from the UI and had no
+ * sentence written for it.
+ */
+const emptyRangeMessage = (from?: Date, to?: Date): string => {
+  const day = (d: Date) => format(d, 'P', { locale: fi });
+  if (from && to) return `Aikavälillä ${day(from)} – ${day(to)} ei ole kirjattuja läsnäoloja.`;
+  if (from) return `Aikavälillä ${day(from)} alkaen ei ole kirjattuja läsnäoloja.`;
+  if (to) return `Aikavälillä ${day(to)} asti ei ole kirjattuja läsnäoloja.`;
+  // Unreachable: the caller checks `hasRange` first. Kept total rather than asserted, so a future
+  // caller cannot get `undefined` rendered into the sentence.
+  return 'Valitulla aikavälillä ei ole kirjattuja läsnäoloja.';
+};
+
 const ClassStatistics = ({ classId }: ClassStatisticsProps) => {
   // TODO: Make this configurable via UI settings
   // For now, exclude the bulk log from 2026-02-27
@@ -30,6 +49,15 @@ const ClassStatistics = ({ classId }: ClassStatisticsProps) => {
   // agrees with, and the one a teacher reads during a course rather than after it.
   const [granularity, setGranularity] = useState<'day' | 'month'>('day');
 
+  // The timeframe. Empty by default, so the page opens on the whole Kurssi and configures nothing
+  // (US-4). It lives here and resets on reload: the tab this surface sits in is not persisted
+  // either, so persisting the range alone would be incoherent — spec 0008 decision 11. Held
+  // separately from `granularity`, which is why flipping Päivät/Kuukaudet cannot cost the filter
+  // (AC-14): the toggle writes its own state and never touches these.
+  const [dateFrom, setDateFrom] = useState<Date | undefined>();
+  const [dateTo, setDateTo] = useState<Date | undefined>();
+  const hasRange = Boolean(dateFrom || dateTo);
+
   // `error` was dropped here, so a failed request rendered "Ei läsnäoloja näytettäväksi" to
   // someone with hundreds of records. DESIGN.md §3, spec 0006.
   const {
@@ -37,7 +65,24 @@ const ClassStatistics = ({ classId }: ClassStatisticsProps) => {
     isLoading,
     error,
     refetch,
-  } = useAttendanceStatistics(classId, excludeDates);
+  } = useAttendanceStatistics(classId, { excludeDates, dateFrom, dateTo });
+
+  const clearRange = () => {
+    setDateFrom(undefined);
+    setDateTo(undefined);
+  };
+
+  // The filter is the same element in every state that renders it, so it is built once. Its
+  // absence from the loading and error branches is deliberate — see those branches.
+  const rangeFilter = (
+    <StatisticsRangeFilter
+      dateFrom={dateFrom}
+      dateTo={dateTo}
+      onDateFromChange={setDateFrom}
+      onDateToChange={setDateTo}
+      onClear={clearRange}
+    />
+  );
 
   // Format daily data for chart
   const dailyData = useMemo(() => {
@@ -67,8 +112,13 @@ const ClassStatistics = ({ classId }: ClassStatisticsProps) => {
     );
   }
 
-  // Before the empty check, always: `!stats` is true on failure too, and whichever branch runs
-  // first owns the failure.
+  // Before BOTH empty checks, always: `!stats` is true on failure too, and whichever branch runs
+  // first owns the failure. A timeframe makes this more load-bearing rather than less — with the
+  // totals filtered, a failed request and an empty September are the same `total_records === 0` to
+  // everything below, so an error reaching either empty branch would be dressed as a range that
+  // holds nothing (AC-13). The error state owns the whole surface and shows no filter: the retry
+  // is the action here, and offering a date picker for a request that did not arrive invites the
+  // teacher to debug her own range instead.
   if (error) {
     return (
       <Card>
@@ -85,6 +135,35 @@ const ClassStatistics = ({ classId }: ClassStatisticsProps) => {
     );
   }
 
+  // The empty timeframe, checked BEFORE the all-time empty one (spec 0008 decision 12). What
+  // separates them is whether a range is set, and nothing else: with the totals filtered, "no
+  // records here" and "no records at all" are indistinguishable from this data without a second
+  // count, and a second count is a query and a schema field bought to warm up one sentence. So
+  // this copy asserts nothing about data outside the range.
+  if ((!stats || stats.total_records === 0) && hasRange) {
+    return (
+      <div className="space-y-8">
+        {rangeFilter}
+        <Card>
+          <CardHeader>
+            <CardTitle>Tilastot</CardTitle>
+            <CardDescription>Ei läsnäoloja valitulla aikavälillä</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {/* Naming the dates back is what lets her see her own mistake in it (US-16) — a bare
+                "ei tuloksia" leaves her guessing which end she got wrong. The way out is the
+                filter's own Tyhjennä aikaväli above, one clear action rather than two. */}
+            <p className="text-sm text-muted-foreground">{emptyRangeMessage(dateFrom, dateTo)}</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // A Kurssi with no attendance at all, and no timeframe to blame. The advice still fits here,
+  // which is the whole reason the branch above exists rather than this copy being reworded to
+  // cover both (US-18). No filter: there is nothing to filter, and the empty branch owns the
+  // whole surface — DESIGN.md §3.
   if (!stats || stats.total_records === 0) {
     return (
       <Card>
@@ -120,6 +199,8 @@ const ClassStatistics = ({ classId }: ClassStatisticsProps) => {
 
   return (
     <div className="space-y-8">
+      {rangeFilter}
+
       {/* Four totals. `auto-fit`/`minmax` rather than a fixed `md:grid-cols-4`, so they
           reflow one-by-one instead of jumping four-to-one at the md breakpoint —
           the prototype's stat grid does the same. */}
@@ -127,7 +208,7 @@ const ClassStatistics = ({ classId }: ClassStatisticsProps) => {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Yhteensä läsnäoloja
+              Läsnäoloja yhteensä
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -178,8 +259,13 @@ const ClassStatistics = ({ classId }: ClassStatisticsProps) => {
       <Card>
         <CardHeader>
           <CardTitle>Läsnäolot päivittäin</CardTitle>
+          {/* "Kaikki päivät" is a claim, and a timeframe makes it false — spec 0008 decision 13.
+              It stays when there is no range, where it is both true and the more useful of the
+              two sentences. */}
           <CardDescription>
-            Kaikki päivät, joilta läsnäoloja on kirjattu
+            {hasRange
+              ? 'Päivät valitulla aikavälillä'
+              : 'Kaikki päivät, joilta läsnäoloja on kirjattu'}
           </CardDescription>
         </CardHeader>
         <CardContent>

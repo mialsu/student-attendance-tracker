@@ -1,6 +1,6 @@
 """Attendance API endpoints - Track student attendance."""
 
-from datetime import datetime
+from datetime import date, datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, status
@@ -30,6 +30,12 @@ async def get_attendance_statistics(
     current_user: CurrentUser,
     db: AsyncSession = Depends(get_db),
     exclude_dates: str | None = Query(None, description="Comma-separated dates to exclude (YYYY-MM-DD)"),
+    date_from: date | None = Query(
+        None, description="First day to include (YYYY-MM-DD), inclusive"
+    ),
+    date_to: date | None = Query(
+        None, description="Last day to include (YYYY-MM-DD), inclusive of that whole day"
+    ),
 ) -> AttendanceStatistics:
     """
     Get attendance statistics grouped by date and month.
@@ -47,13 +53,17 @@ async def get_attendance_statistics(
         current_user: Current authenticated user
         db: Database session
         exclude_dates: Optional comma-separated dates to exclude (e.g., "2026-02-27,2026-03-01")
+        date_from: Optional first day to include, inclusive
+        date_to: Optional last day to include, inclusive of that whole day
 
     Returns:
-        Attendance statistics with daily and monthly aggregations
+        Attendance statistics with daily and monthly aggregations.
+        Every figure describes the timeframe, the four summary cards included.
 
     Raises:
         404: If class not found
         403: If user doesn't own the class
+        422: If date_from falls after date_to
     """
     # Parse exclude_dates
     excluded_dates_list = []
@@ -62,7 +72,12 @@ async def get_attendance_statistics(
 
     # Ownership is checked inside the service, like every other route here (INV-1).
     stats = await attendance_service.get_attendance_statistics(
-        db, class_id, current_user, exclude_dates=excluded_dates_list
+        db,
+        class_id,
+        current_user,
+        exclude_dates=excluded_dates_list,
+        date_from=date_from,
+        date_to=date_to,
     )
 
     return AttendanceStatistics(**stats)

@@ -1,6 +1,8 @@
 """Application configuration using Pydantic Settings."""
 
-from pydantic import model_validator
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -45,11 +47,37 @@ class Settings(BaseSettings):
     # API
     api_prefix: str = "/api"
 
+    # The clock every reported date is expressed in. One teacher, one country -- deliberately a
+    # setting rather than a column on User or Class, because a dimension nobody varies is the
+    # Speculative Generality ANTI-PATTERNS.md names (spec 0009, decision 1). When a second school
+    # in another country exists, this moves onto the Class and `attendance_service`'s two helpers
+    # are the only things that change.
+    app_timezone: str = "Europe/Helsinki"
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
     )
+
+    @field_validator("app_timezone")
+    @classmethod
+    def _timezone_must_resolve(cls, value: str) -> str:
+        """Refuse to start on a zone `zoneinfo` cannot resolve.
+
+        This module is an import-time singleton, so an unusable zone stops the app rather than
+        serving every date shifted by an unknown amount. `zoneinfo` reads the OS tz database and
+        falls back to the `tzdata` package; `tzdata` is in requirements.txt so the fallback is a
+        declared dependency rather than something inherited from whichever base image is current.
+        """
+        try:
+            ZoneInfo(value)
+        except (ZoneInfoNotFoundError, ValueError) as exc:
+            raise ValueError(
+                f"APP_TIMEZONE={value!r} is not a resolvable IANA timezone "
+                f"(expected something like 'Europe/Helsinki'): {exc}"
+            ) from exc
+        return value
 
     @property
     def docs_auth_required(self) -> bool:

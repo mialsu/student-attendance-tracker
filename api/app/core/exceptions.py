@@ -67,6 +67,25 @@ class BadRequestException(HTTPException):
         self.reason = reason
 
 
+class UnprocessableEntityException(HTTPException):
+    """Raised when a request parses but asks for something incoherent.
+
+    Distinct from `BadRequestException` by status code alone: 422 is what FastAPI already
+    returns when a query parameter fails validation, and a range whose end precedes its start
+    is the same kind of fault one field cannot see. Keeping it 422 means a client handles one
+    status for "your parameters do not make sense" rather than two (spec 0008, decision 8).
+    """
+
+    def __init__(self, detail: str = "Unprocessable request"):
+        # The literal, not `status.HTTP_422_UNPROCESSABLE_*`, and deliberately the one place in
+        # this file that departs from its siblings. Starlette renamed the constant: `_ENTITY` is
+        # deprecated and warns, `_CONTENT` exists only from 0.47. `requirements.txt` pins nothing
+        # and the newest FastAPI declares `starlette>=0.46.0`, so both names are reachable in the
+        # image that deploys and either spelling is an import-time AttributeError waiting for a
+        # resolution nobody watched. 422 is not going to change.
+        super().__init__(status_code=422, detail=detail)
+
+
 # Convenience aliases
 AuthenticationError = UnauthorizedException
 NotFoundError = NotFoundException

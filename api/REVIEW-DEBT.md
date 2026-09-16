@@ -6,6 +6,225 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 
 <!-- Newest first. -->
 
+## 2026-09-16 — a clone could commit with no gates at all, and nothing said so
+- **What:** `core.hooksPath` lives in the untracked `.git/config`, so it does not arrive with a
+  `git pull`. A clone where the one-off had never been run executed **no** pre-commit gate, and an
+  uninstalled hook is silent — you commit, see no complaint, and assume the gates ran. That is the
+  exact hazard the root `.githooks/pre-commit` header warns about, arriving by a different door.
+  Found on one clone of a multi-machine setup; **the state of any given clone is not knowable from
+  another one**, which is the whole problem.
+- **Why `just install-hooks` was not the answer:** it is reached *through* `just`, which need not
+  be installed. The api hook does carry a no-`just` fallback, but every line of it calls
+  `./venv/bin/{lint-imports,ruff,mypy}` — so on a clone with no `api/venv` installing the hook
+  would have **blocked every api commit** instead of gating it. The venv, not `just`, is the real
+  prerequisite, and `api/venv` is gitignored so it does not travel either. Same for
+  `client/node_modules`.
+- **The first fix was prose, and prose was the wrong shape.** It named a machine and recorded what
+  was installed there. With more than one development machine that rots immediately: the facts
+  worth recording (which interpreter, which tools, how long the gates take) are **exactly** the
+  ones that differ between machines, and a committed document cannot say "this machine" and stay
+  true. A hostname in a public repository is also nobody's business.
+- **Fixed 2026-09-16 with `scripts/bootstrap.sh`**, which **detects instead of documenting**:
+  - sets `core.hooksPath`, builds `api/venv`, runs `npm ci` — only for whatever is actually absent
+  - `--check` reports without changing anything and exits 1 if setup is incomplete, so it works in
+    CI or as a habit before a first commit on a machine
+  - prefers `uv` (no root needed) and falls back to `python -m venv`, because `ensurepip` comes
+    from an OS package that is **not** installed everywhere. It **pins the interpreter**: an
+    unpinned `uv venv` picks the first python it finds, and a 3.8 fails the resolve on
+    OpenTelemetry's `Python>=3.10` with a message that does not mention the cause.
+  - idempotent, so re-running is a no-op and it can be recommended without qualification
+  - the api hook now **names it** when the venv is missing, instead of dying as
+    `./venv/bin/lint-imports: No such file or directory`, which reads like a broken repo
+- **Watched fail, every branch of it:** `--check` on a clone with `core.hooksPath` unset and the
+  venv moved away reports both and exits 1; the repair path fixes both and exits 0; a second run is
+  a no-op; the hook's new message fires with the venv absent and exits 1. And the gates themselves:
+  an unused import in `app/config.py` took ruff to 96 against baseline 91, and a planted `TS2322`
+  took the client typecheck to 5 against baseline 4 — both times `git commit` exited 1 with HEAD
+  unmoved.
+- **What this does not prove, and it is the dependency debt speaking:** `requirements.txt` is
+  almost all `>=` with no lockfile, so a bootstrap resolves to whatever is newest that day. Both
+  ratchets happened to land **exactly** at baseline, which is luck rather than design — a newer
+  ruff shipping one new rule would fail the gate on unchanged code and look like the commit's
+  fault. Two machines bootstrapped weeks apart can therefore disagree, and the gate would blame
+  whoever committed next.
+- **Disposition:** fixed, and deliberately with no per-machine record to maintain. The honest check
+  on any clone is `./scripts/bootstrap.sh --check`, followed by watching the hook refuse a planted
+  violation. The `>=` dependency debt is unchanged and recorded separately.
+
+## 2026-09-16 — a third copy of the port-5433 footgun survives in `scripts/run-tests-docker.sh`, and two docs still recommend it
+- **What:** `scripts/run-tests-docker.sh:41` hardcodes
+  `export TEST_DATABASE_URL="postgresql+asyncpg://attendance_user:test_password_123@localhost:5433/attendance_tracker_test"`
+  and then runs the suite, whose fixtures call `Base.metadata.drop_all`. Port 5433 on this machine
+  is `platform-postgres`, a different project's container.
+- **Why this is a new entry and not the old one:** the 2026-09-01 entry above
+  (*the documented way to get a test database pointed at another project's container*) enumerates
+  where the hazard lived — root `CLAUDE.md`, the `justfile`'s `test` recipe, and
+  `deployment/local/docker-compose.yml`'s `db-test` — and declares the repo side **fixed**. This
+  script was not in that list and was not corrected. `api/docs/TEST_QUICK_START.md:11` and
+  `api/scripts/README.md:89` both still present it as the way to run the suite.
+- **Why it has not fired:** three accidents, none of them a safeguard. It calls bare `pytest`,
+  which is not on this machine (no `api/venv`), so it dies before connecting. It first runs
+  `docker compose --profile test up -d db-test`, which cannot bind 5433 while `platform-postgres`
+  holds it, and `set -e` stops the script there. And the URL names database
+  `attendance_tracker_test`, which another project's container is unlikely to have.
+  **Checked 2026-09-16: nothing is currently bound on 5433** — `platform-postgres` is not running —
+  so today the compose step would succeed and bind it, and only the missing `pytest` stands between
+  the script and a live `drop_all` against whatever later takes that port.
+- **What green tests do not prove:** nothing executes this script, so no gate reads that line. The
+  drift gate is a diff gate and the file has not changed since it was written.
+- **Disposition: FIXED 2026-09-16, and the fix was not the obvious one.** Swapping 5433 for 5439
+  would have moved the defect rather than removed it — no port is free on every machine, which is
+  the Owner's point and the reason the original hardcode was wrong in the first place. So:
+  - `scripts/run-tests-docker.sh` no longer owns a connection string at all. It calls
+    `scripts/test-db.sh up` and uses what that exports, leaving **one** place in the repo where a
+    test database port is decided. It also exports the four extra variables `conftest.py` needs,
+    unsets the OTel variables (see the entry below), refuses to start alongside another pytest
+    session, destroys the database on exit via a trap, and fails by name when `pytest` is missing
+    from `PATH` instead of dying as `command not found`.
+  - `scripts/test-db.sh` reads `PORT="${TEST_DB_PORT:-5439}"`, so a machine where 5439 is taken
+    can move it without editing a file. Its port-in-use guard still refuses to guess.
+  - `deployment/local/docker-compose.yml`'s `db-test` publishes `"${TEST_DB_PORT:-5439}:5432"`,
+    which closes the **"still open"** clause of the 2026-09-01 entry above: that service could
+    never start on this machine while it was pinned to 5433.
+  - `docs/TEST_QUICK_START.md` carried **two more copies** nobody had counted — a hand-written
+    `export TEST_DATABASE_URL=...5433...` under *Option 2*, and 5433 documented as the port. Both
+    corrected; Option 2 now tells you to `eval "$(./scripts/test-db.sh up)"` and says why writing
+    the URL by hand is the hazard.
+- **One collision worth knowing:** `db-test` and `test-db.sh` now default to the same port, because
+  they are two ways to do one thing and should never both run. If `db-test` is up, `test-db.sh`
+  refuses rather than guessing — a loud stop, which is the right failure.
+- **What is still not proven:** the rewritten script has **not** been run end to end on this
+  machine, because there is no `api/venv` and it calls `pytest` from `PATH`. What was proven:
+  `bash -n` on both scripts, the `TEST_DB_PORT` override starting a container on 5445 and the
+  default on 5439, the already-running branch reporting the port it is *actually* on, and the
+  missing-`pytest` path failing **before** it touches docker. Its first real run is its
+  verification.
+
+## 2026-09-16 — running the suite in the local backend container turns one tracing test red, and it is not a defect
+- **What:** with no `just` and no `api/venv` on this machine, the practical way to run pytest is
+  inside the running `attendance-backend-local` container (the `api/` directory is bind-mounted at
+  `/app`, so it tests the live working tree). That container's environment sets
+  `OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318`, so `app/core/telemetry.py` does **not** take
+  its early return and tracing is live for the test process.
+- **The symptom:** `tests/test_logging.py::test_trace_id_is_absent_when_tracing_is_off` fails on
+  line 94 — a span context is valid, so the log line carries a `trace_id` the test requires to be
+  absent. Its own docstring states the assumption it is run under: "The suite runs with no OTLP
+  endpoint, so no span context is valid." The test is right and the harness is wrong.
+- **Measured 2026-09-16:** 540 collected, 1 failed / 539 passed that way; with the four OTel
+  variables cleared, `tests/test_logging.py` passes 12/12 and the suite is green. Coverage TOTAL
+  90%.
+- **Why it is worth an entry:** it is a **false red**, which costs more than a false green does
+  here — it points a session at the tracing code, which is fine, on a branch whose actual subject
+  is date handling. CI never sees it (the workflow's `env:` block sets no OTel variables), so it
+  cannot be caught there either.
+- **What green tests do not prove:** that the suite is environment-independent. Exactly one test
+  reads process-wide tracing state, and nothing warns you when the ambient environment supplies it.
+- **How to run it correctly:** add `-e OTEL_EXPORTER_OTLP_ENDPOINT= -e OTEL_SERVICE_NAME=
+  -e OTEL_EXPORTER_OTLP_PROTOCOL= -e OTEL_RESOURCE_ATTRIBUTES=` to the `docker exec`, alongside the
+  `env:` block of the `pytest` step in `.github/workflows/backend.yml`. Aim both `DATABASE_URL` and
+  `TEST_DATABASE_URL` at the disposable database from `scripts/test-db.sh` (port 5439), never 5433,
+  and never at `attendance-db-local` — the fixtures call `drop_all`.
+- **The better fix, not taken here:** the test could neutralise the ambient environment itself
+  (monkeypatch the OTel variables, or assert against a tracer provider it controls) rather than
+  depending on what the shell happens to carry. That is a change to a passing-in-CI test and was
+  out of scope for a verification pass.
+- **Disposition:** open. Low priority, zero production impact, but it will burn the next session
+  that runs the suite this way.
+
+## 2026-09-15 — the SQLite branch of the statistics query is unreachable, and now also wrong
+- **What:** `get_attendance_statistics` branches on `db.bind.dialect.name`. Spec 0009 converted
+  the PostgreSQL branch to the configured timezone with `AT TIME ZONE`, which SQLite has no
+  equivalent for. The `else` branch still buckets by UTC day, so the two branches now disagree
+  about what a day is.
+- **Why it is not a live bug:** nothing reaches it. `conftest.py` requires a PostgreSQL
+  `TEST_DATABASE_URL` with no default, production is PostgreSQL 17, and the docstring's claim of
+  SQLite compatibility has outlived the SQLite it was written for — CLAUDE.md's *Test Database*
+  section says "PostgreSQL 17, never SQLite" in as many words.
+- **What green tests do not prove:** anything at all about that branch. No test can fail there,
+  which is exactly why the divergence could be introduced without a single red result.
+- **The fix:** delete the branch and the dialect check with it. That is proven-dead deletion,
+  which `/prune` owns and spec 0009 deliberately did not widen into. A comment at the site names
+  the divergence so a reader is not misled in the meantime.
+- **Disposition:** open, low priority, and a good first candidate for the next `/prune`.
+
+## 2026-09-15 — every date this API reports is a UTC day, and no screen says so
+- **What:** `get_attendance_statistics` groups with `date_trunc('day', timestamp)` against a
+  `timestamptz` column under a **UTC** session, so "a day" means a UTC day. Spec 0008's timeframe
+  bounds with `datetime.combine(..., tzinfo=timezone.utc)` and therefore agrees with the buckets
+  exactly — the endpoint is self-consistent, and `test_end_day_is_inclusive_to_its_last_second`
+  proves the boundary lands where the code says.
+- **What it does not agree with:** the teacher. She works in Finnish local time, UTC+3 in summer
+  and UTC+2 in winter. A Kurssi logged at 01:00 Helsinki on 11 March is 22:00 UTC on the 10th, and
+  appears under 10 March in the daily table, in the chart, and now inside or outside a timeframe
+  she picked by Finnish dates.
+- **Pre-existing, and that is the point.** Slice 1 did not introduce this; the aggregation has
+  been UTC-day-grained since it was written, and no screen has ever said so. The timeframe makes
+  it *reachable* — picking "1.9. – 30.9." is the first time a teacher states a date boundary and
+  can be surprised by which side a record falls on.
+- **Found by:** `/code-review`'s spec axis on 2026-09-15, not by a test. Nothing fails.
+- **What green tests do not prove:** that any date on the screen is the date the teacher would
+  write down. They prove only that the server agrees with itself.
+- **The two ways out:** aggregate with `AT TIME ZONE 'Europe/Helsinki'` and move the range bounds
+  with it, which changes every figure the endpoint has ever returned and needs a decision about
+  what happens to existing data; or keep UTC.
+- **Disposition: CLOSED, 2026-09-15 — fixed by spec 0009.** The Owner's first answer that day was
+  "keep UTC"; he reversed it within the hour on a ground the technical framing had missed — this
+  repository is going public, and two screens disagreeing about one record is not a thing to
+  carry into a portfolio. The reversal is recorded rather than tidied away, because the second
+  reason was the better one and the entry is the evidence.
+  **What closed it:** `app_timezone` (default `Europe/Helsinki`) with two helpers in
+  `attendance_service` — `_local_midnight` for sargable range bounds, `_local_wall_clock` for
+  grouping. No migration and no backfill: every stored row was already a correct instant, and
+  only the interpretation changed. Watched failing three ways before it was trusted (unconverted
+  grouping, UTC range bounds, and the config validator removed). Tests run at both DST offsets,
+  so a hardcoded +2 or +3 fails one of them.
+
+## 2026-09-15 — two endpoints now read `date_from`/`date_to` differently, and one of them is wrong
+- **What:** spec 0008 slice 1 gave `GET /classes/{id}/attendance/statistics` a timeframe typed
+  `date`, compared half-open (`>= date_from`, `< date_to + 1 day`), so `date_to` includes that
+  whole day. `list_attendance_for_class` has accepted the same two parameter names since long
+  before, typed `datetime`, compared `timestamp <= date_to` — so `date_to=2026-03-10` there parses
+  to midnight and silently drops every record of 10 March.
+- **Why it is not fixed here:** no surface exposes the list endpoint's two parameters. Nothing is
+  broken for a user today, and spec 0008 put the fix out of scope deliberately rather than widen a
+  statistics slice into the register's query contract.
+- **What the green tests do not prove:** that the two endpoints agree. They do not, and a reader
+  who learns the parameter on one will be wrong about the other. The statistics behaviour is
+  pinned by `tests/test_statistics.py::TestStatisticsTimeframe::test_end_day_is_inclusive_to_its_last_second`,
+  watched failing against exactly the `<=` comparison the list endpoint still has.
+- **The fix, when someone takes it:** the same `datetime.combine(date_to + 1 day, time.min)`
+  bound, and a test at 23:59 on the end day. It is a behaviour change for any caller relying on
+  today's exclusive end, which today means nobody.
+- **Disposition: CLOSED, 2026-09-15 — fixed by spec 0009**, which rewrote the same comparison for
+  the timezone and would otherwise have left the two endpoints on different rules. `date_to` on
+  the list endpoint is now the start of the following local day, exclusive — the same half-open
+  rule the statistics endpoint uses. Its parameters stay typed `datetime`: no surface exposes
+  them and the contract had no reason to change. Watched failing first:
+  `tests/test_attendance.py::TestListEndDayIsWhole` is red against the old `<=`.
+
+## 2026-09-15 — "Läsnäoloja yhteensä" will drop once on deploy, and that is the accepted cost
+- **What:** `get_attendance_statistics` computed `total_records` and `total_students` over **all**
+  data while the daily and monthly aggregations honoured `exclude_dates`. The top two summary
+  cards and the charts below them therefore described different row sets. Spec 0008 decision 5
+  moved both counts inside the shared `WHERE` clause; decision 6 accepted the consequence.
+- **The consequence:** `client/src/.../ClassStatistics` still passes a hardcoded
+  `excludeDates = ['2026-02-27']` under a `TODO`, hiding one bulk log from the charts. With the
+  counts now filtered, that day leaves the total too — so on the deploy that carries slice 1,
+  "Läsnäoloja yhteensä" falls once, to the figure the charts have been drawing all along. Nothing
+  is lost; the number was wrong before and is right after.
+- **Owner-facing, and this is the part a test cannot hold:** the Owner undertook to warn the
+  teacher who uses this app daily **before** it ships. A number dropping unannounced on a screen
+  someone trusts is worse than the disagreement it fixes.
+- **Two tests changed to say so**, rather than being deleted:
+  `test_get_statistics_with_exclude_dates` and `test_get_statistics_exclude_multiple_dates` in
+  `tests/test_statistics.py` asserted the old totals ("Total should still show ALL data"). Both
+  now assert the filtered figures and carry a dated comment explaining the switch.
+- **Still not fixed:** the hardcoded `excludeDates` constant and its `TODO`, which spec 0008 left
+  out of scope. While it stands, every teacher silently loses 27 February from both the charts and
+  now the totals, with nothing on screen saying so.
+- **Disposition:** open, and it is the Owner's call rather than a code fix — the constant should
+  either become a real feature or go.
+
 ## 2026-09-12 — the nginx staleness is fixed by deleting the fix, and the clever version is why
 - **What:** the deploy now recreates the nginx container on **every** deploy
   (`up -d --force-recreate --no-deps nginx`) and health-checks the public endpoint afterwards.
@@ -57,10 +276,17 @@ cut (`/confess`), read first by any architecture or review session, dispositione
   all, and nothing fails when a new endpoint is added without a budget. The four routes it holds
   are the four someone thought of in September; `/api/classes`, `/api/auth/*` and the statistics
   route were never on it. Coverage does not help — these lines were all covered.
-- **Disposition:** partly closed. `/api/classes` now has a ceiling and was watched failing at 7
-  against 3 before the fix. **Open:** the remaining unbudgeted endpoints, and the absence of
-  anything that notices a new route arriving without a budget. A cheap version is a test that
-  walks the OpenAPI paths and fails on any list route missing from the parametrize list.
+- **Disposition:** partly closed, and narrowed again on 2026-09-15. `/api/classes` now has a
+  ceiling and was watched failing at 7 against 3 before the fix. The **statistics route**, named
+  above as one of the three never on the list, joined it with spec 0008 slice 1:
+  `BUDGET_STATISTICS = 5`, plus `test_statistics_stays_flat_in_the_number_of_records`, both
+  watched failing against a planted per-day query (31 statements against the ceiling, and 31 -> 43
+  as rows grew).
+  **Still open, and this is the half that matters:** `/api/auth/*` remains unbudgeted, and nothing
+  yet notices a *new* route arriving without a budget. Spec 0008 decision 14 says adding the
+  statistics row "closes the open confession", which is an overclaim — it removes one name from a
+  list this entry says should not be hand-written at all. A cheap real version is still a test
+  that walks the OpenAPI paths and fails on any list route missing from the parametrize list.
 
 ## 2026-09-11 — every nginx.conf change since the bind mount existed may never have taken effect
 - **What:** `deployment/production/docker-compose.yml` mounts `./nginx.conf:/etc/nginx/nginx.conf:ro`

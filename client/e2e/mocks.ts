@@ -17,6 +17,7 @@ import type { PaginatedAttendanceSummaryResponse } from '../src/api/types';
 import {
   ACCESS_TOKEN,
   KURSSI,
+  NO_STATISTICS,
   REGISTER,
   STATISTICS,
   SUGGESTIONS,
@@ -102,6 +103,35 @@ export async function statistics(
   body: AttendanceStatistics = STATISTICS,
 ): Promise<void> {
   await mockJson(page, ROUTES.statistics, body);
+}
+
+/**
+ * A Kurssi that **has** attendance but none inside the chosen timeframe — spec 0008's fifth state.
+ *
+ * `statistics()` above answers every request with one body, which cannot express this: the surface
+ * has to render figures with no range (or there is no filter to operate) and nothing with one.
+ * So this reads the query string and answers accordingly, which is also the only mock here that
+ * asserts anything about the request — a range that never reached the wire would show up as the
+ * aggregates state instead of the empty one, and the swept state would fail rather than pass
+ * quietly.
+ *
+ * Deliberately keyed on the PRESENCE of either bound, not on its value. The value is
+ * `src/api/__tests__/attendance.test.ts`'s business (AC-9) and pinning it here would make this
+ * mock fail every time the walk's clock moved into a new month.
+ */
+export async function statisticsByRange(
+  page: Page,
+  inRange: AttendanceStatistics = NO_STATISTICS,
+  allTime: AttendanceStatistics = STATISTICS,
+): Promise<void> {
+  await page.route(ROUTES.statistics, (route) => {
+    const ranged = /[?&]date_(from|to)=\d/.test(route.request().url());
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(ranged ? inRange : allTime),
+    });
+  });
 }
 
 /**

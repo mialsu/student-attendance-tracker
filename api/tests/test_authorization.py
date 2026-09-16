@@ -33,6 +33,14 @@ CLASS_SCOPED_ROUTES = [
     # specs/0002-legacy-student-cutoff.md would be the one summary call nobody attacks.
     ("GET", "/api/classes/{class_id}/attendance/summary?legacy=true", None),
     ("GET", "/api/classes/{class_id}/attendance/statistics", None),
+    # A timeframe is not a way around INV-1. Same reasoning as the `legacy=true` row above:
+    # without this, the two parameters added by specs/0008-statistics-timeframe-filter.md
+    # would be the one statistics call nobody attacks.
+    (
+        "GET",
+        "/api/classes/{class_id}/attendance/statistics?date_from=2026-03-01&date_to=2026-03-31",
+        None,
+    ),
     (
         "POST",
         "/api/classes/{class_id}/attendance",
@@ -169,6 +177,7 @@ POSITIVE_CONTROL_ROUTES = [
     "/api/classes/{class_id}/attendance/summary",
     "/api/classes/{class_id}/attendance/summary?legacy=true",
     "/api/classes/{class_id}/attendance/statistics",
+    "/api/classes/{class_id}/attendance/statistics?date_from=2026-03-01&date_to=2026-03-31",
     "/api/classes/{class_id}/students",
     "/api/classes/{class_id}/students/autocomplete?query=jo",
 ]

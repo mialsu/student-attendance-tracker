@@ -7,7 +7,7 @@
 Tests use a real PostgreSQL database via Docker Compose:
 
 ```bash
-# Start test database and run tests (automatic cleanup)
+# Start a disposable test database, run the suite, destroy it again
 ./scripts/run-tests-docker.sh
 
 # Run with custom pytest arguments
@@ -15,7 +15,13 @@ Tests use a real PostgreSQL database via Docker Compose:
 
 # Run specific test
 ./scripts/run-tests-docker.sh -k test_signup
+
+# If the default port is taken on your machine
+TEST_DB_PORT=5445 ./scripts/run-tests-docker.sh
 ```
+
+The database it starts is disposable by design (`--rm`, no volume): the fixtures call
+`Base.metadata.drop_all`, so `TEST_DATABASE_URL` must never point at a database worth keeping.
 
 ### Option 2: Manual Setup
 
@@ -25,12 +31,22 @@ If you have PostgreSQL running locally:
 # Install dependencies (including test packages)
 pip install -r requirements.txt
 
-# Set test database URL
-export TEST_DATABASE_URL="postgresql+asyncpg://attendance_user:test_password_123@localhost:5433/attendance_tracker_test"
+# Start the throwaway database and export TEST_DATABASE_URL for it.
+# Do NOT write this URL by hand: the fixtures call drop_all, and a port guessed wrong aims a
+# schema-dropping suite at whatever else is listening. This script owns the decision.
+eval "$(./scripts/test-db.sh up)"
 
 # Run tests
 pytest
+
+# Destroy it; there is nothing in it worth keeping
+./scripts/test-db.sh down
 ```
+
+`conftest.py` needs more than `TEST_DATABASE_URL` -- `app/config.py` is an import-time singleton,
+so it also wants `DATABASE_URL`, `SECRET_KEY`, `DOCS_USERNAME` and `DOCS_PASSWORD`. The `env:`
+block of the `pytest` step in `.github/workflows/backend.yml` is the complete record; throwaway
+values are fine. `run-tests-docker.sh` sets them for you.
 
 ## Run Tests
 
@@ -151,7 +167,9 @@ Tests run automatically via GitHub Actions on:
 ### Local Testing Environment
 
 - **Test Database**: PostgreSQL 17 (Docker container)
-- **Port**: 5433 (to avoid conflicts with development database on 5432)
+- **Port**: 5439 by default, overridable with `TEST_DB_PORT` (5432 is the development
+  database, and **5433 is another project's container on some machines** -- pointing a
+  `drop_all` suite there was /audit finding #6)
 - **Database**: `attendance_tracker_test`
 - **User**: `attendance_user`
 - **Password**: `test_password_123`

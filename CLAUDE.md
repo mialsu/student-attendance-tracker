@@ -21,7 +21,10 @@ npm run lint:boundaries    # dependency-cruiser: layering, cycles, orphans, test
 npm run drift              # devkit drift gate
 npm run drift:extra        # compound-vocabulary bans the segment matcher cannot express
 ```
-Pre-commit hook: `.husky/pre-commit` (runs the same set, drift staged-only).
+Pre-commit hook: the **root** `.githooks/pre-commit`, which dispatches on what is staged and runs
+the client set from there (drift staged-only). **husky is gone** — it set `core.hooksPath` too, and
+that is a single repository-wide value, so whichever package configured it last silently disabled
+the other's gates. `client/.husky/` does not exist; this line claimed it did until 2026-09-16.
 
 **api** (`cd api`)
 ```bash
@@ -33,7 +36,9 @@ just lint-verbose          # ruff, showing every finding
 just typecheck             # mypy ratchet — same file (ADR-0004)
 just typecheck-verbose     # mypy, showing every finding
 just drift                 # devkit drift gate + drift-extra.sh (vocabulary, alembic edits)
-just install-hooks         # one-off per clone: core.hooksPath -> .githooks
+just install-hooks         # one-off per clone: core.hooksPath -> .githooks. Prefer
+                           # ../scripts/bootstrap.sh — same setting, plus the venv the
+                           # gates actually need, and it works without `just`
 ```
 The API **has a type gate** since 2026-09-02: `just typecheck` runs mypy over `app/` as a
 ratchet against `api/.harness-baseline` (ADR-0004). It is in `check-fast`, so the pre-commit hook and CI both run it. This
@@ -42,6 +47,19 @@ old justfile claiming it, and ADR-0001 deferred it on the grounds that the openi
 be large and unmeasured". Measured, it opened at 16 across 9 files, and has only ratcheted down
 since — the N+1 fixes of 2026-09-09 took some without anyone aiming at them. The remainder are
 confessed, not fixed. `cat api/.harness-baseline` for where it stands.
+
+**Fresh clone, or a machine you have not committed from before — run this and nothing else:**
+```bash
+./scripts/bootstrap.sh          # idempotent; sets core.hooksPath, builds api/venv, npm ci
+./scripts/bootstrap.sh --check  # report only; exit 1 if this clone would commit ungated
+```
+**Why it is not optional.** Three things the gates need are outside git and do not arrive with a
+`git pull`: `core.hooksPath` (untracked `.git/config`), `api/venv` (gitignored) and
+`client/node_modules` (gitignored). A clone missing the first **commits with no gates at all and
+reports nothing** — the dangerous failure, because it answers. `just` is *not* the prerequisite and
+never was; the venv is. `bootstrap.sh` detects what is missing rather than assuming, which is why
+this file names no machine and carries no per-machine setup notes: on more than one machine those
+rot immediately, since which tools are installed is exactly what differs.
 
 Tests DROP tables, so `TEST_DATABASE_URL` is mandatory with no default. **Use the helper** — it
 starts a disposable database on port 5439 and prints the export line:
@@ -559,7 +577,12 @@ POST   /classes/{id}/attendance         - Log attendance (student_name, quantity
 DELETE /attendance/{id}                 - Delete attendance record
 GET    /classes/{id}/attendance/summary - Get summary by student (course credit; legacy= reveals
                                           students whose first attendance is over 5 years old)
-GET    /classes/{id}/attendance/statistics - Daily/monthly aggregates (exclude_dates optional)
+GET    /classes/{id}/attendance/statistics - Daily/monthly aggregates (exclude_dates optional;
+                                          date_from/date_to optional, both inclusive of their
+                                          whole day — every figure including the two totals
+                                          describes the timeframe, spec 0008). Every date is a
+                                          LOCAL day (APP_TIMEZONE, default Europe/Helsinki),
+                                          not a UTC one — spec 0009 and ADR-0008
 ```
 
 **Admin — there is none.** The three `/api/admin/codes` endpoints and the superadmin role that
@@ -1120,8 +1143,32 @@ Closes #123
 3. ✅ **Bulk Logging**: Create 1-50 attendance records in one API call
 4. ✅ **Autocomplete**: Fast student name suggestions ordered by frequency
 5. ✅ **No Duplicate Students**: Fixed StudentLogs bug completely
+6. ✅ **Timeframe filter on *Tilastot*** (spec 0008): two date pickers, `Alkaen` / `Päättyen`,
+   empty by default. Every figure on the surface describes the chosen timeframe — the four summary
+   cards included, which is a **change in what "Läsnäoloja yhteensä" counts** and drops that figure
+   once on deploy, to what the charts have been drawing all along. The Owner undertook to warn the
+   teacher. *Tilastot* has **two** empty states now, and the order they are checked in matters —
+   `client/DESIGN.md` §3 is the record. Every date is a local day (spec 0009, ADR-0008).
 
-**Next Development:** Ready for new feature requests or enhancements
+**Next Development:** Ready for new feature requests or enhancements.
+
+**`cd client && npm run check` passes end to end, e2e included** — verified 2026-09-16, every gate
+at its `.harness-baseline` figure and the walk 78/78 at both viewports.
+
+One setup step a fresh clone needs, because it is a system package and not an npm one: Playwright's
+Chromium will not start without `libasound.so.2` — ALSA sound, which a headless browser never uses
+but links against anyway. `sudo apt-get install -y libasound2t64` on Ubuntu 24.04; it is installed
+on the Owner's machine as of 2026-09-16. Without it the `e2e` step fails loudly and by name, which
+is the right failure mode. `npx playwright install chromium` is the other one-off per clone.
+
+**The walk is worth the trouble: it found two defects on 2026-09-16 that every other gate passed.**
+A WCAG 1.4.3 contrast failure in the shared `client/src/components/ui/calendar.tsx` (outside days
+at **2.25:1** — an alpha composite, which `tokens-contrast.test.ts` structurally cannot see), and
+three races in the new tests themselves. The contrast bug had shipped since before spec 0008 and
+sat unseen because **no swept state had ever opened a calendar popover** — `AttendanceTracking`'s
+picker is on screen in a swept state but closed, and a closed popover renders no days. That is the
+standing argument for `e2e/states.spec.ts` being a table of states rather than a set of journeys:
+adding a state is the only thing that finds a defect nobody is looking for.
 
 **Deployment Cost Breakdown:**
 - **Frontend**: Free (Vercel Hobby tier, non-commercial)
