@@ -146,7 +146,7 @@ accessibility check available here is also the width decision.
 | `/dashboard` | "Ei kursseja vielä" as the heading, "Luo ensimmäinen kurssisi yllä olevasta painikkeesta." under it — the shipped sentence, split, and still pointing at the header button rather than carrying a second one | spinner in place of the list | "Kurssien lataaminen epäonnistui" + the retry | the Kurssi list, each card a link naming its two counts, and a dashed card that opens the dialog |
 | `/dashboard` — luo uusi kurssi | n/a | the submit becomes "Luodaan..." and disables | toast, `detail` from the API or "Kurssin luominen epäonnistui"; a blank name is refused before the request with "Kurssin nimi on pakollinen" | toast "Kurssi luotu", the dialog closes, the fields clear |
 | *Kirjaa läsnäolo* | n/a — the form is always the form | the submit button becomes "Kirjataan…" and disables | toast, `detail` from the API or "Läsnäolon kirjaaminen epäonnistui" | toast, and the field clears |
-| *Läsnäolot* | "Ei opiskelijoita vielä" (desktop) / "Ei läsnäoloja kirjattu vielä tälle kurssille" (narrow); searching yields "Ei hakutuloksia haulla …" | Card header stays, body becomes a spinner | "Opiskelijoiden lataaminen epäonnistui" + the retry | rows, tally, and the *Suoritus* tick |
+| *Läsnäolot* | "Ei opiskelijoita vielä" (desktop) / "Ei läsnäoloja kirjattu vielä tälle kurssille" (narrow); searching yields "Ei hakutuloksia haulla …", naming the search the rows on screen answer | First load: the Card header stays and the body becomes a spinner. After it, a search, a page change or *Näytä*/*Piilota* keeps the rows and the search box, focus included, until the new rows arrive; past 300 ms the rows fade (`aria-busy`) and the magnifier turns into a spinner. Another Kurssi starts again from the spinner rather than showing this one's rows | "Opiskelijoiden lataaminen epäonnistui" + the retry | rows, tally, and the *Suoritus* tick |
 | *Tilastot* | **Two empties since spec 0008, and the order they are checked in is the point.** With no timeframe set: "Ei läsnäoloja näytettäväksi" + "Kirjaa opiskelijoiden läsnäoloja nähdäksesi tilastot." — the empty branch owns the whole surface, so there is no chart frame, no toggle and no filter to press. With a timeframe set: "Ei läsnäoloja valitulla aikavälillä" + a sentence naming her own dates back ("Aikavälillä 1.9.2026 – 30.9.2026 ei ole kirjattuja läsnäoloja."), the filter still on screen above it and its *Tyhjennä aikaväli* the way out | "Ladataan tilastoja…" | "Tilastojen lataaminen epäonnistui" + the retry. **Checked before both empties**, which a timeframe makes load-bearing rather than cosmetic — see the note under this table | the *Aikaväli* filter (*Alkaen* / *Päättyen*, empty by default, cross-disabling, no future days), four totals, the per-day table, and one chart whose granularity the *Kaavion jakso* toggle sets — **Päivät** by default, **Kuukaudet** the other. Both granularities are swept, because each draws a different dataset and `A11Y-7` has to hold for both. Every figure describes the timeframe, the four totals included |
 | `/settings` | n/a | each submit becomes "Tallennetaan..." and disables — **both**, independently, because the two cards are on screen together | toast, `detail` from the API or the surface's own wording | toast, and the confirming field clears |
 | `/auth` — kirjautuminen | n/a | the submit becomes "Kirjaudutaan..." and disables | toast: "Väärä sähköposti tai salasana" | redirect to the dashboard |
@@ -215,14 +215,19 @@ ambiguous in the walk's three `— refused` states, which assert against exactly
 and `AppShell.test.tsx` asserts the empty sentence is absent, which is the half that holds it.
 
 **Loading is the one state design owns outright** — no product decision sits behind it. Decided
-here, and each of these is a change the current code does not yet make:
+here. The first two hold in one place so far, *Läsnäolot* after its first load (2026-09-30), and
+are still a change the rest of the code does not yet make:
 
 - **Nothing shows a spinner before 300ms.** The API sits on a Hetzner VM and most of these calls
   return in well under that; a spinner that appears and vanishes reads as a flicker, not as
-  progress. Today every one of them spins immediately.
+  progress. *Läsnäolot*'s search, paging and *Näytä* toggle honour it: the old rows stay and fade
+  only past 300 ms, a number `src/hooks/useDelayedFlag.ts` holds and `DataTable`'s `isRefreshing`
+  applies. Every first load, *Läsnäolot*'s included, still spins immediately.
 - **The frame never waits for the data.** A Card's title and description render at once and only
-  the body region resolves. *Läsnäolot* already does this; `/class/:id` does not — it blanks the
-  whole surface, tabs included, behind one spinner.
+  the body region resolves. *Läsnäolot* does this, and after its first load keeps its search box
+  and rows mounted through every refresh — the fix for the box being unmounted mid-word on each
+  debounced search, which the teacher reported on 2026-09-30. `/class/:id` does not: it blanks
+  the whole surface, tabs included, behind one spinner.
 - **A mutation never blanks anything.** It disables its own control and says what it is doing
   ("Kirjataan…"). This line said "that is already the pattern and it stays" until slice 7, and it
   was **wrong about four of the ten** — the two on `/settings` and the two modes of `/auth`'s one
