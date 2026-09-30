@@ -402,7 +402,8 @@ The honest list, because §5's tags make the rest of this document look more enf
   declared English and `src/components/ui/**` carried English names — "Close", "Go to previous
   page", "More pages" — plus the pager's visible "Previous" and "Next". All are Finnish now, and
   `A11Y-9` names its test. What stays unguarded is the next English string: only the three
-  primitives that test renders are held. App code contains **no** `sr-only` text at all.
+  primitives that test renders are held. App code has one `sr-only` string of its own, *Avaa
+  valikko* in `TeacherLayout.tsx`, which `AppShell.test.tsx` asserts by name.
 - **A name that exists but is useless.** axe accepts a `title`-only name, so the search-clear button
   (`title="Tyhjennä haku"`) passes while giving a touch user nothing.
 - **Contrast as rendered.** The token test proves the palette can clear AA, never that a screen

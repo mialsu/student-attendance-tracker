@@ -332,7 +332,7 @@ Each cuts to something observable and is demoable alone. Blocking order.
 1. **The chart moves up and numbers its bars.** Decisions 2–8. The reorder, the fit function and
    its tests, the `LabelList` and the ticks, the hint, one source of width; the two existing
    *Tilastot* walk states assert numbered bars and a long-fixture state sweeps the hint;
-   `DESIGN.md` §2's and §3's *Tilastot* rows. Client only. Demoable: one month by day on a
+   `DESIGN.md` §1's and §3's *Tilastot* rows. Client only. Demoable: one month by day on a
    desktop, then the whole Kurssi on a phone. AC-1 – AC-7.
 2. **The API sorts four ways and refuses a fifth.** Decisions 13, 14 and 18. The closed set, the
    `ORDER BY` for each, the route tests, the budget rows, the collation measurement for open
@@ -388,6 +388,8 @@ the 422 for a value no client sends. Slices 1, 3 and 4 touch the client only.
      sortable-table example: "Läsnäolot päivittäin. Järjestystä voi vaihtaa sarakkeiden
      otsikoista." and "Opiskelijoiden läsnäolot. Järjestystä voi vaihtaa sarakkeiden otsikoista."
      These would be the first `sr-only` strings in app code; `DESIGN.md` §6 counts none today.
+     **Wrong when written: app code has carried one since #12, *Avaa valikko* in
+     `TeacherLayout.tsx`.**
    - `client/index.html` declares `lang="en"`, so a screen reader reads these strings, like every
      Finnish string in the app, by English rules. See *Out of Scope*. **No longer true: #16
      declares `lang="fi"`.**
@@ -441,3 +443,10 @@ unrecorded is the defect.)*
 included, with `src/__tests__/document-language.test.tsx` as `A11Y-9`'s enforcer. The *Out of
 Scope* bullet and open question 1's last bullet are marked rather than deleted. #16 also found the
 pager mouse-only, which this spec's slices 3 and 4 would otherwise build on: open question 5.
+
+**2026-09-30 — two claims about `DESIGN.md` were wrong when written, found on resuming.** Slice 1
+named §2's *Tilastot* row, and §2 holds the flows, none of them on *Tilastot*. The row that lists
+the surface's order is §1's inventory row, so slice 1 changes §1's and §3's rows; corrected in
+place. Open question 1 called its two captions the first `sr-only` strings in app code, after §6's
+"App code contains **no** `sr-only` text at all", and app code has carried one since #12: *Avaa
+valikko* in `TeacherLayout.tsx`. That bullet is marked, and §6 is corrected.

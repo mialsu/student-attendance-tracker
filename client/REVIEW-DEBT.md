@@ -751,10 +751,10 @@ cut (`/confess`), read first by any architecture or review session, dispositione
   closed 2026-09-12** (spec 0006 slice 8): `index.css` carries a `prefers-reduced-motion: reduce`
   block and `e2e/motion.spec.ts` is its enforcer, with a `no-preference` control so the pair
   proves the media query switches rather than a constant being read back. `active:scale-[0.98]`
-  is out of its scope on purpose and the `A11Y-6` row says why. **`A11Y-8` (200% zoom) and
-  `A11Y-9` (a control announcing itself in the wrong language) stay open**, both still
-  `[review-only]` with nothing behind them, and `A11Y-9` still has the seven English `sr-only`
-  strings in `src/components/ui/**` behind it.
+  is out of its scope on purpose and the `A11Y-6` row says why. **`A11Y-9` closed 2026-09-30**
+  (#16): the seven strings are Finnish, and `src/__tests__/document-language.test.tsx` holds the
+  page's `lang` and the three primitives the app renders; that date's entry says what it does not
+  prove. **`A11Y-8` (200% zoom) stays open**, still `[review-only]` with nothing behind it.
 
 ## 2026-09-07 — DESIGN.md's loading thresholds are decided but not implemented
 - **What:** §3 decides that nothing shows a spinner before 300ms, that a Card's frame never waits
