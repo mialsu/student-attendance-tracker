@@ -101,7 +101,8 @@ Enforced by `.dependency-cruiser.cjs`, and each rule below was proven by breakin
 - A test is not a reason to keep dead code alive. The orphan gate counts a test file as an
   importer, so a module whose only caller is its own test walks straight past it. `src/lib/classes.ts`
   did exactly that with 26 passing tests and was deleted on 2026-09-03. `[review-only]`
-- No skipped, focused, or silently-deleted test lands without a `REVIEW-DEBT.md` entry. `[script]`
+- No skipped, focused, or silently-deleted test lands without a `REVIEW-DEBT.md` entry.
+  `[script]` (skipped, focused), `[review-only]` (deleted)
 - Green tests gate; they do not prove. The live exercise proves (PRINCIPLES #1). `[review-only]`
 
 ## Escape hatches

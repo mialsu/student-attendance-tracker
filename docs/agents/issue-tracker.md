@@ -1,12 +1,13 @@
 # Issue tracker: Local markdown (specs/)
 
 Specs live as numbered markdown files in `specs/`, following the existing
-`specs/NNNN-<slug>.md` convention (see `specs/0002`–`specs/0005`). This is a solo
+`specs/NNNN-<slug>.md` convention. This is a solo
 utility — there is no external tracker, and GitHub Issues is deliberately unused.
 
 ## Conventions
 
-- One spec per feature: `specs/NNNN-<slug>.md`, numbered sequentially (next free: `0010`).
+- One spec per feature: `specs/NNNN-<slug>.md`, numbered sequentially: one past the highest
+  number in `specs/` or `api/specs/`.
 - Tracer slices and open questions are sections *inside* the spec, not separate ticket
   files — devkit's METHOD folds slices into the local spec for solo work.
 - If a feature ever genuinely needs per-ticket files, use

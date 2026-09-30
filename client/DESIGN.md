@@ -46,7 +46,7 @@ re-deciding it. That difference from the template is deliberate and was the Owne
 | Not in this file | Where it lives | Why not here |
 |---|---|---|
 | Palette values, type scale, spacing steps | `src/index.css` (HSL custom properties — "Läsnä" indigo since 2026-09-10, education teal before that) and `tailwind.config.ts` (type scale, spacing, shadows, `Fira Sans`) | a token table here *plus* tokens in code is two implementations of one thing. §5's contrast table is measured **from** those files by a test, not transcribed |
-| Aesthetic direction, wireframes, UI copy | the `frontend-design` skill, applied when the re-skin is built | that skill owns the format and the judgement. devkit adds one constraint: the values stay in code |
+| Aesthetic direction, wireframes, UI copy | `ui-ux-pro-max`, which chose the "Läsnä" foundations (`prototype/DESIGN_SYSTEM.md`); copy voice and ASCII wireframes have no skill owner and fall to the Owner | that skill owns the format and the judgement. devkit adds one constraint: the values stay in code |
 | Which layout wins | a `/prototype` UI run — N variants on the real route with real data | the mobile row's structure (§6) is the open one, and prose will not settle it |
 
 The vocabulary is `CONTEXT.md`, and two of its rules bind this document directly: the app is **a

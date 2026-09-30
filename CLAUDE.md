@@ -24,7 +24,7 @@ npm run drift:extra        # compound-vocabulary bans the segment matcher cannot
 Pre-commit hook: the **root** `.githooks/pre-commit`, which dispatches on what is staged and runs
 the client set from there (drift staged-only). **husky is gone** — it set `core.hooksPath` too, and
 that is a single repository-wide value, so whichever package configured it last silently disabled
-the other's gates. `client/.husky/` does not exist; this line claimed it did until 2026-09-16.
+the other's gates. `client/.husky/` does not exist.
 
 **api** (`cd api`)
 ```bash
@@ -40,13 +40,10 @@ just install-hooks         # one-off per clone: core.hooksPath -> .githooks. Pre
                            # ../scripts/bootstrap.sh — same setting, plus the venv the
                            # gates actually need, and it works without `just`
 ```
-The API **has a type gate** since 2026-09-02: `just typecheck` runs mypy over `app/` as a
-ratchet against `api/.harness-baseline` (ADR-0004). It is in `check-fast`, so the pre-commit hook and CI both run it. This
-line previously said there was no type gate, which was true — mypy was never installed despite the
-old justfile claiming it, and ADR-0001 deferred it on the grounds that the opening baseline "would
-be large and unmeasured". Measured, it opened at 16 across 9 files, and has only ratcheted down
-since — the N+1 fixes of 2026-09-09 took some without anyone aiming at them. The remainder are
-confessed, not fixed. `cat api/.harness-baseline` for where it stands.
+The API **has a type gate**: `just typecheck` runs mypy over `app/` as a ratchet against
+`api/.harness-baseline` (ADR-0004). It is in `check-fast`, so the pre-commit hook and CI both run
+it. The remaining findings are confessed in `api/REVIEW-DEBT.md`, not fixed;
+`cat api/.harness-baseline` for where it stands.
 
 **Fresh clone, or a machine you have not committed from before — run this and nothing else:**
 ```bash
@@ -70,10 +67,10 @@ just check                     # the whole suite, ~4 min; it prints the count
 just test-db-down              # destroys it; there is nothing worth keeping
 ```
 
-⚠ **Do not point `TEST_DATABASE_URL` at port 5433.** An earlier version of this file told you to,
-and it is wrong: on this machine 5433 is `platform-postgres`, a **different project's** container,
-and the fixtures call `drop_all`. `deployment/local/docker-compose.yml`'s `db-test` service is also
-configured for 5433, so it cannot start either — see the API repo's `REVIEW-DEBT.md`.
+⚠ **Do not point `TEST_DATABASE_URL` at port 5433.** On this machine 5433 is `platform-postgres`,
+a **different project's** container, and the fixtures call `drop_all`.
+`deployment/local/docker-compose.yml`'s `db-test` service is also configured for 5433, so it
+cannot start either — see the API repo's `REVIEW-DEBT.md`.
 
 ### CI/CD
 
@@ -99,32 +96,16 @@ execution *is* its verification, so watch the first run. Both workflows also acc
 
 **Manual steps this cannot do for you** (both in `client/REVIEW-DEBT.md`):
 
-1. ~~**Disable Vercel git auto-deploy**~~ — **DONE.** The Owner disconnected the git integration on
-   2026-09-01 and confirmed it again on 2026-09-04, which settles a contradiction that stood in
-   this file for three days: `client/REVIEW-DEBT.md` recorded the disconnect while this section
-   kept listing it as outstanding. **The CI deploy gate is real, not advisory.** Kept here rather
-   than deleted because the trap is worth carrying: an empty **Deploy Hooks** list does *not* mean
-   auto-deploy is off — the **Connected Git Repository** is what deploys on push, so that is the
-   setting to check if a deploy ever races again.
+1. **Vercel git auto-deploy is disconnected** (the Owner, 2026-09-01; confirmed 2026-09-04), so the
+   CI deploy gate is the only path to production. If a deploy ever races again, check the
+   **Connected Git Repository** setting: an empty **Deploy Hooks** list does *not* mean
+   auto-deploy is off.
 2. **Set the secrets.** Frontend: `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID` (the last two
    are in the gitignored `.vercel/project.json`). Backend already has `SERVER_HOST`, `SERVER_USER`,
    `SSH_PRIVATE_KEY`, `PROJECT_PATH`.
 
 The **deploy jobs are the one part not proven by breaking them** — exercising them means deploying to
 production. Everything else was. Prefer a `workflow_dispatch` run at a quiet moment for the first one.
-
-**Action versions, bumped 2026-09-04:** `checkout` v4→v7, `setup-python` v5→v7, `setup-node` v4→v7,
-`upload-artifact` v4→v7. This clears the Node 20 deprecation warning every run printed. Checked
-against the release notes rather than assumed safe, because a bad bump here breaks the path that
-deploys: the majors in between move the runtime to Node 24 (needs runner ≥2.327.1, and
-GitHub-hosted `ubuntu-latest` is well past it), `checkout@v6` persists credentials to a separate
-file (no job here pushes or reuses the git credential — the drift gate only reads), `checkout@v7`
-blocks fork-PR checkout for `pull_request_target` and `workflow_run` (these workflows trigger on
-`push`, `pull_request` and `workflow_dispatch`, none of which is affected), and `setup-python@v7`
-removed the `pip-install` input (never passed here — the inputs used are `fetch-depth`,
-`python-version`, `node-version`, `cache` and `cache-dependency-path`, all of which survive).
-**Like the deploy jobs, this bump cannot be proven locally** — the YAML parses and nothing here
-uses a removed input, but its real proof is the next CI run.
 
 Backend deploy rolls back **code** automatically if the health check fails. It does **not** roll back
 a migration — alembic has already run by then. The pre-deploy backup is the schema rollback path and
@@ -157,31 +138,16 @@ production container now: `attendance-jaeger-prod`.
 - **Tracing cannot take the API down.** Export runs on a background thread and the exporter logs
   and drops after retrying; a dead Jaeger costs log noise.
 
-**What it found immediately, and what is now fixed:** three N+1 loops — autocomplete
-(`student_service.py:430`), the students list (`student_service.py:197`) and the attendance list
-(`attendance_service.py:106`). On a 25-student class they issued **28, 29 and 79** SQL statements
-against 6 for the already-fixed `attendance/summary`. **All three were fixed on 2026-09-09**, each
-one dropping to a handful of statements that stays **flat in the row count** rather than scaling
-with it. Measured two independent ways that agreed — SQLAlchemy's `before_cursor_execute` and the
-PostgreSQL statement log — exercised at two data sizes, and confirmed in production traces.
-`tests/test_query_budget.py` holds the live ceilings and stays a **ratchet**: one may go down and
-never up, so a failure there means a loop has come back. Details in `api/REVIEW-DEBT.md`.
+`tests/test_query_budget.py` holds the statement-count ceilings and stays a **ratchet**: a ceiling
+may go down and never up, so a failure there means an N+1 loop has come back. It guards only the
+endpoints in its parametrize list; one missing from that list has no guard. Measurements and
+history are in `api/REVIEW-DEBT.md`.
 
 ### Why this file quotes no test counts, coverage percentages or baselines
 
-**It used to, and they were wrong every time.** Between 2026-09-01 and 2026-09-09 this document
-carried backend test counts, coverage percentages and gate baselines that had drifted from the
-code — among them five different test counts (241, 63, 346, 437 and 441), one written as a
-*correction* to the previous stale one. `4f742e9` replaced twenty-one figures and is the record
-of the exact set. Each was true when typed and rotted the moment the suite grew. There is no
-gate that compares a number in prose to a number in the code, so nothing ever caught one; they
-were found by hand, repeatedly, and fixing them was pure waste.
-
-So on 2026-09-09 the numbers were **deleted rather than corrected again**, and the rule for anyone
-editing this file is:
-
-> Do not write a count, a percentage or a baseline into this document. Name the command or the
-> file that answers the question instead.
+Do not write a count, a percentage or a baseline into this document. Name the command or the file
+that answers the question instead. Each figure is true when typed and rots the moment the suite
+grows, and no gate compares a number in prose to a number in the code.
 
 | Question | What answers it |
 |---|---|
@@ -232,8 +198,8 @@ changing anything in the service layer.
   credit (the teacher decides; 14–15 is her rule of thumb), and deleting a Student may destroy their
   whole history (the school holds the credit, this app is a tally sheet).
 
-`DESIGN.md` still does not exist in either repo, so the drift gate's accessibility check remains
-inert.
+`client/DESIGN.md` is the surface contract (written by `/design-brief`, 2026-09-07), so the drift
+gate's accessibility check applies in `client/`. `api/` has no surface and no `DESIGN.md`.
 
 ### Security audit, 2026-09-02
 
@@ -255,7 +221,8 @@ Fixed, each with a regression test watched red first, on branch `fix/audit-2026-
 **What held up, and it is the part the threat model cares about:** all **17 class-reaching routes**
 are covered from the denied side by `tests/test_authorization.py`. No raw SQL, no shell-out, no
 `eval`, no outbound fetch anywhere in `app/`. Registration codes are 96 bits from `secrets`.
-Refresh tokens are hashed at rest. The access token lives only in memory (`client.ts:16`). No
+Refresh tokens are hashed at rest. The access token lives only in memory (`accessToken` in
+`client/src/api/client.ts`). No
 `.env`, key or certificate was ever committed in any of the four repositories.
 
 **Not fixed, and recorded in the API repo's `REVIEW-DEBT.md`:**
@@ -268,25 +235,16 @@ Refresh tokens are hashed at rest. The access token lives only in memory (`clien
   break; it means the gates prove nothing about the artifact that deploys.
 - **Two leads nothing in a repo can settle:** the real production `CORS_ORIGINS`; and `gitleaks`,
   which is not installed locally — history was checked independently at file level instead.
-  (The third, **whether Vercel git auto-deploy is still disconnected, is CLOSED** — the Owner
-  confirmed it on 2026-09-04. It was never a repo question, which is why it sat open for three
-  days: the answer lives in a dashboard, so asking the Owner was the only way to get it.)
 
-**The `.env`-in-the-image lead is CLOSED (2026-09-03): the production image never had one.** All
-eight backend images on the VM were checked, including seven predating `.dockerignore` and going
-back two weeks. All clean, and structurally so — the server's build context is a git clone, `.env`
-is gitignored and was never committed, and the VM's only `.env` sits in `deployment/production/`,
-which is not the build context. `SECRET_KEY` was never disclosed; no rotation was needed. The
-finding was real as a *mechanism* (a developer working tree does have a `.env`, and building from
-one bakes it in) and the step from there to "production may be affected" was never evidenced.
-`.dockerignore` stays as prevention.
+`api/.dockerignore` stays: a developer working tree has a `.env`, and building from one bakes it
+into the image. The production images never carried one — the server builds from a git clone,
+where `.env` is gitignored — so `SECRET_KEY` was never disclosed.
 
 **Finding #3's follow-up is DONE (2026-09-07): `refresh_tokens` was revoked in production.** Every
 token issued before that moment is dead, so a refresh token copied before the cookie fix cannot
 mint an access token again. Teachers got one failed refresh and a login screen, as expected.
 
-**What revoking does not do, and the earlier wording here got this wrong.** It said revoking
-"retires the stale cookies". It kills the *token*, not the *cookie*. The old `.kotoio.fi` cookie
+**What revoking does not do.** It kills the *token*, not the *cookie*. The old `.kotoio.fi` cookie
 stays in each browser until it expires — up to 30 days from issue, so early October — because
 `app/api/auth.py:221` calls `delete_cookie(domain=settings.cookie_domain)` and `cookie_domain` is
 empty in production now. The app speaks only for the host-only cookie and has no standing to clear
@@ -318,7 +276,7 @@ student-attendance-tracker/          ONE repository, github.com/mialsu (since 20
 It was four separate repositories in a GitHub organisation until 2026-09-03. They were merged
 with `git subtree` rather than a history rewrite, deliberately: `REVIEW-DEBT.md`, `ADR-0004`,
 this file and `BACKLOG.html` all cite commit SHAs, and a rewrite would have invalidated every
-one. `knowledge-base` is gone as a name; its four files are `docs/`.
+one.
 
 **Why one repository:** `deployment/` had no independent lifecycle — it could not deploy itself,
 and a compose change only reached the VM when an unrelated backend push happened to run. One
@@ -354,7 +312,7 @@ commit ships the whole deployable unit.
 - Bulk attendance logging (1-50 records)
 
 **Infrastructure:**
-- **Frontend**: Vercel (free tier, global CDN)
+- **Frontend**: Vercel Hobby tier (free, non-commercial use only; global CDN)
 - **Backend + Database**: Hetzner Cloud VM (€3.49/month)
   - Docker + Docker Compose
   - Nginx (API gateway with rate limiting)
@@ -420,20 +378,12 @@ commit ships the whole deployable unit.
    - Deployment, SSL, backups and the operational notes (`deployment/README.md`)
    - **Vercel Deployment Guide** (`deployment/VERCEL_DEPLOYMENT.md`) - Frontend deployment
    - Multi-backend hosting documentation (`deployment/README.md`)
-   - **The root `docs/` directory was deleted on 2026-09-07.** It held an architecture document
-     that carried the schema in three copies, a first-week setup guide still listing shipped work
-     under "What's Next", and 1,372 lines of generic UFW and certbot tutorial. Two observed facts
-     about the server were carried into `deployment/README.md`: the host-nginx port-80 trap and
-     the manual-backup reality. The rest is in git history.
-   - **Its *monolith vs microservices* section was NOT preserved, and the attempt is worth
-     remembering.** It was promoted to `api/docs/adr/0005-modular-monolith.md` on 7 September and
-     deleted the same day. Its six reasons trace to `a638ab6` — "Initial knowledge base commit",
-     26 October 2025 — a planning dump written before the code existed, so the file recorded a
-     decision nobody had made, in the directory this project points readers at for decisions. It
-     also took the number `specs/0004-shared-classes.md` had already reserved for the
-     `class_teachers` schema decision. The monolith is stated as description under *Architecture
-     Decisions Already Made*, and its enforcer is the four import-linter contracts in
-     `api/pyproject.toml`.
+   - Two observed facts about the server live in `deployment/README.md`: the host-nginx port-80
+     trap and the manual-backup reality.
+   - **The modular monolith has no ADR, on purpose.** The one once written traced to a planning
+     dump from before the code existed, so it recorded a decision nobody had made. The monolith is
+     stated as description under *Architecture Decisions Already Made*, and its enforcer is the
+     four import-linter contracts in `api/pyproject.toml`.
 
 ### ✅ Deployed to Production
 1. **Frontend**: Deployed to Vercel at `https://app-attendance.kotoio.fi`
@@ -532,8 +482,8 @@ Indexes:
 
 ### Authentication
 - JWT-based with access tokens (15 min) and refresh tokens (**30 days** — the code, both
-  compose files and `.env.example` all say 30; the docs said 7 until `/audit` reconciled them
-  on 2026-09-02). Changing a password revokes every one of that user's refresh tokens.
+  compose files and `.env.example` all say 30). Changing a password revokes every one of that
+  user's refresh tokens.
 - Access token in Authorization header: `Bearer <token>`
 - Refresh token in HTTP-only cookie
 
@@ -599,118 +549,16 @@ On the server, `docker compose … exec backend python scripts/registration_code
 
 ## Backend Project Structure
 
-```
-student-attendance-tracker-api/
-├── app/
-│   ├── main.py                    # FastAPI app entry ✅
-│   ├── config.py                  # Settings (Pydantic BaseSettings) ✅
-│   ├── database.py                # Async database session ✅
-│   ├── dependencies.py            # DI (get_db, get_current_user) ✅
-│   │
-│   ├── models/                    # SQLAlchemy ORM models ✅
-│   │   ├── __init__.py
-│   │   ├── user.py                # User model (with active field) ✅
-│   │   ├── class_.py              # Class model (with active field) ✅
-│   │   ├── student.py             # Student model (single name, course credit) ✅
-│   │   └── attendance.py          # AttendanceRecord model ✅
-│   │
-│   ├── schemas/                   # Pydantic schemas ✅
-│   │   ├── __init__.py
-│   │   ├── user.py                # User schemas ✅
-│   │   ├── class_.py              # Class schemas ✅
-│   │   ├── student.py             # Student schemas ✅
-│   │   ├── attendance.py          # Attendance schemas (with quantity) ✅
-│   │   └── auth.py                # Auth schemas ✅
-│   │
-│   ├── api/                       # Route handlers ✅
-│   │   ├── __init__.py
-│   │   ├── auth.py                # Auth routes ✅
-│   │   ├── classes.py             # Classes routes ✅
-│   │   ├── students.py            # Students routes ✅
-│   │   └── attendance.py          # Attendance routes ✅
-│   │
-│   ├── services/                  # Business logic ✅
-│   │   ├── __init__.py
-│   │   ├── auth_service.py        # Auth & user management ✅
-│   │   ├── class_service.py       # Class CRUD & ownership ✅
-│   │   ├── student_service.py     # Student CRUD & autocomplete ✅
-│   │   └── attendance_service.py  # Attendance tracking & bulk logging ✅
-│   │
-│   ├── core/                      # Core utilities ✅
-│   │   ├── __init__.py
-│   │   ├── security.py            # JWT, password hashing ✅
-│   │   └── exceptions.py          # Custom exceptions ✅
-│   │
-│   └── middleware/
-│       └── __init__.py
-│
-├── alembic/                       # Migrations ✅
-│   ├── versions/
-│   │   ├── 47a39df5f687_initial_migration.py  # Initial schema ✅
-│   │   └── 01edea317e5e_add_student_model.py  # Student entity migration ✅
-│   ├── env.py                     # Alembic env config ✅
-│   └── script.py.mako             # Migration template ✅
-│
-├── tests/                         # Test suite ✅
-│   ├── __init__.py
-│   ├── conftest.py                # Pytest fixtures (DB, auth, test data) ✅
-│   ├── test_main.py               # Basic endpoint tests ✅
-│   ├── test_auth.py               # Auth API tests ✅
-│   ├── test_classes.py            # Classes API tests ✅
-│   ├── test_students.py           # Students API tests ✅
-│   ├── test_attendance.py         # Attendance API tests ✅
-│   └── test_bulk_attendance.py    # Bulk logging tests ✅
-│
-├── docs/                          # Documentation ✅
-│   ├── TESTING_GUIDE.md           # Comprehensive test guide ✅
-│   └── TEST_QUICK_START.md        # Quick test reference ✅
-│
-├── scripts/                       # Helper scripts ✅
-│   ├── generate-migration.sh      # Create migrations ✅
-│   ├── apply-migrations.sh        # Apply migrations ✅
-│   └── run-tests.sh               # Test runner ✅
-│
-├── alembic.ini                    # Alembic config ✅
-├── requirements.txt               # Dependencies ✅
-├── Dockerfile                     # Docker image ✅
-├── pytest.ini                     # Pytest config ✅
-├── .env.example                   # Env template ✅
-├── API_REFERENCE.md               # API documentation ✅
-└── README.md                      # Project documentation ✅
-```
+`api/app/` is layered `api/` (routes) > `services/` (business logic) > `models/`, with `schemas/`
+and the `core/` leaf (security, logging, telemetry, exceptions) beside them; the import-linter
+contracts in `api/pyproject.toml` enforce the layering (`just boundaries`). Migrations live in
+`api/alembic/versions/`, tests in `api/tests/`, and helper scripts in `api/scripts/` (see its
+`README.md`).
 
 ## Key Dependencies (Backend)
 
-```txt
-# Core
-fastapi>=0.104.0
-uvicorn[standard]>=0.24.0
-pydantic>=2.0.0
-pydantic-settings>=2.0.0
-email-validator>=2.0.0    # For EmailStr validation
-
-# Database
-sqlalchemy>=2.0.0
-asyncpg>=0.29.0           # PostgreSQL async driver
-alembic>=1.12.0
-
-# Auth & Security
-python-jose[cryptography]>=3.3.0
-passlib[bcrypt]>=1.7.4
-bcrypt>=4.0.0,<5.0.0      # Pin to 4.x for passlib compatibility
-python-multipart>=0.0.6   # For form data
-
-# Testing
-pytest>=7.4.0
-pytest-asyncio>=0.21.0
-pytest-cov>=4.1.0         # Coverage reporting
-httpx>=0.25.0             # Async HTTP client for tests
-faker>=20.0.0             # Fake data generation
-aiosqlite>=0.19.0         # For in-memory test database
-
-# Development
-python-dotenv>=1.0.0
-```
+`api/requirements.txt` is the list. Most lines are `>=` ranges with no lockfile (see *Security
+audit* above); the OpenTelemetry packages are pinned exactly.
 
 ## Environment Variables
 
@@ -758,12 +606,12 @@ docker run -d \
   -p 5432:5432 \
   postgres:17-alpine
 
-# Create first migration
-alembic revision --autogenerate -m "Initial migration"
-alembic upgrade head
+# Apply migrations (`just migrate-create "message"` makes a new one)
+just migrate
 
-# Run tests
-pytest
+# Run tests: a throwaway database first, because the fixtures DROP tables
+eval "$(just test-db-up)"
+just check
 
 # Run development server
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
@@ -774,19 +622,19 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 cd client
 npm install
 npm run dev     # http://localhost:5173
-npm run test    # Run Vitest tests
+npm run test:run    # Run Vitest once (plain `npm run test` is watch mode)
 ```
 
 ### Full Stack (Docker Compose)
 ```bash
-# Start all services
-docker-compose up -d
+# Start all services (builds and starts deployment/local/)
+./deployment/scripts/start-local.sh
 
 # View logs
-docker-compose logs -f backend
+docker-compose -f deployment/local/docker-compose.yml logs -f backend
 
 # Stop services
-docker-compose down
+./deployment/scripts/stop-local.sh
 ```
 
 ## Testing Guidelines
@@ -805,21 +653,21 @@ docker-compose down
 ### What each test file is for
 Counts deliberately omitted — `pytest --collect-only -q` per file if you need them.
 - `test_auth.py` — signup, login, token refresh, user management
-- `test_classes.py` — class CRUD, and **not** where ownership is proven. `class_service.py:54` is
-  the list filter; dropping it leaves this file entirely green. What catches it is
+- `test_classes.py` — class CRUD, and **not** where ownership is proven. The list filter is the
+  `Class.teacher_id` comparison in `class_service.get_classes_for_teacher`; dropping it leaves this
+  file entirely green. What catches it is
   `tests/test_authorization.py::test_class_list_does_not_leak_another_teachers_class`, alone.
 - `test_authorization.py` — every class-reaching route from the denied side as a second real
   teacher, plus positive controls. **This is the file that proves INV-1, and the only one.**
 - `test_attendance.py` — tracking, filtering, summaries, and the legacy cutoff
-- `test_query_budget.py` — the statement-count ceilings; a ratchet, and the only thing that fails
-  when an N+1 loop comes back
+- `test_query_budget.py` — the statement-count ceilings; a ratchet over its parametrize list, so it
+  fails when an N+1 loop comes back on a listed endpoint and says nothing about an unlisted one
 - `test_main.py` — health check and root endpoint
 
 ### Test Database
-- **PostgreSQL 17, never SQLite.** This section claimed "SQLite in-memory" until 2026-09-04 while
-  the same document's *Backend Testing* section three headings up said PostgreSQL. `conftest.py`
-  requires `TEST_DATABASE_URL` with no default and the fixtures call `drop_all`, so there is
-  nothing in-memory about it and nothing to guess about the target.
+- **PostgreSQL 17, never SQLite.** `conftest.py` requires `TEST_DATABASE_URL` with no default and
+  the fixtures call `drop_all`, so there is nothing in-memory about it and nothing to guess about
+  the target.
 - `eval "$(just test-db-up)"` starts a disposable database on **port 5439** and prints the export
   line. Not 5433 — that is another project's container, and the fixtures drop tables.
 - `TEST_DATABASE_URL` alone is not enough: `app/config.py` is an import-time singleton, so
@@ -832,6 +680,9 @@ Counts deliberately omitted — `pytest --collect-only -q` per file if you need 
 
 ### Running Tests
 ```bash
+cd api
+eval "$(just test-db-up)"    # first: conftest.py refuses to run without TEST_DATABASE_URL
+
 # Run all tests
 pytest -v
 
@@ -859,9 +710,7 @@ pytest tests/test_auth.py -v
 - [x] Database credentials in environment variables
 - [x] `/docs`, `/redoc` and `/openapi.json` behind HTTP Basic auth in production, with **no
       default credentials** — `app/config.py` refuses to start when `DOCS_USERNAME` /
-      `DOCS_PASSWORD` are missing and the docs are protected. They defaulted to `admin` /
-      `changeme` until 2026-09-02 and production ran on that pair, because the compose file never
-      passed the real values through. See the API repo's `REVIEW-DEBT.md`
+      `DOCS_PASSWORD` are missing and the docs are protected. See the API repo's `REVIEW-DEBT.md`
 - [x] Database not exposed to internet (localhost only)
 - [x] Firewall configured (UFW + optional Hetzner Cloud Firewall)
 
@@ -922,15 +771,15 @@ docker-compose -f deployment/local/docker-compose.yml logs -f backend
 ### Database Connection Issues
 ```bash
 # Check if PostgreSQL is running
-docker-compose ps db
+docker-compose -f deployment/local/docker-compose.yml ps db
 
 # Test connection
-docker-compose exec db psql -U attendance_user -d attendance_tracker
+docker-compose -f deployment/local/docker-compose.yml exec db psql -U attendance_user -d attendance_tracker
 
-# Reset database (DANGER: deletes all data)
-docker-compose down -v
-docker-compose up -d db
-alembic upgrade head
+# Reset the LOCAL database (DANGER: deletes all data)
+docker-compose -f deployment/local/docker-compose.yml down -v
+docker-compose -f deployment/local/docker-compose.yml up -d db
+(cd api && alembic upgrade head)
 ```
 
 ### Migration Issues
@@ -947,7 +796,7 @@ alembic downgrade <revision_id>
 
 ### Frontend API Connection
 ```bash
-# Check VITE_API_URL in client-app/.env
+# Check VITE_API_URL in client/.env (production: client/.env.production)
 echo $VITE_API_URL
 
 # Test backend health
@@ -995,9 +844,7 @@ async def get_user_by_email(
 
 ### Branch Strategy
 
-**There is no `develop` branch and there never has been.** This section listed one until
-2026-09-10; no ref, no reflog entry and no merge commit in this repository's history has ever
-carried the name. Anything that told you to branch off `develop` was wrong.
+**There is no `develop` branch.** Anything that tells you to branch off `develop` is wrong.
 
 - `main` — the only long-lived branch, and the only one that deploys. Every push to it that
   passes its gates goes to production (see *CI/CD* above).
@@ -1005,10 +852,6 @@ carried the name. Anything that told you to branch off `develop` was wrong.
   `main` is linear and `git log --oneline main` is the list of what shipped. The Owner chose this
   on 2026-09-11: a thirteen-commit slice landing as thirteen commits makes that log unreadable for
   exactly the case it is for.
-
-  **This paragraph said the opposite until then** — "the merge keeps both parents, no squash, no
-  rebase" — while every PR was in fact squashed. A documented rule the tooling overrides is worse
-  than no rule, since each session reads it and believes it.
 
   Two consequences that follow, and the first is the one that bites:
 
@@ -1084,12 +927,10 @@ Closes #123
 6. Run `alembic revision --autogenerate` after model changes
 7. Keep services thin (business logic in services, not routes)
 
-### When Working on Frontend Integration:
+### When Working on the Frontend:
 1. Use TanStack Query for all API calls
 2. Handle loading and error states
-3. Update existing localStorage code gradually
-4. Test with real API before removing localStorage
-5. Update tests to mock API calls
+3. Mock API calls in tests
 
 ### Architecture Decisions Already Made:
 - ✅ Modular Monolith (not microservices)
@@ -1109,73 +950,26 @@ Closes #123
 
 ## Current Task Context
 
-**Last Completed:**
-- ✅ Backend API fully implemented with all CRUD endpoints
-- Both suites green, and gated in CI on every push that touches them — *Why this file quotes no
-  test counts* above names the commands that report the counts
-- ✅ Frontend API integration complete
-- ✅ Database migrations ready
-- ✅ API documentation complete
-- ✅ **Deployment architecture migrated to Vercel + Hetzner split deployment**
-- ✅ **Frontend deployed to Vercel at app-attendance.kotoio.fi**
-- ✅ **Backend deployed to Hetzner at attendance-api.kotoio.fi**
-- ✅ **SSL certificates configured with Let's Encrypt**
-- ✅ **Custom domain kotoio.fi configured**
-- ✅ **CORS configured for production**
-- ✅ **Student Entity Normalization Sprint Complete (deployed to production)**
-  - ✅ Student entity eliminates duplicate bug in StudentLogs
-  - ✅ Single `name` field replaces first/last names
-  - ✅ Course credit tracking per student
-  - ✅ Bulk attendance logging (1-50 records)
-  - ✅ Student name autocomplete with frequency ordering
+**Timeframe filter on *Tilastot*** (spec 0008): two date pickers, `Alkaen` / `Päättyen`, empty by
+default. Every figure on the surface describes the chosen timeframe — the four summary cards
+included, which is a **change in what "Läsnäoloja yhteensä" counts** and drops that figure once on
+deploy, to what the charts have been drawing all along. The Owner undertook to warn the teacher.
+*Tilastot* has **two** empty states now, and the order they are checked in matters —
+`client/DESIGN.md` §3 is the record. Every date is a local day (spec 0009, ADR-0008).
 
-**Current Status:** Deployed and operational. **Not** "all green": each repo's
-`REVIEW-DEBT.md` is the record of what the gates do not prove.
-
-**Production URLs:**
-- Frontend: https://app-attendance.kotoio.fi
-- Backend API: https://attendance-api.kotoio.fi
-- API Docs: https://attendance-api.kotoio.fi/docs
-
-**Current Features:**
-1. ✅ **Student Management**: CRUD operations with case-insensitive uniqueness
-2. ✅ **Course Credit Tracking**: Toggle course credit status for students
-3. ✅ **Bulk Logging**: Create 1-50 attendance records in one API call
-4. ✅ **Autocomplete**: Fast student name suggestions ordered by frequency
-5. ✅ **No Duplicate Students**: Fixed StudentLogs bug completely
-6. ✅ **Timeframe filter on *Tilastot*** (spec 0008): two date pickers, `Alkaen` / `Päättyen`,
-   empty by default. Every figure on the surface describes the chosen timeframe — the four summary
-   cards included, which is a **change in what "Läsnäoloja yhteensä" counts** and drops that figure
-   once on deploy, to what the charts have been drawing all along. The Owner undertook to warn the
-   teacher. *Tilastot* has **two** empty states now, and the order they are checked in matters —
-   `client/DESIGN.md` §3 is the record. Every date is a local day (spec 0009, ADR-0008).
-
-**Next Development:** Ready for new feature requests or enhancements.
-
-**`cd client && npm run check` passes end to end, e2e included** — verified 2026-09-16, every gate
-at its `.harness-baseline` figure and the walk 78/78 at both viewports.
+`cd client && npm run check` runs every client gate, e2e included; `.harness-baseline` holds the
+current figures.
 
 One setup step a fresh clone needs, because it is a system package and not an npm one: Playwright's
 Chromium will not start without `libasound.so.2` — ALSA sound, which a headless browser never uses
-but links against anyway. `sudo apt-get install -y libasound2t64` on Ubuntu 24.04; it is installed
-on the Owner's machine as of 2026-09-16. Without it the `e2e` step fails loudly and by name, which
-is the right failure mode. `npx playwright install chromium` is the other one-off per clone.
+but links against anyway. `sudo apt-get install -y libasound2t64` on Ubuntu 24.04. Without it the
+`e2e` step fails loudly and by name, which is the right failure mode. `npx playwright install
+chromium` is the other one-off per clone.
 
-**The walk is worth the trouble: it found two defects on 2026-09-16 that every other gate passed.**
-A WCAG 1.4.3 contrast failure in the shared `client/src/components/ui/calendar.tsx` (outside days
-at **2.25:1** — an alpha composite, which `tokens-contrast.test.ts` structurally cannot see), and
-three races in the new tests themselves. The contrast bug had shipped since before spec 0008 and
-sat unseen because **no swept state had ever opened a calendar popover** — `AttendanceTracking`'s
-picker is on screen in a swept state but closed, and a closed popover renders no days. That is the
-standing argument for `e2e/states.spec.ts` being a table of states rather than a set of journeys:
-adding a state is the only thing that finds a defect nobody is looking for.
-
-**Deployment Cost Breakdown:**
-- **Frontend**: Free (Vercel Hobby tier, non-commercial)
-- **Backend + DB**: €3.49/month (Hetzner CX21 with €20 signup credit)
-- **Total First 5 Months**: Free (using Hetzner credit)
-- **Ongoing**: €3.49/month (~$3.80 USD)
-- **Multi-Backend**: Can host multiple hobby backends on same VM for cost efficiency
+**`e2e/states.spec.ts` is a table of states rather than a set of journeys**, because adding a state
+is the only thing that finds a defect nobody is looking for. A closed popover renders no days, so a
+swept state has to open the calendar before the walk can see inside it, and `tokens-contrast.test.ts`
+cannot see an alpha-composited colour such as the outside days in `client/src/components/ui/calendar.tsx`.
 
 ## Agent skills
 
@@ -1195,10 +989,3 @@ Five canonical roles, default strings. See `docs/agents/triage-labels.md`.
 
 Multi-context: root `CONTEXT-MAP.md` → `api/CONTEXT.md` + `client/CONTEXT.md`, per-package
 `docs/adr/`. See `docs/agents/domain.md`.
-
----
-
-**Document Version:** 3.3
-**Last Updated:** 2026-09-01
-**Maintained by:** Claude (AI Assistant)
-**Production Status:** ✅ Deployed and Operational (Student Entity v2.0)
