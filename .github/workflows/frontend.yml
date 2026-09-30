@@ -84,7 +84,7 @@ jobs:
       # The note here used to warn that 25 of 90 tests failed on main and that one made a real HTTP
       # call to localhost:8000, so the failure COUNT could differ on a runner with no server there.
       # Both are fixed: src/test/setup.ts refuses the network by construction since 2026-09-03, and
-      # the baseline is 0 with 105 of 105 passing. A failure here is a real failure.
+      # the baseline is 0. A failure here is a real failure.
       - name: Tests (ratchet)
         run: npm run gate:tests
 

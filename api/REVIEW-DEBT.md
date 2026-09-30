@@ -1727,7 +1727,8 @@ cut (`/confess`), read first by any architecture or review session, dispositione
   to production. What *was* verified: the YAML parses, all embedded shell blocks pass `bash -n`, the
   `gates`/`test`/`security` job commands were run locally with tools on PATH, and the gitleaks block
   was executed verbatim in a clean clone — which found a real bug (see below).
-- **Where:** `.github/workflows/deploy.yml`, the `deploy` job
+- **Where:** `.github/workflows/deploy.yml`, the `deploy` job (`.github/workflows/backend.yml` since
+  the four repositories merged on 2026-09-03)
 - **What green tests do NOT prove here:** that the backup step, the explicit migration step, the
   `up -d --no-deps backend nginx` swap, the health-check retry loop, or the automatic code rollback
   behave as written on the real VM. Specific untested assumptions: that `docker compose run --rm

@@ -931,7 +931,8 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 - **What:** the `gates` and `security` job commands were all run locally; the `deploy` job was not,
   because it needs the Vercel token and deploys to production. YAML parses and every embedded shell
   block passes `bash -n`.
-- **Where:** `.github/workflows/ci.yml`, the `deploy` job
+- **Where:** `.github/workflows/ci.yml`, the `deploy` job (`.github/workflows/frontend.yml` since
+  the four repositories merged on 2026-09-03)
 - **What green tests do NOT prove here:** the post-deploy check against
   `https://app-attendance.kotoio.fi` asserts a 200, which does not prove the *new* bundle is being
   served rather than a cached edge response. It is a liveness check, not a version check.

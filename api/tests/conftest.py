@@ -38,7 +38,7 @@ from app.services import registration_code_service
 #   eval "$(just test-db-up)"
 #   just check
 #   just test-db-down
-# See .env.test.example. CI sets it in .github/workflows/deploy.yml.
+# See .env.test.example. CI sets it in .github/workflows/backend.yml.
 TEST_DATABASE_URL = os.getenv("TEST_DATABASE_URL")
 
 if not TEST_DATABASE_URL:

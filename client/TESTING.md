@@ -322,16 +322,9 @@ it.skip('should skip this', () => {
 
 ## Continuous Integration
 
-Tests should run in CI/CD pipeline:
-
-```yaml
-# .github/workflows/test.yml
-- name: Run tests
-  run: npm run test:run
-
-- name: Check coverage
-  run: npm run test:coverage
-```
+CI runs them in `.github/workflows/frontend.yml`: the *Gates* job through `npm run gate:tests`,
+the ratchet over `vitest run`, and the *Browser walk* job through `npm run e2e`. Nothing in that
+workflow measures coverage.
 
 ## Additional Resources
 
