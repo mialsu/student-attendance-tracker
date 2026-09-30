@@ -364,6 +364,7 @@ the 422 for a value no client sends. Slices 1, 3 and 4 touch the client only.
 - **`client/index.html`'s `<html lang="en">`.** Found while shaping: an all-Finnish UI declares
   English, so a screen reader pronounces every Finnish string by English rules. A whole-app
   `A11Y-9` defect, recorded nowhere yet; it goes to `client/REVIEW-DEBT.md` when slice 3 lands.
+  **Fixed in #16, before this spec's build** — see *Spec Deltas*.
 - **The hardcoded `excludeDates = ['2026-02-27']`**, untouched here as in spec 0008.
 
 ## Non-Goals
@@ -388,7 +389,8 @@ the 422 for a value no client sends. Slices 1, 3 and 4 touch the client only.
      otsikoista." and "Opiskelijoiden läsnäolot. Järjestystä voi vaihtaa sarakkeiden otsikoista."
      These would be the first `sr-only` strings in app code; `DESIGN.md` §6 counts none today.
    - `client/index.html` declares `lang="en"`, so a screen reader reads these strings, like every
-     Finnish string in the app, by English rules. See *Out of Scope*.
+     Finnish string in the app, by English rules. See *Out of Scope*. **No longer true: #16
+     declares `lang="fi"`.**
 
 2. **The defaults, for the Owner to veto on review.** None of these was put to the Owner as a
    question; each is the agent's reading of a decision that was.
@@ -418,6 +420,13 @@ the 422 for a value no client sends. Slices 1, 3 and 4 touch the client only.
    Leaving it splits the idiom; changing it touches a surface this spec otherwise leaves alone.
    Recommendation: both close on pick.
 
+5. **Should slice 3 make the pager keyboard-operable?** `DataTable` renders every page control as
+   `PaginationLink`, an `<a>` with an `onClick` and no `href`, so Tab never reaches it and a
+   keyboard user cannot leave page 1 (`A11Y-1`). Found by #16 and recorded in its
+   `client/REVIEW-DEBT.md` entry. Slice 3 rebuilds `DataTable`'s controls and slice 4 puts the same
+   pager under the per-day table. Recommendation: yes, as buttons, with a keyboard walk over both
+   tables' pagers.
+
 ## Verification status
 
 Nothing built yet.
@@ -426,3 +435,9 @@ Nothing built yet.
 
 *(Dated entries, added as the build teaches us the spec was wrong. Diverging is normal; diverging
 unrecorded is the defect.)*
+
+**2026-09-30 — `lang="en"` was fixed in #16, before this spec's build.** #16 declares
+`lang="fi"` and translated `src/components/ui/**`, the pager's visible "Previous" / "Next"
+included, with `src/__tests__/document-language.test.tsx` as `A11Y-9`'s enforcer. The *Out of
+Scope* bullet and open question 1's last bullet are marked rather than deleted. #16 also found the
+pager mouse-only, which this spec's slices 3 and 4 would otherwise build on: open question 5.
