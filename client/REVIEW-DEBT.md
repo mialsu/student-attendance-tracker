@@ -58,9 +58,9 @@ cut (`/confess`), read first by any architecture or review session, dispositione
   JavaScript animation never touches, so it stays green with the chart animating. The walk's
   `settleAnimations` (`e2e/assertions.ts:101`) does not wait for it either:
   `document.getAnimations()` lists CSS and Web Animations only.
-- **Disposition:** OPEN, for the Owner. Spec 0010's decision 6 is where the fix gets chosen:
-  turning the bars' animation off closes this and the numbers' 400 ms wait together, and honouring
-  the preference closes this alone.
+- **Disposition:** OPEN until spec 0010's slice 1 lands. The Owner decided on 2026-09-30 to turn
+  the bars' animation off (the spec's decision 6), which closes this and the numbers' 400 ms wait
+  together; AC-27 in `e2e/motion.spec.ts` becomes the chart's `A11Y-6` enforcer.
 
 ## 2026-09-30 — the page declared English, and the pager spoke it
 - **What:** `index.html` declared `lang="en"` over an all-Finnish interface, so a screen reader
@@ -314,7 +314,9 @@ cut (`/confess`), read first by any architecture or review session, dispositione
   surface, and the honest reading of an empty plot is "take an element shot" rather than "file a
   bug". Closing it properly means either a visual check a human makes or
   `isAnimationActive={false}` under test, which changes production code to suit a camera and so
-  wants the Owner's call.
+  wants the Owner's call. **The Owner made that call on 2026-09-30**, for the numbers rather than
+  the camera: spec 0010's decision 6 turns the animation off. Slice 1 takes one full-page capture
+  before this closes.
 
 ## 2026-09-11 — the chart toggle's grouping role is judgement, not a gate
 - **What:** the day/month toggle is a Radix `ToggleGroup type="single"`, whose root is

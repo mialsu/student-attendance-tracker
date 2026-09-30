@@ -143,11 +143,19 @@ and `ClassStatistics` nests a second one inside it, so two elements measure the 
 fit rule needs one source of width. **Until a width is measured, neither numbers nor hint render**,
 so the first frame does not flash the hint, and jsdom, which measures 0×0, cannot pass for the rule.
 
-**6. Numbers appear after Recharts' grow animation.** `Bar` draws its `LabelList` only once its
-animation has finished (`isAnimationFinished` in `recharts/lib/cartesian/Bar.js`), so a screenshot
-taken in the first second after load has bars and no numbers yet. Accepted, and recorded so nobody
-files it as a bug. The same animation empties full-page screenshots (client `REVIEW-DEBT.md`,
-2026-09-11), which is why verification uses element screenshots.
+**6. The bars do not animate** (`isAnimationActive={false}` on `Bar`), the Owner's decision on
+2026-09-30. `Bar` draws its `LabelList` only when its animation is off or finished
+(`recharts/lib/cartesian/Bar.js`), and the animation reruns, over 400 ms, on every new dataset and
+every new chart size: on load, on a range change, on the *Kaavion jakso* toggle and on a resize.
+Left on, every rerun takes the numbers off the chart for 400 ms. It also ignores
+`prefers-reduced-motion`: Recharts animates in JavaScript, out of reach of `index.css`'s `reduce`
+block, which leaves a gap in `A11Y-6` (client `REVIEW-DEBT.md`, 2026-09-30). Turning it off costs
+the bars' grow-in and nothing else. Rejected: keeping the animation and accepting the wait, which
+this decision said until 2026-09-30; and animating unless the reader asks for reduced motion,
+which closes the `A11Y-6` gap and still takes everyone else's numbers away at every rerun. The
+empty full-page capture (client `REVIEW-DEBT.md`, 2026-09-11) came from the animation restarting on
+the resize, so a full-page capture should now draw the bars; slice 1 checks that once rather than
+assuming it.
 
 **7. The numbers paint in a token pair already gated on `card`**, `foreground` or
 `muted-foreground`, and sit above the bar rather than inside it. `tokens-contrast.test.ts` then
@@ -251,7 +259,7 @@ built.
 | **Pure functions**, tests beside the two new `src/lib` modules | the fit rule's boundary, and that an unmeasured width means no; the per-day sort in all four directions, the tie-break, page boundaries and the last partial page | `src/hooks/__tests__/useDebounce.test.ts`, a small unit under vitest |
 | **Component**, a new test for `DataTable` | the header contract: button, name, `aria-sort`, reversal, first direction, one header in all three branches | none: `surfaces.a11y.test.tsx` reaches `DataTable` only through `StudentLogs` |
 | **Client hook**, `ClassStatistics.test.tsx` and the `StudentLogs.*.test.tsx` files | the section order; the per-day table's paging, sorting and page reset; `sort_by` reaching `useAttendanceSummary`; figures kept across a range change; the error state after a failed one | the same files; `ClassStatistics.test.tsx` already mocks the hook as a function of the range |
-| **Browser walk**, `e2e/states.spec.ts` and `e2e/timeframe.spec.ts` | numbered bars drawn, by day and by month; none plus the hint on a long range; the sorted tables through axe and 320px reflow; the calendar closing on pick | the `STATES[]` table, which already sweeps both granularities |
+| **Browser walk**, `e2e/states.spec.ts`, `e2e/timeframe.spec.ts` and `e2e/motion.spec.ts` | numbered bars drawn, by day and by month; none plus the hint on a long range; bars drawn with their numbers in the same frame, not animated; the sorted tables through axe and 320px reflow; the calendar closing on pick | the `STATES[]` table, which already sweeps both granularities; `motion.spec.ts`'s `reduce` / `no-preference` pair |
 
 **Why a pure function for "fits".** Recharts measures 0×0 in jsdom, as `ClassStatistics.test.tsx`
 documents, so no hook-seam test can reach the rule. The function carries the arithmetic; the walk
@@ -271,13 +279,15 @@ which is the gate doing its job; the row's entry in `client/REVIEW-DEBT.md` clos
 Slice 3's walk run is what confirms it; until then it is a prediction.
 
 **Screenshots are element screenshots.** `/verify-live` judges legibility and tunes the threshold
-from element screenshots of `.recharts-surface`. A full-page capture resizes the viewport,
-restarts the grow animation and shows an empty plot (client `REVIEW-DEBT.md`, 2026-09-11).
+from element screenshots of `.recharts-surface`, which frame the chart alone. A full-page capture
+used to resize the viewport, restart the grow animation and show an empty plot (client
+`REVIEW-DEBT.md`, 2026-09-11); with decision 6 it should not, and slice 1's verification takes one
+to find out.
 
 **Plant the failures.** Each new assertion is watched red before it is trusted: the 422 test
 against today's silent fallback, each sort test against a swapped direction, the budget rows
-against a planted query, the label-count assertion against a partial set, and the page-reset test
-against a table that keeps its page.
+against a planted query, the label-count assertion against a partial set, the no-animation check
+against the animation turned back on, and the page-reset test against a table that keeps its page.
 
 ## Acceptance Criteria
 
@@ -311,6 +321,7 @@ Verdicts are filled by `/verify-live`, per criterion. A task's verdict is the **
 | AC-24 | Picking a day closes that end's calendar, for a range the cache has seen and for one it has not | `test:` e2e | US-26 | pending |
 | AC-25 | A failed range change renders the error state, and none of the previous range's figures | `test:` hook seam | US-27 | pending |
 | AC-26 | `API_REFERENCE.md`'s summary section documents the route as built: its parameters, the four sort values, the 422 and the paginated response | review, at `/code-review` | US-32 | pending |
+| AC-27 | The bars do not animate: the first frame that holds the bars holds every count label, under `no-preference` as well as `reduce`; watched failing with the animation turned back on | `test:` e2e, in `e2e/motion.spec.ts` | US-3, US-6 | pending |
 
 **Invariants touched:** `INV-1`, which does not move. No route is added, and
 `verify_class_ownership` stays `get_attendance_summary`'s first act, so a sort key cannot reach
@@ -330,10 +341,11 @@ refused `sort_by` adds nothing that could carry a Student's name to a log line.
 Each cuts to something observable and is demoable alone. Blocking order.
 
 1. **The chart moves up and numbers its bars.** Decisions 2–8. The reorder, the fit function and
-   its tests, the `LabelList` and the ticks, the hint, one source of width; the two existing
-   *Tilastot* walk states assert numbered bars and a long-fixture state sweeps the hint;
-   `DESIGN.md` §1's and §3's *Tilastot* rows. Client only. Demoable: one month by day on a
-   desktop, then the whole Kurssi on a phone. AC-1 – AC-7.
+   its tests, the `LabelList` and the ticks, the hint, one source of width, the bars' animation
+   off; the two existing *Tilastot* walk states assert numbered bars and a long-fixture state
+   sweeps the hint; `DESIGN.md` §1's and §3's *Tilastot* rows, and §5's `A11Y-6` row without its
+   chart clause. Client only. Demoable: one month by day on a desktop, then the whole Kurssi on a
+   phone. AC-1 – AC-7 and AC-27.
 2. **The API sorts four ways and refuses a fifth.** Decisions 13, 14 and 18. The closed set, the
    `ORDER BY` for each, the route tests, the budget rows, the collation measurement for open
    question 3, and the API reference. Demoable with `curl`. The deployed client keeps sending
@@ -450,3 +462,10 @@ the surface's order is §1's inventory row, so slice 1 changes §1's and §3's r
 place. Open question 1 called its two captions the first `sr-only` strings in app code, after §6's
 "App code contains **no** `sr-only` text at all", and app code has carried one since #12: *Avaa
 valikko* in `TeacherLayout.tsx`. That bullet is marked, and §6 is corrected.
+
+**2026-09-30 — decision 6 reversed: the bars no longer animate.** It had accepted the numbers
+appearing only after Recharts' grow animation. Traced on resuming, the animation reruns on every
+range change, *Kaavion jakso* toggle and resize, taking the numbers off each time, and it ignores
+`prefers-reduced-motion`, a gap in `A11Y-6`. The Owner chose `isAnimationActive={false}` over
+keeping it and over animating only without reduced motion. AC-27 is new and joins slice 1, and the
+two *Testing Decisions* paragraphs that leaned on the animation are updated.
