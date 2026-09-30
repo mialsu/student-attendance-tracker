@@ -24,6 +24,15 @@ set -e
 # The package root, not the git root — see scripts/baseline-guard.sh for why they differ now.
 cd "$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 
+# Git hands a hook GIT_DIR, and a commit from a `git worktree` gets no GIT_WORK_TREE beside it, so
+# every git command below would take THIS directory for the top of the work tree. `--relative`
+# then does nothing and diffs name `api/requirements.txt` instead of `requirements.txt`, and
+# drift-check's path patterns miss: on 2026-09-30 its ADR check could not see a staged
+# docs/adr/0009 and failed the commit that added it. Without GIT_DIR git finds the repository from
+# the current directory, as it does outside a hook, and GIT_INDEX_FILE still names the index being
+# committed. The root .githooks/pre-commit does the same for the client's gates.
+unset GIT_DIR
+
 if command -v just >/dev/null 2>&1; then
   exec just check-fast --cached
 fi
