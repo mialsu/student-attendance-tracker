@@ -415,10 +415,13 @@ the 422 for a value no client sends. Slices 1, 3 and 4 touch the client only.
    - A range change keeps the previous figures, fades them past 300 ms, keeps the filter mounted
      and closes the calendar on pick (decision 15).
    - About 20 px per bar as the fit threshold, tuned from element screenshots at 320, 390 and
-     1280 px.
+     1280 px. **Confirmed 2026-09-30:** 20 px to start; slice 1's screenshots may move it, and its
+     verification records the move.
    - The module sketch (two pure functions in `src/lib`, the sortable header inside `DataTable`)
      and the test plan above. The skill that wrote this spec asks for both to be confirmed rather
-     than assumed.
+     than assumed. **Slice 1's half confirmed 2026-09-30:** the fit rule as one pure function in
+     `src/lib`, and slice 1's test plan, AC-1 – AC-7 and AC-27. The sort-and-page function, the
+     sortable header and the other slices' tests stay open.
 
 3. **Which alphabet does a name sort follow?** Nothing in the repo sets a collation, and both
    databases run `postgres:17-alpine`. If its musl libc compares strings byte by byte, names
