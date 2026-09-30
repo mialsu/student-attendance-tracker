@@ -10,7 +10,12 @@ name: production
 services:
   # PostgreSQL Database
   db:
-    image: postgres:17-alpine
+    # Exact, like every version here (ADR-0009). CHANGING THIS TAG RESTARTS THE DATABASE: the
+    # deploy's migration step runs `compose run --rm backend` without --no-deps, and `run`
+    # recreates a dependency whose definition changed. It happens after the deploy's backup, and a
+    # minor version within 17 keeps the storage format, so it is a restart and not a migration.
+    # Dependabot proposes postgres in a pull request of its own for that reason.
+    image: postgres:17.11-alpine
     container_name: attendance-db-prod
     restart: always
     volumes:
@@ -103,7 +108,9 @@ services:
 
   # Nginx Reverse Proxy (API Gateway)
   nginx:
-    image: nginx:alpine
+    # Exact (ADR-0009). The backend workflow's Gates job validates nginx.conf with this same image,
+    # read from this line, so a tag bump is checked against the new nginx before it deploys.
+    image: nginx:1.31.6-alpine
     container_name: attendance-nginx-prod
     restart: always
     volumes:

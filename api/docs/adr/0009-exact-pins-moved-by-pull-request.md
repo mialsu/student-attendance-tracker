@@ -1,8 +1,8 @@
 # ADR-0009 — Every dependency version exact, moved only by a pull request
 
-**Status:** accepted 2026-09-30. The Python half is implemented with this ADR. The container image
-tags and the Dependabot configuration are decided here and land in a follow-up pull request, for
-the reason under *Consequences*.
+**Status:** accepted and **implemented**, 2026-09-30, in two pull requests: the Python pins in #18,
+then the container image tags and `.github/dependabot.yml`, kept apart for the reason under
+*Consequences*.
 
 On 2026-09-30 a pull request that changed only comments and documentation under `api/` (#17) failed
 both backend jobs, and nothing in it was at fault. `requirements.txt` said `sqlalchemy>=2.0.0`, CI
@@ -34,12 +34,16 @@ they check.
    instrumenting. In production that drops every SQL span from Jaeger. `[asyncio]` is declared so
    `greenlet` is explicit when 2.1 does arrive, and `attendance_service.py` reads the dialect
    through `get_bind()`, which 2.1's types accept.
-4. **Versions move by scheduled pull request** (follow-up): a `.github/dependabot.yml` covering pip,
-   npm, docker-compose and github-actions, monthly, one grouped pull request per ecosystem, major
-   versions skipped, SQLAlchemy 2.1 ignored until the instrumentation accepts it. CI runs on each
-   one, and nothing moves until one is merged.
-5. **The compose images get exact tags** (follow-up). `nginx:alpine` and `postgres:17-alpine` float
-   today; the Jaeger image is already exact.
+4. **Versions move by scheduled pull request.** `.github/dependabot.yml` covers pip, npm,
+   docker-compose and github-actions: monthly, one grouped pull request per ecosystem, major
+   versions never proposed, SQLAlchemy 2.1 ignored until the instrumentation accepts it. Two
+   dependencies are kept out of their groups so that each arrives alone: `postgres`, whose tag
+   change restarts the database, and `appleboy/ssh-action`, which runs the production deploy and so
+   is first exercised by one. CI runs on each pull request, and nothing moves until one is merged.
+5. **The compose images have exact tags**: `postgres:17.11-alpine` in both compose files and
+   `nginx:1.31.6-alpine` in production; Jaeger was already exact. The Gates job's `nginx.conf`
+   check reads its image from the production compose file, so it always runs the nginx production
+   runs, and an nginx bump is validated against the new binary before it deploys.
 
 ## Rejected alternatives
 
@@ -73,6 +77,8 @@ they check.
   data migration is involved.
 - `python:3.12-slim` still floats within 3.12, deliberately: its patch releases carry security fixes
   and the OS tz database `zoneinfo` reads first, which a digest pin would freeze (ADR-0008).
+- The CI test service stays `postgres:17-alpine`, also deliberately: it tries each new 17.x before
+  production's tag moves to it.
 - The SQLAlchemy hold is a ceiling with a named way out: it comes off when
   `opentelemetry-instrumentation-sqlalchemy` declares 2.1 support. The five OpenTelemetry pins then
   move together, and a trace is checked in Jaeger after that deploy (ADR-0006).

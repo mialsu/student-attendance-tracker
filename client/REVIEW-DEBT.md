@@ -28,6 +28,21 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 - **Disposition:** both fixed in the commit that adds this entry. `count()` was the walk's only
   sample that does not wait; `textContent()` in `timeframe.spec.ts` waits for its element.
 
+## 2026-09-30 — Dependabot's npm pull requests, and the two shapes this repo's gates refuse
+- **What:** `.github/dependabot.yml` opens a monthly grouped pull request for `client/`
+  (ADR-0009, in the API's `docs/adr`). Version updates change `package.json` and
+  `package-lock.json` together, which is the shape every gate here accepts.
+- **What green tests do NOT prove here:**
+  1. **A lockfile-only pull request.** A Dependabot *security* update for a transitive package
+     changes `package-lock.json` alone, and `scripts/drift-check.sh` check 4 fails exactly that
+     ("the lock for package.json changed but package.json didn't"). Security updates are a
+     repository setting that is off unless the Owner turns it on, so none has arrived yet.
+  2. **`bun.lockb`.** Dependabot updates `package-lock.json` only, so the second lockfile this
+     repo commits drifts further from the first every month. `CODING_STANDARDS.md` already names
+     the pair as a gap: one of them is lying about how the app is built.
+- **Disposition:** both OPEN, for the Owner. Deleting `bun.lockb` settles 2; 1 needs a decision
+  only if security updates are switched on.
+
 ## 2026-09-30 — the page declared English, and the pager spoke it
 - **What:** `index.html` declared `lang="en"` over an all-Finnish interface, so a screen reader
   read every Finnish name by English rules. It declares `fi` now. The UI primitives' English

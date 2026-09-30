@@ -1,0 +1,64 @@
+# Scheduled version updates, ADR-0009. Every version in this repository is exact, so nothing moves
+# until one of these pull requests is merged, and CI runs on each one first. Monthly, one grouped
+# pull request per ecosystem, and major versions are never proposed: a major version is a decision
+# to make on purpose, in a change of its own.
+#
+# Merging a pip or docker-compose pull request deploys the backend, as any push to main does.
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: /api
+    schedule:
+      interval: monthly
+    groups:
+      python:
+        patterns: ["*"]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+      # opentelemetry-instrumentation-sqlalchemy declares sqlalchemy < 2.1.0 up to 0.66b0, and on
+      # 2.1 it declines to instrument, which drops every SQL span from Jaeger (ADR-0009). Delete
+      # this entry once a release declares 2.1 support; the OpenTelemetry pins then move together.
+      - dependency-name: sqlalchemy
+        versions: [">=2.1"]
+
+  - package-ecosystem: npm
+    directory: /client
+    schedule:
+      interval: monthly
+    groups:
+      npm:
+        patterns: ["*"]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: docker-compose
+    directories: ["/deployment/production", "/deployment/local"]
+    schedule:
+      interval: monthly
+    groups:
+      # Everything but postgres. A new postgres tag restarts the production database when the
+      # deploy runs its migrations (deployment/production/docker-compose.yml says why), so it
+      # arrives as a pull request of its own and is merged as a deliberate act.
+      images:
+        patterns: ["*"]
+        exclude-patterns: ["postgres"]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      # Everything but appleboy/ssh-action, which runs the production deploy. CI never executes
+      # that step before a merge, so the deploy itself is the first run of a new version, and it
+      # arrives on its own for that reason.
+      actions:
+        patterns: ["*"]
+        exclude-patterns: ["appleboy/ssh-action"]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]

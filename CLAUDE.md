@@ -94,6 +94,11 @@ explicit choice. Consequence worth knowing: the backend `deploy` job is a rewrit
 execution *is* its verification, so watch the first run. Both workflows also accept
 `workflow_dispatch` if you want to trigger one deliberately.
 
+**Versions move only by pull request (ADR-0009).** Every dependency and image version is exact, and
+`.github/dependabot.yml` opens a monthly grouped update PR per ecosystem, which CI tests like any
+other. Two arrive alone on purpose: a `postgres` bump, because merging it restarts the production
+database, and `appleboy/ssh-action`, because the deploy it runs is its first test.
+
 **Manual steps this cannot do for you** (both in `client/REVIEW-DEBT.md`):
 
 1. **Vercel git auto-deploy is disconnected** (the Owner, 2026-09-01; confirmed 2026-09-04), so the
