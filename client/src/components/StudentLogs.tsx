@@ -23,6 +23,7 @@ import { format } from 'date-fns';
 import { fi } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
 import { useDebounce } from '@/hooks/useDebounce';
+import { useDelayedFlag } from '@/hooks/useDelayedFlag';
 import { QueryErrorState } from '@/components/QueryErrorState';
 import type { AttendanceSummary } from '@/api/types';
 
@@ -106,6 +107,8 @@ const StudentLogs = ({ classId }: StudentLogsProps) => {
   const {
     data: paginatedResponse,
     isLoading,
+    isFetching,
+    isPlaceholderData,
     error,
     refetch,
   } = useAttendanceSummary(classId, {
@@ -396,6 +399,14 @@ const StudentLogs = ({ classId }: StudentLogsProps) => {
   // Extract data from paginated response
   const students = paginatedResponse?.items || [];
   const total = paginatedResponse?.total || 0;
+  // The rows on screen answer an earlier search, page or filter, and the new answer is on its way.
+  // The rows stay (DESIGN.md §3); past 300 ms they fade and the magnifier turns into a spinner.
+  const refreshing = isFetching && isPlaceholderData;
+  const slow = useDelayedFlag(refreshing);
+  // The search the rows on screen answer, which is not always the one in the box: while "alek" is
+  // on its way the "al" rows are still up, and a sentence naming "alek" would describe rows that
+  // are not there. So every sentence about the rows reads the page's own `requested`.
+  const shownSearch = paginatedResponse?.requested?.search ?? '';
   // Students the five-year cutoff is holding back under the current search. 0 while they
   // are revealed, so the banner below switches on showLegacy for the way back.
   const legacyHidden = paginatedResponse?.legacy_hidden || 0;
@@ -586,6 +597,10 @@ const StudentLogs = ({ classId }: StudentLogsProps) => {
     ),
   };
 
+  // The FIRST load only. After it, a new search, page or filter keeps the rows on screen
+  // (`keepPreviousData` in useAttendanceSummary), because falling back here replaced the whole card
+  // — search box included — on every debounced search: the box she was typing into was unmounted
+  // mid-word and "ek" after "al" went nowhere (reported 2026-09-30).
   if (isLoading) {
     return (
       <Card>
@@ -638,7 +653,11 @@ const StudentLogs = ({ classId }: StudentLogsProps) => {
         {/* Search Bar */}
         <div className="flex gap-2">
           <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            {slow ? (
+              <Loader2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-muted-foreground" />
+            ) : (
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            )}
             <Input
               type="text"
               placeholder="Etsi opiskelijan nimellä..."
@@ -688,6 +707,7 @@ const StudentLogs = ({ classId }: StudentLogsProps) => {
           columns={studentColumns}
           data={students}
           isLoading={isLoading}
+          isRefreshing={refreshing}
           expandable={expandableConfig}
           rowActions={studentActions}
           pagination={{
@@ -697,8 +717,8 @@ const StudentLogs = ({ classId }: StudentLogsProps) => {
             onPageChange: setCurrentPage,
           }}
           emptyMessage={
-            debouncedSearch
-              ? `Ei hakutuloksia haulla "${debouncedSearch}"`
+            shownSearch
+              ? `Ei hakutuloksia haulla "${shownSearch}"`
               : 'Ei opiskelijoita vielä'
           }
         />
@@ -706,9 +726,9 @@ const StudentLogs = ({ classId }: StudentLogsProps) => {
         {/* Results Summary */}
         {total > 0 && (
           <p className="pt-2 text-sm text-muted-foreground">
-            {searchInput ? (
+            {shownSearch ? (
               <>
-                Löytyi {total} opiskelija{total !== 1 ? 'a' : ''} haulla "{debouncedSearch}"
+                Löytyi {total} opiskelija{total !== 1 ? 'a' : ''} haulla "{shownSearch}"
               </>
             ) : (
               <>

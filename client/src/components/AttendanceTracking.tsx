@@ -32,7 +32,7 @@ const AttendanceTracking = ({ classId }: AttendanceTrackingProps) => {
   const debouncedName = useDebounce(studentName, 300);
 
   // Fetch autocomplete suggestions
-  const { data: suggestions } = useStudentAutocomplete(
+  const { data: suggestions, isFetching: suggestionsFetching } = useStudentAutocomplete(
     classId,
     debouncedName,
     autocompleteOpen && debouncedName.length >= 2
@@ -53,11 +53,14 @@ const AttendanceTracking = ({ classId }: AttendanceTrackingProps) => {
 
   // US-14, and only when the answer is really in: `suggestions` is undefined until the request
   // resolves, and `debouncedName` lags the field by 300ms, so both have to agree with what is
-  // typed before this may claim nobody matches.
+  // typed before this may claim nobody matches. Not while the answer is being asked for again
+  // either: the one on screen is then the old one, and the refresh may be exactly because a
+  // Student it did not contain was just logged or renamed.
   const noMatch =
     autocompleteOpen &&
     studentName.trim().length >= 2 &&
     debouncedName.trim() === studentName.trim() &&
+    !suggestionsFetching &&
     suggestions?.length === 0;
 
   const step = (current: number, delta: number) => {

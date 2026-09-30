@@ -6,6 +6,64 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 
 <!-- Newest first. -->
 
+## 2026-09-30 — the page declared English, and the pager spoke it
+- **What:** `index.html` declared `lang="en"` over an all-Finnish interface, so a screen reader
+  read every Finnish name by English rules. It declares `fi` now. The UI primitives' English
+  strings are Finnish too: the dialog's and the drawer's "Close", the pager's landmark name, its
+  "Go to previous page" / "Go to next page" and its **visible** "Previous" / "Next", which the
+  teacher sees on *Läsnäolot* past twenty Students. The unused carousel, breadcrumb ellipsis and
+  sidebar toggle were translated with them, so `src/components/ui/**` holds no English name.
+  `src/__tests__/document-language.test.tsx` was watched red on all four assertions first.
+- **What green tests do NOT prove:**
+  1. **The next English string.** The test holds the document and the three primitives the app
+     renders. axe reads a name's presence, never its language, and `html-lang-valid` passed on
+     `en` for months, so a new English string anywhere else passes every gate. `A11Y-9` says so.
+  2. **The pager in a browser.** No swept state holds more than twenty Students (`e2e/rows.ts`
+     carries four), so the walk has never drawn the pager; its names are proven in jsdom only.
+- **Found while translating, left alone:**
+  1. **The toast's close button has no name at all.** `ToastClose` renders an `X` icon and
+     nothing else, and `toaster.tsx` puts one in every toast, "Läsnäolo kirjattu" included. An
+     `A11Y-3` defect no swept state reaches, since no state holds a toast open.
+  2. **The pager is mouse-only.** `DataTable` renders every page control as `PaginationLink`, an
+     `<a>` with an `onClick` and no `href`, so Tab never reaches it and a screen reader announces
+     no control: a keyboard user cannot leave page 1 (`A11Y-1`). Spec 0010's slice 3 rebuilds
+     `DataTable`'s controls and puts the pager on *Tilastot* too, so it is the natural home.
+- **Disposition:** both findings OPEN, for the Owner.
+
+## 2026-09-30 — the search fixes, and what their tests do not prove
+- **What:** `fix/search-results-go-stale` fixed two defects the teacher reported — the name
+  suggestions answering "Ei osumia" about a Student logged minutes earlier, and the *Läsnäolot*
+  search box being unmounted mid-word by every debounced search — plus *Tilastot* staying stale for
+  five minutes after a rename, merge or delete. Each has a regression test watched red first; the
+  commit message lists them.
+- **What green tests do NOT prove:**
+  1. **The fade's contrast.** Faded rows are the table at `opacity-60`, an alpha composite, which
+     `tokens-contrast.test.ts` cannot express (the calendar entry below is the same blind spot).
+     No swept state holds a search open past 300 ms, so axe has never measured it, and the muted
+     text at 60% very likely falls under 4.5:1. It lasts only while an answer is late and marks
+     rows about to be replaced; whether WCAG 1.4.3 applies to that is a judgement nobody has made.
+  2. **Real latency.** The 300 ms threshold is proven with fake timers and held mocks. How often a
+     real search against the VM crosses it, which is whether she ever sees the fade, is unmeasured.
+  3. **First loads.** DESIGN.md §3's 300 ms rule now holds for *Läsnäolot*'s refreshes only; every
+     first load still spins at once, so the 2026-09-07 entry on loading thresholds stays open.
+- **Found while tracing, left alone as outside this fix:**
+  1. **Tilastot blanks on a range change.** `useAttendanceStatistics` has no placeholder, so
+     picking a date sends the surface back to "Ladataan tilastoja…", filter included — the
+     *Läsnäolot* defect's shape. Spec 0010 moves the per-day table onto `DataTable`, which can take
+     `isRefreshing`; the totals and the chart need the same treatment.
+  2. **The suggestion list is stale inside the debounce window.** For 300 ms after a keystroke the
+     list still shows the previous prefix's answer, so with the field reading "alek" it can offer
+     a name without "alek" in it, and ArrowDown + Enter will take it. Nothing reported points at
+     it, and whether it bites is unmeasured.
+  3. **The name field's blur timer is never cancelled.** `onBlur` closes the list 150 ms later
+     even if focus has come back, so clicking *Kirjaa läsnäolo* and typing within 150 ms opens no
+     list. Nobody types that fast; `AttendanceTracking.freshness.test.tsx` submits with Enter
+     partly to stay clear of it.
+  4. **A new search from page 2 onwards sends one wasted request.** The page resets to 1 in an
+     effect after the render, so the first request carries the old page's `skip`. Its answer is
+     never shown, since the key moves on at once.
+- **Disposition:** all OPEN, for the Owner. Found item 1 is inside spec 0010's scope.
+
 ## 2026-09-16 — the calendar's outside days measured 2.25:1, and no gate had ever looked at a calendar
 - **What:** `calendar.tsx`'s `day_outside` was `text-muted-foreground opacity-50` — muted
   foreground at half opacity over white, **2.25:1** against WCAG 1.4.3's 4.5:1. An outside day
@@ -671,6 +729,9 @@ cut (`/confess`), read first by any architecture or review session, dispositione
   flicker. This is a decision waiting for the re-skin slice, recorded so the gap between the
   contract and the code is visible rather than discovered later.
 - **Disposition:** open → the re-skin.
+- **2026-09-30:** *Läsnäolot*'s refreshes now honour the first two (`fix/search-results-go-stale`):
+  rows and search box stay, and fade only past 300 ms. Every first load still spins immediately
+  and `/class/:id` still blanks, so this stays open.
 
 ## 2026-09-04 — today's server changes were verified over HTTP, not through the screen
 - **What:** the attendance summary stopped issuing one query per student, and INV-1's seven

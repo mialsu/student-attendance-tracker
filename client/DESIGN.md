@@ -72,7 +72,7 @@ One teacher, one Kurssi, in production since November 2025. Every surface below 
 | `/` | not a surface — renders `null` and redirects by session (`Index.tsx`) | — | built |
 | the shell | not a route: the frame every signed-in surface renders inside — brand, the Kurssi list, settings, the account menu. A drawer below 940px | 0006/3 | built |
 
-- **Surfaces serving nothing:** the 404 was the last file in the app written in English ("Oops!
+- **Surfaces serving nothing:** the 404 was the last file written in English ("Oops!
   Page not found", "Return to Home") and the last one bypassing the token system (`bg-gray-100`,
   `text-gray-600`, `text-blue-500`). **Both closed in slice 8**: it reads "Sivua ei löytynyt" on
   `--background`, `--muted-foreground` and `--primary`, its link is a router `Link` rather than an
@@ -88,6 +88,11 @@ One teacher, one Kurssi, in production since November 2025. Every surface below 
   this file went looking for an English screen and found only the 404. `AppShell.test.tsx` had
   even been passing `Kurssit` as its fixture since slice 3, which is as close to the answer as a
   test can get without asserting it.
+
+  **"The last file" was wrong as well, found 2026-09-30.** The pager's visible "Previous" and
+  "Next" stayed English in `ui/pagination.tsx`, on *Läsnäolot* past twenty Students, and the page
+  itself declared `lang="en"`. Same blind spot: the words were in a primitive, and no swept state
+  holds twenty Students, so no read and no walk ever drew the pager. Both are Finnish now (`A11Y-9`).
 
 - **Capabilities with no surface — five, and the last one matters most:**
   1. **No way to rename or delete a Kurssi.** `useUpdateClass` and `useDeleteClass` exist at
@@ -146,7 +151,7 @@ accessibility check available here is also the width decision.
 | `/dashboard` | "Ei kursseja vielä" as the heading, "Luo ensimmäinen kurssisi yllä olevasta painikkeesta." under it — the shipped sentence, split, and still pointing at the header button rather than carrying a second one | spinner in place of the list | "Kurssien lataaminen epäonnistui" + the retry | the Kurssi list, each card a link naming its two counts, and a dashed card that opens the dialog |
 | `/dashboard` — luo uusi kurssi | n/a | the submit becomes "Luodaan..." and disables | toast, `detail` from the API or "Kurssin luominen epäonnistui"; a blank name is refused before the request with "Kurssin nimi on pakollinen" | toast "Kurssi luotu", the dialog closes, the fields clear |
 | *Kirjaa läsnäolo* | n/a — the form is always the form | the submit button becomes "Kirjataan…" and disables | toast, `detail` from the API or "Läsnäolon kirjaaminen epäonnistui" | toast, and the field clears |
-| *Läsnäolot* | "Ei opiskelijoita vielä" (desktop) / "Ei läsnäoloja kirjattu vielä tälle kurssille" (narrow); searching yields "Ei hakutuloksia haulla …" | Card header stays, body becomes a spinner | "Opiskelijoiden lataaminen epäonnistui" + the retry | rows, tally, and the *Suoritus* tick |
+| *Läsnäolot* | "Ei opiskelijoita vielä" (desktop) / "Ei läsnäoloja kirjattu vielä tälle kurssille" (narrow); searching yields "Ei hakutuloksia haulla …", naming the search the rows on screen answer | First load: the Card header stays and the body becomes a spinner. After it, a search, a page change or *Näytä*/*Piilota* keeps the rows and the search box, focus included, until the new rows arrive; past 300 ms the rows fade (`aria-busy`) and the magnifier turns into a spinner. Another Kurssi starts again from the spinner rather than showing this one's rows | "Opiskelijoiden lataaminen epäonnistui" + the retry | rows, tally, and the *Suoritus* tick |
 | *Tilastot* | **Two empties since spec 0008, and the order they are checked in is the point.** With no timeframe set: "Ei läsnäoloja näytettäväksi" + "Kirjaa opiskelijoiden läsnäoloja nähdäksesi tilastot." — the empty branch owns the whole surface, so there is no chart frame, no toggle and no filter to press. With a timeframe set: "Ei läsnäoloja valitulla aikavälillä" + a sentence naming her own dates back ("Aikavälillä 1.9.2026 – 30.9.2026 ei ole kirjattuja läsnäoloja."), the filter still on screen above it and its *Tyhjennä aikaväli* the way out | "Ladataan tilastoja…" | "Tilastojen lataaminen epäonnistui" + the retry. **Checked before both empties**, which a timeframe makes load-bearing rather than cosmetic — see the note under this table | the *Aikaväli* filter (*Alkaen* / *Päättyen*, empty by default, cross-disabling, no future days), four totals, the per-day table, and one chart whose granularity the *Kaavion jakso* toggle sets — **Päivät** by default, **Kuukaudet** the other. Both granularities are swept, because each draws a different dataset and `A11Y-7` has to hold for both. Every figure describes the timeframe, the four totals included |
 | `/settings` | n/a | each submit becomes "Tallennetaan..." and disables — **both**, independently, because the two cards are on screen together | toast, `detail` from the API or the surface's own wording | toast, and the confirming field clears |
 | `/auth` — kirjautuminen | n/a | the submit becomes "Kirjaudutaan..." and disables | toast: "Väärä sähköposti tai salasana" | redirect to the dashboard |
@@ -215,14 +220,19 @@ ambiguous in the walk's three `— refused` states, which assert against exactly
 and `AppShell.test.tsx` asserts the empty sentence is absent, which is the half that holds it.
 
 **Loading is the one state design owns outright** — no product decision sits behind it. Decided
-here, and each of these is a change the current code does not yet make:
+here. The first two hold in one place so far, *Läsnäolot* after its first load (2026-09-30), and
+are still a change the rest of the code does not yet make:
 
 - **Nothing shows a spinner before 300ms.** The API sits on a Hetzner VM and most of these calls
   return in well under that; a spinner that appears and vanishes reads as a flicker, not as
-  progress. Today every one of them spins immediately.
+  progress. *Läsnäolot*'s search, paging and *Näytä* toggle honour it: the old rows stay and fade
+  only past 300 ms, a number `src/hooks/useDelayedFlag.ts` holds and `DataTable`'s `isRefreshing`
+  applies. Every first load, *Läsnäolot*'s included, still spins immediately.
 - **The frame never waits for the data.** A Card's title and description render at once and only
-  the body region resolves. *Läsnäolot* already does this; `/class/:id` does not — it blanks the
-  whole surface, tabs included, behind one spinner.
+  the body region resolves. *Läsnäolot* does this, and after its first load keeps its search box
+  and rows mounted through every refresh — the fix for the box being unmounted mid-word on each
+  debounced search, which the teacher reported on 2026-09-30. `/class/:id` does not: it blanks
+  the whole surface, tabs included, behind one spinner.
 - **A mutation never blanks anything.** It disables its own control and says what it is doing
   ("Kirjataan…"). This line said "that is already the pattern and it stays" until slice 7, and it
   was **wrong about four of the ten** — the two on `/settings` and the two modes of `/auth`'s one
@@ -301,7 +311,7 @@ runs in `npm run check` and as a job `deploy` needs. One row moved the other way
 | A11Y-6 | `prefers-reduced-motion` is respected | `test:e2e/motion.spec.ts` — **two** tests, and the second is what makes the first mean anything: under `reduce` the page fade and the shared button transition both measure below 1ms, and under `no-preference` they measure the authored 0.3s and 0.2s. Asserting only the first would pass just as well against an app with no animation at all, or one whose keyframes someone deleted. Watched red on the unfixed code, where `reduce` reported the full 0.3s while the control passed. Durations are read as **numbers**: `index.css` authors `0.01ms` and `getComputedStyle` returns `1e-05s`, so pinning either string would pin Blink's serialiser rather than the behaviour. `active:scale-[0.98]` is deliberately **not** covered — the transform still applies, instantly, and an instant state change is not animation | `[test]` |
 | A11Y-7 | Content reflows at 320px with no two-directional scrolling (WCAG 1.4.10) | `test:e2e/states.spec.ts` — `documentElement.scrollWidth <= clientWidth` in every state of `e2e/states.spec.ts`'s table at 320px, measured after `document.fonts.ready` so the widths are Fira Sans's and not system-ui's — Fira **stays** under spec 0006, so these measurements were not re-opened by the reskin. It **passes on all of them**, the three error states and the drawer included, and it caught one real failure on the way in: the *Tilastot* charts forced the page to 760px. An inner container that scrolls is deliberate and allowed; the document scrolling is not. **Second enforcer since slice 5: `expectOverlayWithinViewport`**, because the first one is structurally blind to every overlay — a `position: fixed` element is out of flow and adds nothing to document overflow. Measured, not argued: a `min-w-[34rem]` put on `DialogContent` on purpose rendered the create-course dialog **520px wide from x=-100 to x=420** at a 320px viewport, a third of it unreachable off each edge, while `documentElement.scrollWidth` stayed exactly **320** and the state swept clean. The new check measures the box of any open `[role="dialog"]` — the dialog and the drawer, the shell's whole navigation below 940px — and was watched red on that same break and green once it was reverted | `[test]` |
 | A11Y-8 | Text stays readable and nothing is cut off at 200% zoom (WCAG 1.4.4) | nothing | `[review-only]` |
-| A11Y-9 | No control announces itself in the wrong language | nothing automated — axe reads a name's presence, never its language | `[review-only]` |
+| A11Y-9 | No control announces itself in the wrong language | `test:src/__tests__/document-language.test.tsx` — the page declares `lang="fi"`, and the pager, the dialog and the drawer name themselves in Finnish. `index.html` declared `lang="en"` until 2026-09-30, so a screen reader read every Finnish name by English rules, while axe's `html-lang-valid` passed throughout because `en` is a valid code. Watched red on all four assertions first. **Beyond those three primitives it is still a reader's job**: axe reads a name's presence, never its language, so a new English string anywhere else passes every gate | `[test]` |
 | A11Y-10 | Heading levels increase by one, so the outline a screen reader navigates is not broken | `test:e2e/states.spec.ts` — axe's `heading-order`, run as its **own** pass in `assertions.ts` because the rule is tagged `best-practice` and `runOnly` is exclusive, so the four WCAG tag sets cannot reach it and switching on the whole category would bring `region`, `landmark-one-main` and a dozen others with it. Added 2026-09-12 and watched red immediately: `CardTitle` was an `<h3>`, so five swept states went `h1` → `h3`, and two more carried their own bare `h3` — the dashboard's course-card title and, one level deeper, `StudentLogs`' expanded-row `h4`. No WCAG success criterion names heading order outright, which is why this row is new rather than folded into `A11Y-3` | `[test]` |
 
 Contrast, measured from the real tokens by `src/__tests__/tokens-contrast.test.ts` in each theme,
@@ -388,10 +398,11 @@ The honest list, because §5's tags make the rest of this document look more enf
   register's `min-w-[34rem]` and the page measured 809px at a 320px viewport. The walk caught it,
   and `min-w-0` fixed it — but nothing states the rule, so the next layout change is free to
   reintroduce it and will only be caught if the offending content happens to be in a swept state.
-- **Screen-reader quality, as opposed to the presence of names.** Seven `sr-only` strings in
-  `src/components/ui/**` announce in English — "Close", "More pages" — in an otherwise Finnish app,
-  and two of them are on components in daily use. App code contains **no** `sr-only` text at all.
-  `A11Y-9` exists to name this and has no enforcer.
+- **Screen-reader quality, as opposed to the presence of names.** Until 2026-09-30 the page
+  declared English and `src/components/ui/**` carried English names — "Close", "Go to previous
+  page", "More pages" — plus the pager's visible "Previous" and "Next". All are Finnish now, and
+  `A11Y-9` names its test. What stays unguarded is the next English string: only the three
+  primitives that test renders are held. App code contains **no** `sr-only` text at all.
 - **A name that exists but is useless.** axe accepts a `title`-only name, so the search-clear button
   (`title="Tyhjennä haku"`) passes while giving a touch user nothing.
 - **Contrast as rendered.** The token test proves the palette can clear AA, never that a screen
