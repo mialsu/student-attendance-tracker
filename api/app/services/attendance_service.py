@@ -529,8 +529,9 @@ async def get_attendance_statistics(
     )
     total_records, total_students = totals_result.one()
 
-    # Check database dialect
-    dialect = db.bind.dialect.name
+    # Check database dialect. `get_bind()` rather than `.bind`: SQLAlchemy 2.1 types the attribute
+    # as optional, and the method always answers with the bind the session executes against.
+    dialect = db.get_bind().dialect.name
 
     if dialect == 'postgresql':
         # PostgreSQL: use date_trunc for efficient aggregation

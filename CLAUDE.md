@@ -225,14 +225,12 @@ Refresh tokens are hashed at rest. The access token lives only in memory (`acces
 `client/src/api/client.ts`). No
 `.env`, key or certificate was ever committed in any of the four repositories.
 
+**Fixed since the audit: its dependency finding.** `api/requirements.txt` was `>=` ranges with no
+lockfile, so every install resolved to whatever was newest that minute; the audit measured the
+image installing FastAPI 0.141.1 while the tests ran 0.121.3. On 2026-09-30 it failed a docs-only
+PR, when CI resolved SQLAlchemy 2.1.1. Every version is exact now except `tzdata`'s (ADR-0009).
+
 **Not fixed, and recorded in the API repo's `REVIEW-DEBT.md`:**
-- **Dependencies are unpinned** — almost every line of `api/requirements.txt` is a `>=` range
-  and there is no lockfile, so every install resolves to whatever was newest at that moment. (The
-  OpenTelemetry packages are the exception; tracing pinned those exactly.) Read the file for the
-  current shape. The example below is a snapshot from the audit and the versions have already
-  moved, but the point survives them — the image installs FastAPI
-  **0.141.1** while the tests run against **0.121.3**. Both serve correctly, so this is not a live
-  break; it means the gates prove nothing about the artifact that deploys.
 - **Two leads nothing in a repo can settle:** the real production `CORS_ORIGINS`; and `gitleaks`,
   which is not installed locally — history was checked independently at file level instead.
 
@@ -557,8 +555,9 @@ contracts in `api/pyproject.toml` enforce the layering (`just boundaries`). Migr
 
 ## Key Dependencies (Backend)
 
-`api/requirements.txt` is the list. Most lines are `>=` ranges with no lockfile (see *Security
-audit* above); the OpenTelemetry packages are pinned exactly.
+`api/requirements.txt` is the list. Every version in it is exact except `tzdata`'s, the packages
+the direct ones pull in included, and SQLAlchemy is held on 2.0 until the OpenTelemetry
+instrumentation accepts 2.1 (ADR-0009).
 
 ## Environment Variables
 

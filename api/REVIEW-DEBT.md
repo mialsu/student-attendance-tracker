@@ -6,6 +6,23 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 
 <!-- Newest first. -->
 
+## 2026-09-30 — every dependency is pinned, and what the pins do not prove
+- **What:** `requirements.txt` lists every package at an exact version except `tzdata`, transitive
+  ones included, frozen from a fresh venv the full suite passed in; SQLAlchemy is held on 2.0
+  (ADR-0009). A second fresh venv built from the file froze byte-identical.
+- **What green tests do NOT prove here:**
+  1. **The VM.** The next backend deploy is the first time production runs this set, and every
+     package that moved since the 2026-09-16 image moves in that one deploy. The suite passed on the
+     set; on the VM the deploy's health check is the only proof.
+  2. **A new transitive dependency.** When a pinned package's next version needs a package this
+     file does not list, pip installs it at whatever is newest, and nothing fails or says so.
+     Refreeze whenever a package is added or bumped by hand.
+  3. **Updates.** Nothing proposes one until `.github/dependabot.yml` lands in the follow-up pull
+     request. Until then a version moves only by hand.
+  4. **The images.** `nginx:alpine` and `postgres:17-alpine` still float until that same follow-up.
+- **Disposition:** 3 and 4 close with the follow-up; 1 closes with the first deploy after merge; 2
+  is accepted as a consequence in ADR-0009.
+
 ## 2026-09-16 — a clone could commit with no gates at all, and nothing said so
 - **What:** `core.hooksPath` lives in the untracked `.git/config`, so it does not arrive with a
   `git pull`. A clone where the one-off had never been run executed **no** pre-commit gate, and an
@@ -46,10 +63,11 @@ cut (`/confess`), read first by any architecture or review session, dispositione
   ratchets happened to land **exactly** at baseline, which is luck rather than design — a newer
   ruff shipping one new rule would fail the gate on unchanged code and look like the commit's
   fault. Two machines bootstrapped weeks apart can therefore disagree, and the gate would blame
-  whoever committed next.
+  whoever committed next. **Closed 2026-09-30 by ADR-0009:** ruff and mypy are pinned with
+  everything else, so a tool release can no longer move a ratchet on unchanged code.
 - **Disposition:** fixed, and deliberately with no per-machine record to maintain. The honest check
   on any clone is `./scripts/bootstrap.sh --check`, followed by watching the hook refuse a planted
-  violation. The `>=` dependency debt is unchanged and recorded separately.
+  violation. The `>=` dependency debt was recorded separately, and ADR-0009 fixed it on 2026-09-30.
 
 ## 2026-09-16 — a third copy of the port-5433 footgun survives in `scripts/run-tests-docker.sh`, and two docs still recommend it
 - **What:** `scripts/run-tests-docker.sh:41` hardcodes
@@ -1397,10 +1415,11 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 - **Not a live break, and that is luck rather than design:** both versions were run against a real
   PostgreSQL and both served correctly — `/health` 200, `POST /api/auth/login` 401, `GET
   /api/classes` 401, `GET /api/nonexistent` 404. The next resolution is a coin toss nobody watches.
-- **Disposition:** open. The cheap fix is `pip-compile` (or `uv pip compile`) producing a pinned
-  `requirements.lock` that the Dockerfile installs, with `requirements.txt` kept as the input.
-  Deliberately NOT done inside the audit: it changes every dependency version at once, which is
-  the opposite of one-finding-per-commit, and it wants its own gate run. Found by `/audit`.
+- **Disposition:** **fixed 2026-09-30, ADR-0009**, after it failed a docs-only pull request: CI
+  resolved SQLAlchemy 2.1.1, which no longer installs `greenlet`. Every version in
+  `requirements.txt` is exact now except `tzdata`'s, transitive packages included, so CI, the image
+  and a fresh venv install one set, the one the full suite passed on. `pip-compile`, the fix this
+  entry suggested, is deferred with a named trigger in the ADR. Found by `/audit`.
 
 ## 2026-09-02 — what the security audit did not look at, and what stayed unproven
 
