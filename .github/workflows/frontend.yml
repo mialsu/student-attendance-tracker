@@ -60,8 +60,8 @@ jobs:
       - name: Install
         run: npm ci
 
-      # Cheapest first, so a failure surfaces fast. Same set and order as `npm run check`
-      # and .husky/pre-commit.
+      # Cheapest first, so a failure surfaces fast. The same set and order as the root
+      # .githooks/pre-commit; `npm run check` runs the same gates in its own order, plus the walk.
       - name: Boundaries (dependency-cruiser)
         run: npm run lint:boundaries
 
@@ -72,6 +72,11 @@ jobs:
 
       - name: Typecheck (ratchet)
         run: npm run gate:typecheck
+
+      # The walk's own specs and config, held to tsconfig.e2e.json. Playwright strips types without
+      # checking them, so without this step a type error under e2e/ fails nothing in CI.
+      - name: Typecheck (e2e)
+        run: npm run typecheck:e2e
 
       - name: Lint (ratchet)
         run: npm run gate:lint
@@ -84,7 +89,7 @@ jobs:
       # The note here used to warn that 25 of 90 tests failed on main and that one made a real HTTP
       # call to localhost:8000, so the failure COUNT could differ on a runner with no server there.
       # Both are fixed: src/test/setup.ts refuses the network by construction since 2026-09-03, and
-      # the baseline is 0 with 105 of 105 passing. A failure here is a real failure.
+      # the baseline is 0. A failure here is a real failure.
       - name: Tests (ratchet)
         run: npm run gate:tests
 

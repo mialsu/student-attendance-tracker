@@ -12,7 +12,7 @@
 #
 # The TEST SUITE IS NOT HERE, deliberately: it takes ~7 minutes and needs a running postgres with
 # TEST_DATABASE_URL set. A hook that slow gets bypassed, and a bypassed hook is worse than an honest
-# split. Run `just check` (fast set + 330 tests) before pushing.
+# split. Run `just check` (the fast set plus the whole suite) before pushing.
 #
 # And read this before trusting either: the suite is green, but during the harness install the
 # teacher-ownership filter was removed from app/services/class_service.py:54 and every test still

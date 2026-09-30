@@ -32,7 +32,7 @@ harness was installed (`/harness` retrofit, baseline in `.harness-baseline`):
 |---|---|---|
 | `[types]` | 4 errors | a diff may not ADD a type error. The 4 are debt, not permission. |
 | `[lint]` | 16 errors | same, for lint. |
-| `[test]` | 0 failing | same, for tests. **105 of 105 pass** (2026-09-07). |
+| `[test]` | 0 failing | same, for tests. `npm run test:run` prints the count. |
 | `[a11y]` | 0 errors | jsx-a11y, on its own ratchet so an a11y error cannot be netted out against a lint fix. |
 
 Those numbers are read from `.harness-baseline`, and three of the four have moved since the
@@ -151,6 +151,8 @@ restate them here; two homes for one artifact is the defect that document spends
 ## What tooling already enforces (deliberately not restated above)
 
 - Types: `npm run gate:typecheck` (ratchet, baseline 4)
+- The walk's types: `npm run typecheck:e2e` (`e2e/` and `playwright.config.ts`, against
+  `tsconfig.e2e.json`)
 - Lint: `npm run gate:lint` (ratchet, baseline 16)
 - Accessibility: `npm run gate:a11y` (ratchet, baseline 0)
 - Boundaries: `npm run lint:boundaries`
@@ -159,6 +161,8 @@ restate them here; two homes for one artifact is the defect that document spends
 - Compound vocabulary + repo-specific checks: `npm run drift:extra`
 - Build: `npm run build`
 - All of it: `npm run check`
-- In CI: `.github/workflows/ci.yml` — the same set with `BASELINE_FROZEN=1`, plus gitleaks and
-  `npm audit`. The drift gate runs via `scripts/drift-ci.sh`, which resolves a real diff range;
-  a bare `drift-check.sh` on a clean CI checkout compares nothing and falsely reports clean.
+- In CI: `.github/workflows/frontend.yml`, with `BASELINE_FROZEN=1`. Its *Gates* job runs each gate
+  listed above, its *Browser walk* job runs `npm run e2e`, and its *Security* job runs `npm audit`,
+  report-only. gitleaks scans the whole repository in `.github/workflows/security.yml`. The drift
+  gate runs via `scripts/drift-ci.sh`, which resolves a real diff range; a bare `drift-check.sh` on
+  a clean CI checkout compares nothing and falsely reports clean.

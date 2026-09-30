@@ -37,14 +37,15 @@ still legal here.
 mypy 16 on a clean tree (`.harness-baseline`); each gate fails when its count **grows**. It blocks accumulation, not
 substitution. `just lint-verbose` shows the findings.
 
-**Formatting is not gated.** 33 of 51 files would change under `ruff format`. `just fmt` exists and
-is a deliberate commit of its own.
+**Formatting is not gated.** `./venv/bin/ruff format --check app tests` lists the files that would
+change. `just fmt` exists and is a deliberate commit of its own.
 
-**The test suite is green — and it does not prove authorization.** 262 tests pass, 77% coverage.
-During install, the teacher-ownership filter was removed from `get_classes_by_teacher`
-(`app/services/class_service.py:54`) and **all 262 tests still passed, with byte-identical
-coverage**. Read that as the standing warning it is: green here does not mean a teacher cannot see
-another teacher's data. See `REVIEW-DEBT.md`.
+**A green suite once hid a missing authorization check.** During the harness install on 2026-09-01
+the teacher-ownership filter was removed from `get_classes_for_teacher`
+(`app/services/class_service.py`), and **every test still passed, with byte-identical coverage**.
+`tests/test_authorization.py` has tested every class-reaching route from the denied side since, and
+it is the one file that proves `INV-1`: a route it does not list has no such proof. Coverage is
+still no measure of authorization, because those tests moved it not at all. See `REVIEW-DEBT.md`.
 
 ## Shape & boundaries
 
@@ -142,11 +143,14 @@ Raising a number in `.harness-baseline` gets the same treatment. `[review-only]`
 
 ## What tooling already enforces (deliberately not restated above)
 
-- Lint: `just lint` (ratchet, baseline 95) / `just lint-verbose`
+- Lint: `just lint` (ratchet, baseline in `.harness-baseline`) / `just lint-verbose`
+- Types: `just typecheck` (mypy ratchet, same file, ADR-0004) / `just typecheck-verbose`
 - Boundaries: `just boundaries`
 - Drift: `just drift` (devkit's `drift-check.sh` + this repo's `drift-extra.sh`)
 - Tests: `just test` (needs `TEST_DATABASE_URL`)
 - Fast set (pre-commit): `just check-fast`
 - Everything: `just check`
-- In CI: `.github/workflows/deploy.yml` — the same set with `BASELINE_FROZEN=1`, plus gitleaks
-  (`.gitleaks.toml`) and `pip-audit`. The drift gate runs via `scripts/drift-ci.sh`.
+- In CI: `.github/workflows/backend.yml`, with `BASELINE_FROZEN=1`. Its *Gates* job runs the fast
+  set, its *Tests* job the suite, and its *Security* job runs `pip-audit`, report-only. gitleaks
+  scans the whole repository in `.github/workflows/security.yml`, against `.gitleaks.toml`. The
+  drift gate runs via `scripts/drift-ci.sh`.
