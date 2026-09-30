@@ -60,8 +60,8 @@ jobs:
       - name: Install
         run: npm ci
 
-      # Cheapest first, so a failure surfaces fast. Same set and order as `npm run check`
-      # and .husky/pre-commit.
+      # Cheapest first, so a failure surfaces fast. The same set and order as the root
+      # .githooks/pre-commit; `npm run check` runs the same gates in its own order, plus the walk.
       - name: Boundaries (dependency-cruiser)
         run: npm run lint:boundaries
 
@@ -72,6 +72,11 @@ jobs:
 
       - name: Typecheck (ratchet)
         run: npm run gate:typecheck
+
+      # The walk's own specs and config, held to tsconfig.e2e.json. Playwright strips types without
+      # checking them, so without this step a type error under e2e/ fails nothing in CI.
+      - name: Typecheck (e2e)
+        run: npm run typecheck:e2e
 
       - name: Lint (ratchet)
         run: npm run gate:lint

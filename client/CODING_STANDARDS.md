@@ -151,6 +151,8 @@ restate them here; two homes for one artifact is the defect that document spends
 ## What tooling already enforces (deliberately not restated above)
 
 - Types: `npm run gate:typecheck` (ratchet, baseline 4)
+- The walk's types: `npm run typecheck:e2e` (`e2e/` and `playwright.config.ts`, against
+  `tsconfig.e2e.json`)
 - Lint: `npm run gate:lint` (ratchet, baseline 16)
 - Accessibility: `npm run gate:a11y` (ratchet, baseline 0)
 - Boundaries: `npm run lint:boundaries`
@@ -161,7 +163,6 @@ restate them here; two homes for one artifact is the defect that document spends
 - All of it: `npm run check`
 - In CI: `.github/workflows/frontend.yml`, with `BASELINE_FROZEN=1`. Its *Gates* job runs each gate
   listed above, its *Browser walk* job runs `npm run e2e`, and its *Security* job runs `npm audit`,
-  report-only. Nothing in CI runs `typecheck:e2e`, which `npm run check` and the pre-commit hook
-  both do. gitleaks scans the whole repository in `.github/workflows/security.yml`. The drift gate
-  runs via `scripts/drift-ci.sh`, which resolves a real diff range; a bare `drift-check.sh` on a
-  clean CI checkout compares nothing and falsely reports clean.
+  report-only. gitleaks scans the whole repository in `.github/workflows/security.yml`. The drift
+  gate runs via `scripts/drift-ci.sh`, which resolves a real diff range; a bare `drift-check.sh` on
+  a clean CI checkout compares nothing and falsely reports clean.
