@@ -26,7 +26,7 @@
  * assertion here would pass with both ends shifted by a day. `src/api/__tests__/attendance.test.ts`
  * owns that, and AC-9 is why it is a separate file.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen } from '@/test/test-utils';
 import userEvent from '@testing-library/user-event';
 import ClassStatistics from '@/pages/ClassStatistics';
@@ -225,6 +225,15 @@ describe('ClassStatistics — the timeframe (spec 0008)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockByRange();
+    // Every test here reasons about days relative to today, so today is pinned: late enough in the
+    // month that DAY and OTHER_DAY are past, early enough that tomorrow is in the same month. Only
+    // Date is faked, so userEvent's real timers still run.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 8, 20, 12));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   // --- AC-10 ---------------------------------------------------------------------------------
