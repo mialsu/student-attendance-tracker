@@ -6,6 +6,30 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 
 <!-- Newest first. -->
 
+## 2026-09-30 — the page declared English, and the pager spoke it
+- **What:** `index.html` declared `lang="en"` over an all-Finnish interface, so a screen reader
+  read every Finnish name by English rules. It declares `fi` now. The UI primitives' English
+  strings are Finnish too: the dialog's and the drawer's "Close", the pager's landmark name, its
+  "Go to previous page" / "Go to next page" and its **visible** "Previous" / "Next", which the
+  teacher sees on *Läsnäolot* past twenty Students. The unused carousel, breadcrumb ellipsis and
+  sidebar toggle were translated with them, so `src/components/ui/**` holds no English name.
+  `src/__tests__/document-language.test.tsx` was watched red on all four assertions first.
+- **What green tests do NOT prove:**
+  1. **The next English string.** The test holds the document and the three primitives the app
+     renders. axe reads a name's presence, never its language, and `html-lang-valid` passed on
+     `en` for months, so a new English string anywhere else passes every gate. `A11Y-9` says so.
+  2. **The pager in a browser.** No swept state holds more than twenty Students (`e2e/rows.ts`
+     carries four), so the walk has never drawn the pager; its names are proven in jsdom only.
+- **Found while translating, left alone:**
+  1. **The toast's close button has no name at all.** `ToastClose` renders an `X` icon and
+     nothing else, and `toaster.tsx` puts one in every toast, "Läsnäolo kirjattu" included. An
+     `A11Y-3` defect no swept state reaches, since no state holds a toast open.
+  2. **The pager is mouse-only.** `DataTable` renders every page control as `PaginationLink`, an
+     `<a>` with an `onClick` and no `href`, so Tab never reaches it and a screen reader announces
+     no control: a keyboard user cannot leave page 1 (`A11Y-1`). Spec 0010's slice 3 rebuilds
+     `DataTable`'s controls and puts the pager on *Tilastot* too, so it is the natural home.
+- **Disposition:** both findings OPEN, for the Owner.
+
 ## 2026-09-30 — the search fixes, and what their tests do not prove
 - **What:** `fix/search-results-go-stale` fixed two defects the teacher reported — the name
   suggestions answering "Ei osumia" about a Student logged minutes earlier, and the *Läsnäolot*
