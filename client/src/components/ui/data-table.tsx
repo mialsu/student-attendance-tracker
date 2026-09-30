@@ -22,6 +22,7 @@ import {
   PaginationEllipsis,
 } from '@/components/ui/pagination';
 import { cn } from '@/lib/utils';
+import { useDelayedFlag } from '@/hooks/useDelayedFlag';
 
 /**
  * Column definition for the data table
@@ -97,6 +98,12 @@ export interface DataTableProps<TData> {
   data: TData[];
   /** Loading state */
   isLoading?: boolean;
+  /**
+   * The rows on screen are being replaced: a new search, page or filter has been asked for and
+   * its answer is not in yet. The rows stay where they are and fade only if that answer takes
+   * longer than 300 ms (DESIGN.md §3), with `aria-busy` rising alongside the fade.
+   */
+  isRefreshing?: boolean;
   /** Skeleton rows count (default: 5) */
   loadingRows?: number;
   /** Empty state message */
@@ -162,6 +169,7 @@ export function DataTable<TData>({
   columns,
   data,
   isLoading = false,
+  isRefreshing = false,
   loadingRows = 5,
   emptyMessage = 'Ei tietoja näytettävänä',
   expandable,
@@ -174,6 +182,14 @@ export function DataTable<TData>({
 }: DataTableProps<TData>) {
   // Each row manages own expansion state
   const [expandedRows, setExpandedRows] = React.useState<Set<string>>(new Set());
+
+  // An answer that arrives inside 300 ms changes the rows and nothing else; a slower one fades
+  // the old rows so they do not pass for the answer. Both branches that draw a table use it.
+  const faded = useDelayedFlag(isRefreshing);
+  const refreshing = {
+    'aria-busy': faded || undefined,
+    className: cn(DENSITY, 'transition-opacity', faded && 'opacity-60', className),
+  };
 
   const isExpanded = (rowId: string) => expandedRows.has(rowId);
 
@@ -255,7 +271,7 @@ export function DataTable<TData>({
   if (data.length === 0) {
     return (
       <div className="rounded-md border">
-        <Table className={cn(DENSITY, className)}>
+        <Table {...refreshing}>
           {caption && <TableCaption>{caption}</TableCaption>}
           <TableHeader>
             <TableRow>
@@ -297,7 +313,7 @@ export function DataTable<TData>({
   return (
     <div className="space-y-4">
       <div className="rounded-md border">
-        <Table className={cn(DENSITY, className)}>
+        <Table {...refreshing}>
           {caption && <TableCaption>{caption}</TableCaption>}
           <TableHeader>
             <TableRow>

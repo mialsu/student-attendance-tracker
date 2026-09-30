@@ -5,15 +5,41 @@ import type {
   GetStatisticsParams,
   GetSummaryParams,
 } from '../api/attendance';
+import type { PaginatedAttendanceSummaryResponse } from '../api/types';
+import { invalidateRegister } from './registerQueries';
 
+/** A page of the summary, carrying the parameters it is the answer to. */
+export type AttendanceSummaryPage = PaginatedAttendanceSummaryResponse & {
+  requested: GetSummaryParams;
+};
+
+/**
+ * The register behind *Läsnäolot*, one page at a time.
+ *
+ * A new search, page or legacy filter keeps the page on screen until its replacement arrives,
+ * so the surface never falls back to its loading branch after the first load. That fallback
+ * unmounted the search box mid-word on every debounced search — reported by the teacher on
+ * 2026-09-30. Because the rows on screen can therefore answer an older question than the one
+ * being asked, each page carries `requested`, and anything written about the rows reads it rather
+ * than the newest input.
+ *
+ * Kept within one Kurssi only. With the tab open, picking another Kurssi re-renders the same
+ * component with a new `classId`, and keeping the rows there would show the last Kurssi's
+ * Students under this one's heading until its own arrived.
+ */
 export function useAttendanceSummary(
   classId: string,
   params?: GetSummaryParams
 ) {
   return useQuery({
     queryKey: ['attendance-summary', classId, params],
-    queryFn: () => attendanceApi.getSummary(classId, params),
+    queryFn: async (): Promise<AttendanceSummaryPage> => ({
+      ...(await attendanceApi.getSummary(classId, params)),
+      requested: params ?? {},
+    }),
     enabled: !!classId,
+    placeholderData: (previous, previousQuery) =>
+      previousQuery?.queryKey[1] === classId ? previous : undefined,
   });
 }
 
@@ -41,11 +67,7 @@ export function useCreateAttendance() {
   return useMutation({
     mutationFn: ({ classId, data }: { classId: string; data: CreateAttendanceRequest }) =>
       attendanceApi.create(classId, data),
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['attendance', variables.classId] });
-      queryClient.invalidateQueries({ queryKey: ['attendance-summary', variables.classId] });
-      queryClient.invalidateQueries({ queryKey: ['attendance-statistics', variables.classId] });
-    },
+    onSuccess: (_, variables) => invalidateRegister(queryClient, variables.classId),
   });
 }
 
@@ -55,10 +77,6 @@ export function useDeleteAttendance() {
   return useMutation({
     mutationFn: ({ recordId, classId }: { recordId: string; classId: string }) =>
       attendanceApi.delete(recordId),
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['attendance', variables.classId] });
-      queryClient.invalidateQueries({ queryKey: ['attendance-summary', variables.classId] });
-      queryClient.invalidateQueries({ queryKey: ['attendance-statistics', variables.classId] });
-    },
+    onSuccess: (_, variables) => invalidateRegister(queryClient, variables.classId),
   });
 }

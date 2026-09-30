@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { studentsApi } from '@/api/students';
 import type { ListStudentsParams, UpdateStudentRequest } from '@/api/students';
+import { invalidateRegister } from './registerQueries';
 
 /**
  * Fetch paginated list of students for a class
@@ -14,8 +15,13 @@ export function useStudents(classId: string, params?: ListStudentsParams) {
 }
 
 /**
- * Fetch autocomplete suggestions for student names
- * Enabled only when query is at least 2 characters
+ * Name suggestions for the attendance form, asked afresh for every prefix.
+ * Enabled only when query is at least 2 characters.
+ *
+ * No answer is ever reused. Until 2026-09-30 each prefix's answer was kept for five minutes, so a
+ * prefix first asked before a Student existed went on answering "nobody" after they were logged —
+ * the teacher's "al finds Aleksi, alek does not". The request is one indexed query per debounced
+ * keystroke, so the cache saved next to nothing and cost a wrong answer.
  */
 export function useStudentAutocomplete(
   classId: string,
@@ -26,7 +32,9 @@ export function useStudentAutocomplete(
     queryKey: ['students-autocomplete', classId, query],
     queryFn: () => studentsApi.getAutocomplete(classId, query),
     enabled: enabled && !!classId && query.length >= 2,
-    staleTime: 1000 * 60 * 5, // Cache for 5 minutes
+    // Stale the moment it lands, and dropped the moment nothing on screen shows it.
+    staleTime: 0,
+    gcTime: 0,
   });
 }
 
@@ -39,11 +47,7 @@ export function useUpdateStudent() {
   return useMutation({
     mutationFn: ({ studentId, data }: { studentId: string; data: UpdateStudentRequest }) =>
       studentsApi.update(studentId, data),
-    onSuccess: () => {
-      // Invalidate all related queries
-      queryClient.invalidateQueries({ queryKey: ['students'] });
-      queryClient.invalidateQueries({ queryKey: ['attendance-summary'] });
-    },
+    onSuccess: () => invalidateRegister(queryClient),
   });
 }
 
@@ -55,11 +59,7 @@ export function useDeleteStudent() {
 
   return useMutation({
     mutationFn: (studentId: string) => studentsApi.delete(studentId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['students'] });
-      queryClient.invalidateQueries({ queryKey: ['attendance'] });
-      queryClient.invalidateQueries({ queryKey: ['attendance-summary'] });
-    },
+    onSuccess: () => invalidateRegister(queryClient),
   });
 }
 
@@ -78,10 +78,6 @@ export function useMergeStudent() {
       targetStudentId: string;
       duplicateStudentId: string;
     }) => studentsApi.merge(targetStudentId, duplicateStudentId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['students'] });
-      queryClient.invalidateQueries({ queryKey: ['attendance'] });
-      queryClient.invalidateQueries({ queryKey: ['attendance-summary'] });
-    },
+    onSuccess: () => invalidateRegister(queryClient),
   });
 }
