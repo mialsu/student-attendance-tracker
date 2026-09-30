@@ -43,6 +43,25 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 - **Disposition:** both OPEN, for the Owner. Deleting `bun.lockb` settles 2; 1 needs a decision
   only if security updates are switched on.
 
+## 2026-09-30 — the chart's bars still animate under `prefers-reduced-motion: reduce`
+- **What:** `A11Y-6` was closed on 2026-09-12 for CSS motion, and the chart moves in JavaScript.
+  The `<Bar>` at `src/pages/ClassStatistics.tsx:345` sets no animation prop, so it takes Recharts'
+  defaults: animated in every browser, over 400 ms (`recharts/lib/cartesian/Bar.js:329-332`).
+  Recharts drives that through react-smooth, which takes its JavaScript path for a function child
+  (`react-smooth/lib/Animate.js:262`) and reads no motion preference, so `index.css`'s `reduce`
+  block never reaches it. The animation reruns on every new dataset and every new chart size
+  (`recharts/lib/chart/generateCategoricalChart.js:2028`): on load, on a range change, on the
+  *Kaavion jakso* toggle and on a resize.
+- **How it is known:** traced through the code while resuming spec 0010. Not yet watched in a
+  browser.
+- **What green tests do NOT prove here:** `e2e/motion.spec.ts` reads `getComputedStyle`, which a
+  JavaScript animation never touches, so it stays green with the chart animating. The walk's
+  `settleAnimations` (`e2e/assertions.ts:101`) does not wait for it either:
+  `document.getAnimations()` lists CSS and Web Animations only.
+- **Disposition:** OPEN, for the Owner. Spec 0010's decision 6 is where the fix gets chosen:
+  turning the bars' animation off closes this and the numbers' 400 ms wait together, and honouring
+  the preference closes this alone.
+
 ## 2026-09-30 — the page declared English, and the pager spoke it
 - **What:** `index.html` declared `lang="en"` over an all-Finnish interface, so a screen reader
   read every Finnish name by English rules. It declares `fi` now. The UI primitives' English
@@ -751,7 +770,9 @@ cut (`/confess`), read first by any architecture or review session, dispositione
   closed 2026-09-12** (spec 0006 slice 8): `index.css` carries a `prefers-reduced-motion: reduce`
   block and `e2e/motion.spec.ts` is its enforcer, with a `no-preference` control so the pair
   proves the media query switches rather than a constant being read back. `active:scale-[0.98]`
-  is out of its scope on purpose and the `A11Y-6` row says why. **`A11Y-9` closed 2026-09-30**
+  is out of its scope on purpose and the `A11Y-6` row says why. **The chart is outside it too**,
+  found 2026-09-30: its bars animate in JavaScript, out of the block's reach (that date's entry).
+  **`A11Y-9` closed 2026-09-30**
   (#16): the seven strings are Finnish, and `src/__tests__/document-language.test.tsx` holds the
   page's `lang` and the three primitives the app renders; that date's entry says what it does not
   prove. **`A11Y-8` (200% zoom) stays open**, still `[review-only]` with nothing behind it.
