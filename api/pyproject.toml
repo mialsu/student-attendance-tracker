@@ -1,5 +1,6 @@
-# Tool configuration only. Runtime dependencies live in requirements.txt — this file deliberately
-# declares no [project] table, so there is exactly one dependency manifest in this repo.
+# Tool configuration only. Dependencies are declared in requirements.in and requirements-dev.in and
+# compiled by `just lock` (ADR-0010); this file deliberately declares no [project] table, so they
+# have one home.
 
 [tool.ruff]
 line-length = 100          # matches CLAUDE.md's "Max line length: 100 characters"

@@ -691,9 +691,11 @@ client/scripts/drift-extra.sh:34 &mdash; the check that would ban them in a new 
           build re-resolves. The deployed image installs FastAPI <strong>0.141.1</strong> while the
           330 tests run against <strong>0.121.3</strong>. Both serve correctly, so this is not a live
           break; it means the gates prove nothing about the artifact that actually deploys. Not
-          fixed inside <code>/audit</code> because a lockfile moves every dependency at once</td>
+          fixed inside <code>/audit</code> because a lockfile moves every dependency at once.
+          <strong>Fixed by #18</strong>: every version exact, so the image and the suite install the same
+          set. Spec 0007's split, which takes the test tools out of the image, is in review (ADR-0010)</td>
         <td class="where">requirements.txt, Dockerfile:22</td>
-        <td class="st"><span class="chip hold">new</span></td>
+        <td class="st"><span class="chip done">shipped 30 Sep</span></td>
       </tr>
       <tr>
         <td><code>cookie_samesite</code> is typed <code>str</code> where Starlette wants

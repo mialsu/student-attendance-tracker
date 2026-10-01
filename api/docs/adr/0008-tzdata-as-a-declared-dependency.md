@@ -1,6 +1,9 @@
 # ADR-0008 — `tzdata` as a declared dependency, not an inherited one
 
 **Status:** accepted and **implemented**, 2026-09-15, with [spec 0009](../../../specs/0009-local-day-boundaries.md).
+**Amended by [ADR-0010](0010-compiled-requirements-and-pinned-ci-tools.md), 2026-10-01:** `tzdata`
+is still declared, and is now pinned exactly like every other package, moved by the monthly
+Dependabot pull request instead of on every rebuild.
 
 Spec 0009 made every date this API reports depend on `zoneinfo.ZoneInfo(settings.app_timezone)`.
 `zoneinfo` reads the operating system's tz database and falls back to the PyPI `tzdata` package

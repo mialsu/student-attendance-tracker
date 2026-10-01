@@ -6,6 +6,58 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 
 <!-- Newest first. -->
 
+## 2026-10-01 — ADR-0009 overrode spec 0007's pinning decision, and never cited it
+- **What:** on 2026-09-11 the Owner decided in `specs/0007-operational-gaps.md` how dependencies
+  would be pinned: `pip-tools`, `.in` files, and a runtime lock split from the dev one so the image
+  stops installing the suite's tools. The spec rejects `pip freeze` by name. ADR-0009 (2026-09-30,
+  #18) pinned one flat file from `pip freeze`, listed `pip-compile` as a rejected alternative, and
+  does not mention the spec. The session that wrote it did not read `specs/` first, and the question
+  it put to the Owner ("Pin all, monthly PRs") did not mention the earlier decision, so the Owner
+  approved a design that contradicted their own. Found on 2026-10-01 by a `git grep` for
+  `requirements.txt` while planning the move to `pip-compile`.
+- **Where:** `docs/adr/0009-exact-pins-moved-by-pull-request.md`, which now carries a supersession
+  note; `specs/0007-operational-gaps.md`, *Pinning*.
+- **What green tests do NOT prove here:** that an ADR agrees with the specs written before it.
+  drift-check's check 3 asks for an ADR when a dependency is added and accepts any ADR, including
+  one that reverses a recorded decision.
+- **Disposition:** the ADR is **fixed**: ADR-0010 builds spec 0007's slices 3 and 4 and supersedes
+  ADR-0009's decisions 1 and 2. The gap that let it happen, no step that reads earlier specs before
+  an ADR is written, is open, for the Owner.
+
+## 2026-10-01 — spec 0007 slices 3 and 4: what the split and the compiled locks do not prove
+- **What:** `requirements.in` and `requirements-dev.in`, compiled by `scripts/lock.sh` (pip-tools)
+  into `requirements.txt`, which the image installs, and `requirements-dev.txt`, which CI,
+  `just install` and `scripts/bootstrap.sh` install. drift-extra checks 6 and 7 guard them. The
+  conversion moved no version except `tzdata`'s, from a range to 2026.4 (ADR-0010).
+- **Where:** `requirements*.in`, `requirements*.txt`, `scripts/lock.sh`, `scripts/drift-extra.sh`
+  checks 6 and 7, the two install steps in `.github/workflows/backend.yml`.
+- **Criterion:** spec 0007 AC-6, "The production image installs **no** test or lint package", and
+  AC-9, "The versions `just check` installs and the versions in the built image are
+  **identical**": both PARTIAL.
+- **What green tests do NOT prove here:**
+  1. **The production image.** AC-6 and AC-9 were proven on an image built locally from this
+     branch; the VM builds its own during the merge's deploy. Its build log lists every package it
+     installs, and reading that log is the live half.
+  2. **Dependabot against two layered locks.** Whether it recompiles `requirements-dev.txt` when a
+     runtime package moves is unobserved until its first run after the merge. Check 7 fails a pull
+     request that leaves the two disagreeing, so a failure would be loud. #23 edits the flat file
+     this replaces and should be closed; the OpenTelemetry bump it carried comes back from the
+     compiled files.
+  3. **The image's own pip** is the base image's 25.0.1, not the 26.2.1 CI installs. It installs
+     exact pins either way, and it floats with `python:3.12-slim`, which ADR-0009 leaves floating.
+  4. **The four CI tool versions** move by hand, and nothing reminds anyone they exist.
+  5. **`scripts/lock.sh` on another machine.** It needs `python3.12` with `venv` and network access
+     to PyPI, and it has run on one machine.
+- **Disposition:** 1 closes when the merge's deploy log is read. 2 to 5 are open, for the Owner.
+
+## 2026-10-01 — the deploy's health check logs `000000` for a refused connection
+- **What:** `code="$(curl -s -o /dev/null -w '%{http_code}' ... || echo 000)"`. When the connection
+  fails, curl prints `000` through `-w` and exits non-zero, so `|| echo 000` appends a second one.
+  #22's deploy logged `attempt 1/15: 000000` while nginx restarted. It never equals `200` either
+  way, so every decision the script makes is right; only the log line is wrong.
+- **Where:** the three health-check loops in the deploy step of `.github/workflows/backend.yml`.
+- **Disposition:** open, cosmetic. `|| true` fixes it, in a script whose only test is a deploy.
+
 ## 2026-10-01 — CI installs its own tools at whatever is newest, so "every version is exact" overclaims
 - **What:** ADR-0009 pinned the API's packages and the compose images, and the CLAUDE.md paragraph
   that went in with them (#19) says every dependency and image version is exact. The workflows
@@ -33,7 +85,11 @@ cut (`/confess`), read first by any architecture or review session, dispositione
   `automated-security-fixes` reports `enabled: false`), so a CVE fix in a pinned package waits for
   the monthly run. Security updates would also open the lockfile-only npm pull request the client's
   drift check 4 refuses (`client/REVIEW-DEBT.md`, 2026-09-30); alerts alone open no pull requests.
-- **Disposition:** open, for the Owner.
+- **Disposition:** the four tools are **fixed** by ADR-0010: gitleaks 8.30.1 from its release URL
+  with the tarball's sha256 checked and no API call, Vercel CLI 62.1.0, pip-audit 2.10.1 and pip
+  26.2.1, each the version CI ran that day. The actions' major tags stay **open**. Dependabot
+  **alerts were turned on** the same day (404 before, 204 after); security-update pull requests stay
+  off, for the lockfile reason above.
 
 ## 2026-09-30 — every dependency is pinned, and what the pins do not prove
 - **What:** `requirements.txt` lists every package at an exact version except `tzdata`, transitive
@@ -63,8 +119,9 @@ cut (`/confess`), read first by any architecture or review session, dispositione
      its *Migrations* group after the backup, and reported it healthy before the backend swap.
 - **Disposition:** 1 **closed** — #18 deployed on 2026-09-30, both health checks passed and
   `/health` answers 200. 2 is accepted as a consequence in ADR-0009. 4 is **closed**: the restart
-  it predicted was observed on the VM. 3's trigger has fired and waits for the Owner: move to
-  `pip-compile`, as ADR-0009 says, or hold `pydantic_core` by hand on every run until 2.14.
+  it predicted was observed on the VM. 2 is **closed** by ADR-0010: the lock is compiled, so a new
+  transitive dependency arrives pinned and named in the diff. 3 is **fixed** by ADR-0010, which
+  moved to `pip-compile` as the trigger said; the flat file is gone.
 
 ## 2026-09-16 — a clone could commit with no gates at all, and nothing said so
 - **What:** `core.hooksPath` lives in the untracked `.git/config`, so it does not arrive with a
@@ -191,6 +248,10 @@ cut (`/confess`), read first by any architecture or review session, dispositione
   out of scope for a verification pass.
 - **Disposition:** open. Low priority, zero production impact, but it will burn the next session
   that runs the suite this way.
+- **2026-10-01:** the local backend container builds from `api/Dockerfile`, which since spec 0007's
+  split installs `requirements.txt` alone, so pytest is not in it and the suite cannot run there.
+  Run it from `api/venv` (`scripts/bootstrap.sh` builds one). The test's dependence on ambient OTel
+  variables stays open for anyone who exports them in their shell.
 
 ## 2026-09-15 — the SQLite branch of the statistics query is unreachable, and now also wrong
 - **What:** `get_attendance_statistics` branches on `db.bind.dialect.name`. Spec 0009 converted

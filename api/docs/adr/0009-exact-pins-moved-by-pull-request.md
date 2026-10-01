@@ -4,6 +4,14 @@
 then the container image tags and `.github/dependabot.yml`, kept apart for the reason under
 *Consequences*.
 
+**Superseded in part by [ADR-0010](0010-compiled-requirements-and-pinned-ci-tools.md),
+2026-10-01.** Decisions 1 and 2 below (one flat file taken from `pip freeze`, `tzdata` the one
+range) and the rejection of `pip-compile` are replaced: two compiled locks, runtime and dev, from
+`requirements.in` and `requirements-dev.in`. **This ADR should have cited
+[spec 0007](../../../specs/0007-operational-gaps.md)**, where the Owner had decided `pip-tools` and
+that split on 2026-09-11 and rejected `pip freeze` by name. It was written without reading the
+spec. Everything else here stands.
+
 On 2026-09-30 a pull request that changed only comments and documentation under `api/` (#17) failed
 both backend jobs, and nothing in it was at fault. `requirements.txt` said `sqlalchemy>=2.0.0`, CI
 resolved **SQLAlchemy 2.1.1**, and 2.1 no longer installs `greenlet` on its own, so

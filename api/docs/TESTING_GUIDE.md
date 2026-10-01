@@ -438,7 +438,7 @@ jobs:
       - uses: actions/setup-python@v2
         with:
           python-version: '3.12'
-      - run: pip install -r requirements.txt
+      - run: pip install -r requirements-dev.txt
       - run: pytest --cov=app
 ```
 

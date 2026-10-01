@@ -5,11 +5,17 @@
 default:
     @just --list
 
-# Install dependencies in virtual environment
+# Install dependencies in virtual environment: the runtime lock plus the suite and the gates
+# (requirements-dev.txt, spec 0007). The image installs requirements.txt alone.
 install:
     python3 -m venv venv
-    ./venv/bin/pip install -r requirements.txt
+    ./venv/bin/pip install -r requirements-dev.txt
     @echo "✓ Dependencies installed. Activate venv with: source venv/bin/activate"
+
+# Recompile requirements.txt and requirements-dev.txt from the .in files (ADR-0010). Run it after
+# editing a .in file; `just lock --upgrade-package NAME` moves one package. Never hand-edit a .txt.
+lock *args:
+    ./scripts/lock.sh {{args}}
 
 # Run development server with auto-reload
 run:

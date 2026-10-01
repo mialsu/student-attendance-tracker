@@ -1,11 +1,16 @@
-# Scheduled version updates, ADR-0009. Every version in this repository is exact, so nothing moves
-# until one of these pull requests is merged, and CI runs on each one first. Monthly, one grouped
-# pull request per ecosystem, and major versions are never proposed: a major version is a decision
-# to make on purpose, in a change of its own.
+# Scheduled version updates, ADR-0009 and ADR-0010. The two Python locks, the client's lockfile and
+# the compose image tags are exact, so nothing in them moves until one of these pull requests is
+# merged, and CI runs on each one first. The actions are referenced by major tag and float inside
+# it. Monthly, one grouped pull request per ecosystem, and major versions are never proposed: a
+# major version is a decision to make on purpose, in a change of its own.
 #
 # Merging a pip or docker-compose pull request deploys the backend, as any push to main does.
 version: 2
 updates:
+  # /api holds two pip-compile locks: requirements.in -> requirements.txt, and requirements-dev.in
+  # -> requirements-dev.txt. Dependabot recompiles them with the command in their headers, so a
+  # pull request it opens has been through a resolver. Proposing lines one at a time is how #23
+  # asked for a pydantic_core no released pydantic accepts (ADR-0010).
   - package-ecosystem: pip
     directory: /api
     schedule:

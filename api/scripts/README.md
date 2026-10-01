@@ -89,13 +89,31 @@ python scripts/seed_data.py
 ./scripts/run-tests-docker.sh
 ```
 
+### 5. Compile the requirements
+
+**Purpose**: Write `requirements.txt` (what the image installs) and `requirements-dev.txt` (that
+plus the suite and the gates) from `requirements.in` and `requirements-dev.in` (ADR-0010). The
+`.txt` files are generated; edit a `.in` file, then run this.
+
+**Usage**:
+```bash
+just lock                                  # after adding or removing a line; nothing else moves
+just lock --upgrade-package fastapi        # move one package by hand
+
+# Or without just
+./scripts/lock.sh
+```
+
+It needs `python3.12` on the PATH and network access to PyPI, and runs pip-tools from a throwaway
+venv, so nothing is installed into `venv/`. Dependabot recompiles the same files monthly.
+
 ---
 
 ## Prerequisites
 
 ### For Shell Scripts
 - Virtual environment created: `python3 -m venv venv`
-- Dependencies installed: `pip install -r requirements.txt`
+- Dependencies installed: `pip install -r requirements-dev.txt`
 - `.env` file configured (or using defaults from `.env.example`)
 
 ### For Python Scripts Directly
@@ -148,7 +166,7 @@ whoever finds it can redeem.
 ```bash
 python3 -m venv venv
 source venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements-dev.txt
 ```
 
 ### "Database connection failed"

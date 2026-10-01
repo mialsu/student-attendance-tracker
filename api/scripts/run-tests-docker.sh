@@ -36,7 +36,7 @@ fi
 if ! command -v pytest >/dev/null 2>&1; then
     echo -e "${RED}pytest is not on PATH.${NC}" >&2
     echo "Create the venv first: python3.12 -m venv venv && source venv/bin/activate" >&2
-    echo "                       pip install -r requirements.txt" >&2
+    echo "                       pip install -r requirements-dev.txt" >&2
     exit 1
 fi
 
