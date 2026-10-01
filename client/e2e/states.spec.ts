@@ -19,6 +19,7 @@
  * fourth state joins this table" — it has.
  */
 import {
+  BUSY_STATISTICS,
   EMPTY_REGISTER,
   KURSSI,
   LONG_STATISTICS,
@@ -42,6 +43,7 @@ import {
   expectNoAxeViolations,
   expectNoHorizontalScroll,
   expectOverlayWithinViewport,
+  fontsReady,
 } from './assertions';
 import { expect, test } from './fixtures';
 import type { Page } from '@playwright/test';
@@ -124,15 +126,65 @@ async function expectChartSpansItsCard(page: Page): Promise<void> {
 }
 
 /**
- * Spec 0010 AC-3: when the counts fit, every bar carries its count and its date tick. Counted
- * against the fixture rather than sampled from the page, so every count here is a retrying
- * assertion. Waiting is right for this one: it asserts the numbers arrive at all, and
- * `e2e/motion.spec.ts` owns "in the same frame as the bars" (AC-27).
+ * Spec 0010 AC-3: when the counts fit, every bar carries its count and its date tick. Checked
+ * against the fixture's own counts, in order, rather than sampled from the page, so every check
+ * here but the last is a retrying assertion. Waiting is right for this one: it asserts the numbers
+ * arrive at all, and `e2e/motion.spec.ts` owns "in the same frame as the bars" (AC-27).
  */
-async function expectEveryBarNumbered(page: Page, bars: number): Promise<void> {
-  await expect(page.locator('.recharts-bar-rectangle')).toHaveCount(bars);
-  await expect(page.locator('.recharts-label-list .recharts-label')).toHaveCount(bars);
-  await expect(page.locator('.recharts-xAxis .recharts-cartesian-axis-tick')).toHaveCount(bars);
+async function expectEveryBarNumbered(page: Page, counts: number[]): Promise<void> {
+  await expect(page.locator('.recharts-bar-rectangle')).toHaveCount(counts.length);
+  await expect(page.locator('.recharts-label-list .recharts-label')).toHaveText(counts.map(String));
+  await expect(page.locator('.recharts-xAxis .recharts-cartesian-axis-tick')).toHaveCount(
+    counts.length,
+  );
+  await expectCountsLegible(page);
+}
+
+/**
+ * Every count drawn whole and on its own: inside the chart's SVG, which clips whatever reaches past
+ * it, and clear of every other count's box. That is the part of "legible" a test can check; until
+ * the three-digit state arrived (slice 1's review debt, item 5) the walk only counted the labels.
+ * Any gap above zero passes, however narrow, and `REVIEW-DEBT.md` has what three digits leave at
+ * the 20px threshold. Measured after the webfont loads, because the boxes are Fira Sans's advance
+ * widths and system-ui's differ.
+ */
+async function expectCountsLegible(page: Page): Promise<void> {
+  await fontsReady(page);
+  const { clipped, overlapping } = await page
+    .locator('[data-chart] .recharts-wrapper > svg')
+    .evaluate((svg) => {
+      const frame = svg.getBoundingClientRect();
+      const labels = [...svg.querySelectorAll('.recharts-label-list .recharts-label')].map((el) => ({
+        text: el.textContent ?? '',
+        box: el.getBoundingClientRect(),
+      }));
+      const clipped = labels
+        .filter(
+          ({ box }) =>
+            box.left < frame.left ||
+            box.right > frame.right ||
+            box.top < frame.top ||
+            box.bottom > frame.bottom,
+        )
+        .map(({ text }) => text);
+      const overlapping = labels.flatMap((a, i) =>
+        labels
+          .slice(i + 1)
+          .filter(
+            (b) =>
+              a.box.left < b.box.right &&
+              b.box.left < a.box.right &&
+              a.box.top < b.box.bottom &&
+              b.box.top < a.box.bottom,
+          )
+          .map((b) => `${a.text} and ${b.text}`),
+      );
+      return { clipped, overlapping };
+    });
+  expect(
+    { clipped, overlapping },
+    'a count reaches past the chart, which clips it, or two counts overlap',
+  ).toEqual({ clipped: [], overlapping: [] });
 }
 
 const STATES: SweptState[] = [
@@ -358,7 +410,7 @@ const STATES: SweptState[] = [
       await page.goto(classUrl);
       await page.getByRole('tab', { name: 'Tilastot' }).click();
       await expect(page.getByText('Ladataan tilastoja...')).toBeHidden();
-      await expectEveryBarNumbered(page, STATISTICS.daily_stats.length);
+      await expectEveryBarNumbered(page, STATISTICS.daily_stats.map((day) => day.count));
       await expectChartSpansItsCard(page);
     },
     byChartWidth: true,
@@ -381,7 +433,32 @@ const STATES: SweptState[] = [
       await expect(page.getByText('Ladataan tilastoja...')).toBeHidden();
       await page.getByRole('radio', { name: 'Kuukaudet' }).click();
       await expect(page.getByText('Läsnäolot kuukausittain (kaavio)')).toBeVisible();
-      await expectEveryBarNumbered(page, STATISTICS.monthly_stats.length);
+      await expectEveryBarNumbered(page, STATISTICS.monthly_stats.map((month) => month.count));
+    },
+    byChartWidth: true,
+  },
+  {
+    /*
+     * Slice 1's review debt, item 5: every other fixture's counts have one or two digits, and a
+     * month in a busy workshop counts a hundred or more. By month because that is where three
+     * digits arrive first, with six bars so 320px numbers them too. `expectEveryBarNumbered`
+     * checks each count is drawn whole inside the chart and clear of its neighbours, here and in
+     * every other numbered state.
+     */
+    name: 'Tilastot — three-digit counts, by month',
+    arrange: async (page) => {
+      await signedIn(page);
+      await oneKurssi(page);
+      await register(page);
+      await statistics(page, BUSY_STATISTICS);
+    },
+    reach: async (page) => {
+      await page.goto(classUrl);
+      await page.getByRole('tab', { name: 'Tilastot' }).click();
+      await expect(page.getByText('Ladataan tilastoja...')).toBeHidden();
+      await page.getByRole('radio', { name: 'Kuukaudet' }).click();
+      await expect(page.getByText('Läsnäolot kuukausittain (kaavio)')).toBeVisible();
+      await expectEveryBarNumbered(page, BUSY_STATISTICS.monthly_stats.map((month) => month.count));
     },
     byChartWidth: true,
   },

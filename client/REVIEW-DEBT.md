@@ -51,7 +51,10 @@ cut (`/confess`), read first by any architecture or review session, dispositione
      hint and none), beside 7, 11 and 41 at 320, 390 and 1280px.
   3. **Pixels, still.** The walk counts labels and ticks; it does not look at them. Legibility,
      collisions and clipping rest on slice 1's screenshots, taken once. A later font or spacing
-     change that crowds the counts would pass every gate.
+     change that crowds the counts would pass every gate. *Narrowed 2026-10-01 by item 5:* every
+     numbered state now fails if a count reaches past the chart or overlaps another count's box,
+     at every swept width. The slanted dates are still only counted, and a gap above zero
+     passes however small it is.
   4. **Uncaught page errors.** The walk has no guard for them. Withholding the chart element
      crashed the whole app once in 200 runs, and it showed only as a missing bar and a blank
      screenshot. A `pageerror` listener beside `hermetic` in `e2e/fixtures.ts` would have named it
@@ -60,7 +63,15 @@ cut (`/confess`), read first by any architecture or review session, dispositione
      above has the reds, and the blind spot the walk's own clock had made.
   5. **Three-digit counts.** Every fixture's counts are one or two digits. A month with a hundred
      attendances or more draws a three-digit count; months are few and wide, so it should fit, but
-     no screenshot shows one.
+     no screenshot shows one. **CLOSED 2026-10-01:** *Tilastot — three-digit counts, by month*
+     sweeps six months of 104 to 140 (`BUSY_STATISTICS` in `e2e/rows.ts`) at 320, 1024 and
+     1280px, with axe. Each count must read as its number, sit wholly inside the chart's SVG, and
+     overlap no other count; January's 140 is the axis's top tick, so its count sits in the 20px
+     margin. They fit: at 320px the closest two are 5.8px apart. At the 20px threshold itself,
+     measured at 390px with eleven daily counts of 180 to 198, three-digit counts keep 1.7 to
+     2.2px apart where two-digit ones keep 6.7 to 7.2px; a 3x screenshot reads, tightly. The
+     threshold was tuned on two digits (spec 0010 decision 4), so whether that is close enough is
+     the Owner's call, and three-digit days need a bulk log to happen at all.
   6. **A width carried across a remount.** `chartWidth` lives in the page, and a range change the
      cache has not seen unmounts the chart for its loading branch. The remounted chart therefore
      decides numbers and hint from the old width before its own container reports. That is right
@@ -72,8 +83,8 @@ cut (`/confess`), read first by any architecture or review session, dispositione
   it. Radix's toggle group only moves focus, and Space selects, so a screen reader announces
   "Kuukaudet, radio button, not checked" on the focused option until Space is pressed. The
   2026-09-11 entry on the toggle's grouping role is where this belongs next.
-- **Disposition:** 2 and 4 CLOSED 2026-10-01; the rest OPEN, for the Owner. The radio semantics
-  are a decision about the toggle's role.
+- **Disposition:** 2, 4 and 5 CLOSED 2026-10-01; 1, 3 and 6 OPEN, for the Owner, 3 narrowed. The
+  radio semantics are a decision about the toggle's role.
 
 ## 2026-10-01 — the walk had two nondeterminisms, and `retries: 0` was claiming otherwise
 - **What:** two ways the browser walk could fail on a tree that had already passed.
