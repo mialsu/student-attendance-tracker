@@ -320,7 +320,13 @@ const ClassStatistics = ({ classId }: ClassStatisticsProps) => {
             className="h-[400px] max-w-full"
             onChartResize={(width) => setChartWidth(width)}
           >
-            <BarChart data={chart.data} margin={CHART_MARGIN}>
+            {/* No bars until this page knows the width (decision 5), so the first frame that holds
+                a bar is already numbered or already not. Recharts sizes itself in an effect, and
+                `onChartResize` first fires later, from a ResizeObserver; usually the two land in
+                one render and sometimes they do not. The chart element itself must stay: with a
+                null child, ResponsiveContainer reads `children.type` and the whole app unmounts,
+                which the walk caught once in 200 runs on 2026-10-01. So the data waits. */}
+            <BarChart data={chartWidth > 0 ? chart.data : []} margin={CHART_MARGIN}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis
                 dataKey={chart.dataKey}
@@ -334,10 +340,18 @@ const ClassStatistics = ({ classId }: ClassStatisticsProps) => {
               />
               <YAxis width={Y_AXIS_WIDTH} />
               <ChartTooltip content={<ChartTooltipContent />} />
-              <Bar dataKey="count" fill="hsl(var(--primary))">
+              {/* No grow-in (decision 6): Recharts draws a LabelList only once its animation has
+                  finished, it reruns the animation on every new range, toggle and resize, and it
+                  animates in JavaScript, where `prefers-reduced-motion` cannot reach. */}
+              <Bar dataKey="count" fill="hsl(var(--primary))" isAnimationActive={false}>
                 {numbered && (
-                  // `foreground` on `card`, a pair tokens-contrast.test.ts already gates (decision 7).
-                  <LabelList dataKey="count" position="top" fontSize={12} fill="hsl(var(--foreground))" />
+                  // `foreground` on `card`, a pair tokens-contrast.test.ts gates (decision 7).
+                  <LabelList
+                    dataKey="count"
+                    position="top"
+                    fontSize={12}
+                    fill="hsl(var(--foreground))"
+                  />
                 )}
               </Bar>
             </BarChart>

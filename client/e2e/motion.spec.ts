@@ -20,7 +20,9 @@
  * 4.43:1 on the walk's first run. An app that honours the preference has no animation to wait for.
  */
 import { expect, test } from './fixtures';
-import { oneKurssi, signedIn } from './mocks';
+import { oneKurssi, register, signedIn, statistics } from './mocks';
+import { KURSSI, STATISTICS } from './rows';
+import type { Page } from '@playwright/test';
 
 /** What `index.css` authors, in seconds, and therefore what the control expects to find. */
 const AUTHORED_FADE = 0.3;
@@ -49,6 +51,55 @@ async function dashboard(page: Parameters<typeof signedIn>[0]) {
   await page.goto('/dashboard');
   await expect(page.getByRole('heading', { name: 'Kurssit', level: 1 })).toBeVisible();
 }
+
+/**
+ * Spec 0010 AC-27: the chart's bars do not animate, so the first frame that holds a bar holds every
+ * count. Recharts animates in JavaScript, out of reach of `index.css`'s `reduce` block and of
+ * `getComputedStyle`, and it draws a bar's `LabelList` only once its grow-in has finished.
+ *
+ * **No retrying assertion can see this.** With the animation on, the labels arrive 400 ms after
+ * the bars, and `toHaveCount` would simply wait for them and pass. So the page records from inside,
+ * with a MutationObserver installed before any script runs, the first DOM change that puts a bar
+ * shape on screen and how many count labels arrived in that same change.
+ */
+async function firstFrameWithBars(page: Page): Promise<{ bars: number; labels: number }> {
+  await page.addInitScript(() => {
+    const record = window as unknown as { __firstBars?: { bars: number; labels: number } };
+    new MutationObserver((_changes, observer) => {
+      const bars = document.querySelectorAll('.recharts-bar-rectangle path').length;
+      if (bars === 0) return;
+      record.__firstBars = {
+        bars,
+        labels: document.querySelectorAll('.recharts-label-list .recharts-label').length,
+      };
+      observer.disconnect();
+    }).observe(document, { childList: true, subtree: true });
+  });
+  await signedIn(page);
+  await oneKurssi(page);
+  await register(page);
+  await statistics(page);
+  await page.goto(`/class/${KURSSI.id}`);
+  await page.getByRole('tab', { name: 'Tilastot' }).click();
+  await expect(page.locator('.recharts-bar-rectangle path')).toHaveCount(
+    STATISTICS.daily_stats.length,
+  );
+  const first = await page.evaluate(
+    () => (window as unknown as { __firstBars?: { bars: number; labels: number } }).__firstBars,
+  );
+  expect(first, 'no DOM change ever put a bar on screen').toBeDefined();
+  return first ?? { bars: 0, labels: 0 };
+}
+
+test.describe('the chart draws its numbers with its bars', () => {
+  for (const reducedMotion of ['reduce', 'no-preference'] as const) {
+    test(`${reducedMotion} — the first frame with bars carries every count`, async ({ page }) => {
+      await page.emulateMedia({ reducedMotion });
+      const first = await firstFrameWithBars(page);
+      expect(first.labels).toBe(first.bars);
+    });
+  }
+});
 
 test.describe('prefers-reduced-motion', () => {
   test('reduce — the page fade and the button transition are both neutralised', async ({ page }) => {
