@@ -6,6 +6,20 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 
 <!-- Newest first. -->
 
+## 2026-10-01 — Jaeger 2.21.0 runs in production, and no trace has been looked at since
+- **What:** #21 moved `jaegertracing/jaeger` from 2.20.0 to 2.21.0. Its deploy pulled the image,
+  recreated `attendance-jaeger-prod`, and both health checks passed. Neither touches tracing: the
+  API exports spans on a background thread and drops them when the collector refuses, by design
+  (ADR-0006), so a collector that stopped accepting them would cost log noise and nothing a check
+  sees.
+- **Where:** `deployment/production/docker-compose.yml`, `deployment/jaeger.yaml`.
+- **What green tests do NOT prove here:** that spans reach the new Jaeger. `tests/test_telemetry.py`
+  runs against an in-process exporter, never the collector.
+- **How to check:** `ssh -L 16686:localhost:16686 <user>@<host>`, open `http://localhost:16686`, and
+  find an `attendance-api` trace newer than the deploy.
+- **Disposition:** open, for the Owner, because it needs the SSH tunnel. Every later Jaeger bump
+  Dependabot proposes leaves the same gap, the way an OpenTelemetry bump does.
+
 ## 2026-10-01 — Dependabot alerts, on since today, report `ecdsa` with no fix, and it is not reached
 - **What:** turning alerts on put 35 open alerts on `main`: 34 in `client/package-lock.json`,
   recorded in the client's ledger, and one here. `ecdsa` 0.19.2, pulled in by `python-jose`, is
