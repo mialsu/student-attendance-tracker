@@ -63,7 +63,12 @@ cut (`/confess`), read first by any architecture or review session, dispositione
   4. **The four CI tool versions** move by hand, and nothing reminds anyone they exist.
   5. **`scripts/lock.sh` on another machine.** It needs `python3.12` with `venv` and network access
      to PyPI, and it has run on one machine.
-- **Disposition:** 1 closes when the merge's deploy log is read. 2 to 5 are open, for the Owner.
+  6. **A venv built before the locks.** `scripts/bootstrap.sh` judges `api/venv` by whether
+     `ruff`, `mypy` and `lint-imports` exist, not by their versions. On 2026-10-01 the main
+     checkout's venv differed from the pins in 23 packages, ruff 0.16.5 against 0.16.9 among them,
+     so a commit from there ran the ratchets on tools CI does not use. The cure for one machine is
+     `./venv/bin/pip install -r requirements-dev.txt` inside `api/`; nothing detects the next one.
+- **Disposition:** 1 closes when the merge's deploy log is read. 2 to 6 are open, for the Owner.
 
 ## 2026-10-01 — the deploy's health check logs `000000` for a refused connection
 - **What:** `code="$(curl -s -o /dev/null -w '%{http_code}' ... || echo 000)"`. When the connection
