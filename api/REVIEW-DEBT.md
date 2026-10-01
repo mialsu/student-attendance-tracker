@@ -23,8 +23,9 @@ cut (`/confess`), read first by any architecture or review session, dispositione
   4. **The images.** ~~`nginx:alpine` and `postgres:17-alpine` still float.~~ Exact since the
      follow-up. The first deploy after that merge restarts the production database onto 17.11,
      after its backup. That is expected, and it rests on `compose run` recreating a changed
-     dependency, which was observed with Compose v5.5.1 locally and never checked on the VM: the
-     deploy log's *Migrations* group shows `attendance-db-prod` either way.
+     dependency, which was observed with Compose v5.5.1 locally. **Observed on the VM on
+     2026-10-01:** #19's deploy pulled `postgres:17.11-alpine`, recreated `attendance-db-prod` in
+     its *Migrations* group after the backup, and reported it healthy before the backend swap.
 - **Disposition:** 1 **closed** — #18 deployed on 2026-09-30, both health checks passed and
   `/health` answers 200. 2 is accepted as a consequence in ADR-0009. 3 and 4 are fixed, each with
   the open half named above.

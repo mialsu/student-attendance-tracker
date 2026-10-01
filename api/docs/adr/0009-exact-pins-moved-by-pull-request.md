@@ -67,14 +67,15 @@ they check.
   through the scheduled pull requests, or by hand.
 - Adding a package means adding its line and the new transitive lines a fresh `pip freeze` shows.
   The header of `requirements.txt` says so.
-- **A postgres tag change restarts the production database.** The deploy's migration step,
-  `$COMPOSE run --rm backend alembic upgrade head` in `.github/workflows/backend.yml`, passes no
-  `--no-deps`, and `backend` depends on `db`. `docker compose run` recreates a dependency whose
-  definition changed: verified locally with Compose v5.5.1, where the dependency's container id and
-  image both changed. The VM's Compose version was not checked. That is why the image tags land in a
-  pull request of their own: its merge is a scheduled database restart, after the deploy's backup,
-  and so is every later postgres bump. A minor version within 17 keeps the storage format, so no
-  data migration is involved.
+- **A postgres tag change restarts the production database.** The deploy's migration step, `$COMPOSE
+  run --rm backend alembic upgrade head` in `.github/workflows/backend.yml`, passes no `--no-deps`,
+  and `backend` depends on `db`. `docker compose run` recreates a dependency whose definition
+  changed: verified locally with Compose v5.5.1, where the dependency's container id and image both
+  changed. Observed on the VM too, on 2026-10-01: #19's deploy log shows `attendance-db-prod`
+  *Recreate* in its migration step, after the backup, and healthy again before the backend was
+  swapped. That is why the image tags land in a pull request of their own: its merge is a scheduled
+  database restart, after the deploy's backup, and so is every later postgres bump. A minor version
+  within 17 keeps the storage format, so no data migration is involved.
 - `python:3.12-slim` still floats within 3.12, deliberately: its patch releases carry security fixes
   and the OS tz database `zoneinfo` reads first, which a digest pin would freeze (ADR-0008).
 - The CI test service stays `postgres:17-alpine`, also deliberately: it tries each new 17.x before
