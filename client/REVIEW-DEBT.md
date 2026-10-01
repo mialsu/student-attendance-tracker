@@ -6,6 +6,31 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 
 <!-- Newest first. -->
 
+## 2026-10-01 — the walk fails on an uncaught error now, and what that guard cannot see
+- **What:** `noUncaughtErrors`, a third auto fixture in `e2e/fixtures.ts`, fails every walk test
+  whose page throws an error nothing catches, and names it. Over the whole walk it found none: 88
+  of 88 passed with it on, so no swept state or journey was hiding a crash. Planted in two swept
+  states at both viewports: a render error in `NotFound.tsx` went red naming it, beside the heading
+  timeout it causes; a throw inside a `setTimeout` and an unhandled rejection on the *Kaavion
+  jakso* toggle went red naming both, in a state that passes without the guard.
+- **Found on the way in: the walk's fixed clock hid errors thrown in timers.** `fixedClock` installs
+  Playwright's clock, which runs every timer and animation-frame callback inside its own try/catch
+  and logs what it catches with `console.error`. The planted `setTimeout` throw never reached
+  `pageerror`; only the rejection did. The guard now also counts a `console.error` whose first
+  argument is an Error, and `e2e/guards.spec.ts` holds it there: it plants a click-handler throw, a
+  rejection, a timer throw and a logged string, and expects exactly the three errors. Watched red
+  with the console channel removed (the timer error missing) and with every `console.error`
+  counted (the string present). Dependabot moves `@playwright/test` monthly, which is why the
+  clock's behaviour has a test rather than a note.
+- **Any other `console.error` does not fail a test, measured:** 28 of them in 10 of the 88 tests,
+  and no warnings. 26 are Chromium's "Failed to load resource" for the 500s and 401s the walk
+  serves on purpose, and 2 are `NotFound.tsx` logging the address it could not find. None is an
+  Error.
+- **What green tests do NOT prove here:** an Error logged just as the page navigates away. The
+  guard asks the page whether a logged value is an Error, a document that has gone cannot answer,
+  and that one report is dropped rather than failed on timing.
+- **Disposition:** OPEN, for the Owner, so nobody reads the guard as complete.
+
 ## 2026-10-01 — spec 0010 slice 1: what its green tests and its live pass do not prove
 - **What:** *Tilastot* reads filter, totals, chart, table; every bar carries its count and date
   when all of them fit at 20px a bar, otherwise a one-line hint; the bars do not animate; the chart
@@ -24,7 +49,9 @@ cut (`/confess`), read first by any architecture or review session, dispositione
   4. **Uncaught page errors.** The walk has no guard for them. Withholding the chart element
      crashed the whole app once in 200 runs, and it showed only as a missing bar and a blank
      screenshot. A `pageerror` listener beside `hermetic` in `e2e/fixtures.ts` would have named it
-     on the first failure.
+     on the first failure. **CLOSED 2026-10-01:** `noUncaughtErrors` in `e2e/fixtures.ts` fails
+     every walk test whose page throws an error nothing catches, and names the error. The entry
+     above has the reds, and the blind spot the walk's own clock had made.
   5. **Three-digit counts.** Every fixture's counts are one or two digits. A month with a hundred
      attendances or more draws a three-digit count; months are few and wide, so it should fit, but
      no screenshot shows one.
@@ -39,8 +66,8 @@ cut (`/confess`), read first by any architecture or review session, dispositione
   it. Radix's toggle group only moves focus, and Space selects, so a screen reader announces
   "Kuukaudet, radio button, not checked" on the focused option until Space is pressed. The
   2026-09-11 entry on the toggle's grouping role is where this belongs next.
-- **Disposition:** all OPEN, for the Owner. 4 is a small fixture change worth doing before the next
-  slice; the radio semantics are a decision about the toggle's role.
+- **Disposition:** 4 CLOSED 2026-10-01; the rest OPEN, for the Owner. The radio semantics are a
+  decision about the toggle's role.
 
 ## 2026-10-01 — the walk had two nondeterminisms, and `retries: 0` was claiming otherwise
 - **What:** two ways the browser walk could fail on a tree that had already passed.
