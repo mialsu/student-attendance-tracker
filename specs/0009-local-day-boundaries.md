@@ -1,6 +1,8 @@
 # Spec 0009 — a day is a Finnish day
 
-**Status:** shaped 2026-09-15, two decisions taken by the Owner — `ready-for-agent`
+**Status:** shaped 2026-09-15, two decisions taken by the Owner. **Closed 2026-09-16:** its one
+slice shipped in #15 (`cd262c1`) with spec 0008 and deployed the same day; AC-1 – AC-10 all read
+WORKS (gates)
 **Weight:** Standard
 **Domain dial:** on (project-wide); touches `INV-1` not at all, and no invariant governs the clock
 
@@ -195,4 +197,7 @@ clearing the OTel variables restores CI's environment and the file passes 12/12.
 
 *(Dated entries, added as the build teaches us the spec was wrong.)*
 
-None yet.
+**2026-10-01 — the status line said `ready-for-agent` for two weeks after #15 shipped this spec,
+found on resuming.** In this repo the `Status:` line is the triage label
+(`docs/agents/triage-labels.md`), so the spec went on advertising itself as work an agent could
+pick up. Corrected to closed, in the form spec 0006 uses.

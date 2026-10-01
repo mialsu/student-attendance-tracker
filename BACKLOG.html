@@ -271,10 +271,10 @@ footer p { margin: 0 0 .5rem; }
   <dl class="tally">
     <div><dt>Shipped</dt><dd>5</dd></div>
     <div><dt>Ranked, remaining</dt><dd>2</dd></div>
-    <div><dt>Small &amp; independent</dt><dd>13</dd></div>
+    <div><dt>Small &amp; independent</dt><dd>15</dd></div>
     <div><dt>Live defects</dt><dd>0</dd></div>
-    <div><dt>Need your call</dt><dd>5</dd></div>
-    <div><dt>Ready to spec</dt><dd>1</dd></div>
+    <div><dt>Need your call</dt><dd>4</dd></div>
+    <div><dt>Ready to spec</dt><dd>0</dd></div>
   </dl>
 </header>
 
@@ -479,10 +479,10 @@ ruff 93 -> 91, mypy 16 -> 15; client typecheck 4 and lint 16 unchanged</p>
       </p>
       <p>
         <strong>What remains is the feature.</strong> Two teachers on one class: a join table, a
-        definition of <em>associated</em> that replaces <em>owns</em>, and a decision you have not
-        made yet &mdash; whether a shared teacher may delete the class, delete students, or only
-        record attendance. That question is the reason this is not just a schema change, and it is
-        yours (<code>INVARIANTS.md</code>, <em>Known future change</em>).
+        definition of <em>associated</em> that replaces <em>owns</em>, and a decision about what a
+        shared teacher may do. <strong>Shaped 7 Sep</strong> with you as spec&nbsp;0004: only the
+        class's creator may delete, share or unshare it (D5), and everything else, the
+        <code>active</code> toggle included, is open to any associated teacher (D6). Not built.
       </p>
       <p>
         The cost is now what the wording always promised: <strong>two edits</strong>, the check and
@@ -493,7 +493,7 @@ ruff 93 -> 91, mypy 16 -> 15; client typecheck 4 and lint 16 unchanged</p>
       <p class="ev">DONE: class_service.verify_class_ownership &mdash; the one check site
 DONE: class_service.get_classes_for_teacher &mdash; the one filter site, WHERE not a check
 DONE: drift-extra.sh check 4 &mdash; proven against four operand spellings
-OWED: shared classes &mdash; needs your call on what a shared teacher may do
+OWED: shared classes &mdash; spec 0004, shaped 7 Sep, not built
 tests/test_authorization.py &mdash; 18 denials, 8 positive controls; neuter the check, 17 go red</p>
     </div>
   </li>
@@ -776,9 +776,9 @@ client/scripts/drift-extra.sh:34 &mdash; the check that would ban them in a new 
         <td class="st"><span class="chip hold">your call</span></td>
       </tr>
       <tr>
-        <td>No accessibility enforcer exists anywhere, so every A11Y rule is <code>[review-only]</code> and there is no <code>DESIGN.md</code>. The web profile names three cheap enforcers; this is a <code>/design-brief</code> decision before it is a task</td>
-        <td class="where">client/ &mdash; no DESIGN.md</td>
-        <td class="st"><span class="chip hold">your call</span></td>
+        <td>No accessibility enforcer exists anywhere, so every A11Y rule is <code>[review-only]</code> and there is no <code>DESIGN.md</code>. The web profile names three cheap enforcers; this is a <code>/design-brief</code> decision before it is a task. <strong>Done 7 Sep:</strong> <code>/design-brief</code> wrote <code>client/DESIGN.md</code>, and counted on 1 Oct, 8 of its 11 <code>A11Y</code> rows name a <code>[test]</code> or <code>[live]</code> enforcer</td>
+        <td class="where">client/DESIGN.md &sect;5</td>
+        <td class="st"><span class="chip done">done 7 Sep</span></td>
       </tr>
       <tr>
         <td>Vercel's git integration must stay disconnected or CI's gate silently becomes advisory again and two deploys race. <strong>Nothing in the repo can detect a reconnect</strong></td>
