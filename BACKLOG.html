@@ -601,6 +601,43 @@ client/scripts/drift-extra.sh:34 &mdash; the check that would ban them in a new 
     </thead>
     <tbody>
       <tr>
+        <td><strong>Check a trace in Jaeger 2.21.0.</strong> #21 moved the collector on 1 Oct and
+          the deploy's health checks passed, but they never touch tracing: the API drops spans the
+          collector refuses, by design. <code>ssh -L 16686:localhost:16686</code> to the VM, open
+          <code>localhost:16686</code>, and look for an <code>attendance-api</code> trace newer than
+          the deploy. Every later Jaeger bump leaves the same check</td>
+        <td class="where">api/REVIEW-DEBT.md, 1 Oct &mdash; deployment/production/docker-compose.yml</td>
+        <td class="st"><span class="chip hold">your call</span></td>
+      </tr>
+      <tr>
+        <td><strong>Accept the <code>ecdsa</code> alert, or replace <code>python-jose</code>.</strong>
+          Dependabot rates <code>ecdsa</code> 0.19.2 high, for a timing attack on P-256 signing, and no
+          fixed version exists. It arrives with <code>python-jose</code>. This API signs HS256 only, so
+          nothing reaches it today; it becomes real only if <code>ALGORITHM</code> is ever set to an
+          ES* value. PyJWT in place of <code>python-jose</code> removes it, a change to the one module
+          that makes tokens</td>
+        <td class="where">api/REVIEW-DEBT.md, 1 Oct &mdash; app/core/security.py</td>
+        <td class="st"><span class="chip hold">your call</span></td>
+      </tr>
+      <tr>
+        <td><strong>react-router 7 and vite 6 are majors Dependabot never proposes.</strong> Each fixes
+          alerts that went on 1 Oct: react-router 6.30.6's two (one SSR-only, one an open redirect no
+          link here can reach) and vite 5's and esbuild's, which matter only to the dev server and
+          the build. lodash 4.17.21, bundled through recharts, needs only a transitive move to 4.18.0,
+          and version updates never make one. None is reachable from the app today</td>
+        <td class="where">client/REVIEW-DEBT.md, 1 Oct &mdash; client/package.json</td>
+        <td class="st"><span class="chip hold">your call</span></td>
+      </tr>
+      <tr>
+        <td><strong>OpenTelemetry and pydantic only move by hand.</strong> Dependabot unlocks one
+          package at a time, and both families pin their members exactly, so it never proposes them.
+          OpenTelemetry 1.45.0 is out and replaces <code>requests</code> in the HTTP exporter, so it
+          wants its own pull request and a trace checked in Jaeger after the deploy. pydantic moves
+          when 2.14 ships. The command for each is in <code>api/scripts/README.md</code></td>
+        <td class="where">api/REVIEW-DEBT.md, 1 Oct &mdash; api/requirements.in</td>
+        <td class="st"><span class="chip hold">your call</span></td>
+      </tr>
+      <tr>
         <td><strong>The dependency gate catches none of this repo's dependencies.</strong>
           <code>drift-check.sh</code> refuses a dependency added without an ADR. Its path bug was
           fixed on 4 Sep (<code>--relative</code> on every <code>git diff</code>, proven in the
@@ -609,9 +646,10 @@ client/scripts/drift-extra.sh:34 &mdash; the check that would ban them in a new 
           the first of <code>["':= ]</code>, leaving the <code>&gt;</code> attached, and the charset
           filter after it drops the line. All 21 requirements here use <code>&gt;=</code>. The fix
           is two characters in the cut class, but it changes the vendored template's parsing rather
-          than a path, so it waits for your word</td>
+          than a path, so it waits for your word. <strong>Fixed 4 Sep:</strong> the cut class now
+          stops at <code>&lt;&gt;~![</code> too, and since #18 every requirement is exact anyway</td>
         <td class="where">api/scripts/drift-check.sh:225-227 &mdash; dep_names</td>
-        <td class="st"><span class="chip hold">needs your call</span></td>
+        <td class="st"><span class="chip done">fixed 4 Sep</span></td>
       </tr>
       <tr>
         <td><strong>devkit's own template still has the path bug.</strong> The
@@ -628,14 +666,16 @@ client/scripts/drift-extra.sh:34 &mdash; the check that would ban them in a new 
           hidden-count query, which turned out to be the cheap part: 200 students and 5,000 records
           give a 65&nbsp;ms request, of which the legacy count is 6.6&nbsp;ms and this loop is most
           of the rest. Not slow yet, and every test runs against a handful of students, so nothing
-          fails as it grows. One <code>selectinload</code> would replace 20 queries with one</td>
+          fails as it grows. One <code>selectinload</code> would replace 20 queries with one.
+          <strong>Fixed 4 Sep</strong>, and <code>tests/test_query_budget.py</code> fails if it comes back</td>
         <td class="where">app/services/attendance_service.py &mdash; the <code>for student in students:</code> loop</td>
-        <td class="st"><span class="chip rest">open</span></td>
+        <td class="st"><span class="chip done">fixed 4 Sep</span></td>
       </tr>
       <tr>
-        <td><code>student_service.py</code> is a core service at 29% coverage</td>
+        <td><code>student_service.py</code> is a core service at 29% coverage. <strong>100% on
+          1 Oct</strong>, in the suite run that verified spec 0007</td>
         <td class="where">app/services/student_service.py</td>
-        <td class="st"><span class="chip hold">open</span></td>
+        <td class="st"><span class="chip done">100% on 1 Oct</span></td>
       </tr>
       <tr>
         <td><code>Settings</code> is an import-time singleton reading the ambient environment, so a test's result depends on who runs it.
