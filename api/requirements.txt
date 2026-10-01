@@ -45,7 +45,7 @@ aiosqlite==0.22.1  # tests/test_telemetry.py's throwaway engine; the suite itsel
 # The one range left in this file, on purpose: tz rules change by legislation, and ADR-0008 chose a
 # package that updates on rebuild over a frozen copy that goes wrong without saying so. It is data
 # with no code and no dependencies, so letting it float cannot change behaviour anywhere else.
-tzdata>=2024.1
+tzdata>=2026.4
 
 # Development
 python-dotenv==1.2.3
@@ -72,11 +72,11 @@ python-dotenv==1.2.3
 # check asks for is already written, in ADR-0007, which records that trace_id needs no new
 # dependency and that opentelemetry-instrumentation-logging was investigated and rejected. A second
 # ADR written to satisfy a gate is the pseudo-artifact ANTI-PATTERNS.md names.
-opentelemetry-api==1.44.0  # drift-ok: made explicit, not added; decided in ADR-0007
-opentelemetry-sdk==1.44.0
-opentelemetry-exporter-otlp-proto-http==1.44.0
-opentelemetry-instrumentation-fastapi==0.65b0
-opentelemetry-instrumentation-sqlalchemy==0.65b0
+opentelemetry-api==1.45.0  # drift-ok: made explicit, not added; decided in ADR-0007
+opentelemetry-sdk==1.45.0
+opentelemetry-exporter-otlp-proto-http==1.45.0
+opentelemetry-instrumentation-fastapi==0.66b0
+opentelemetry-instrumentation-sqlalchemy==0.66b0
 
 # Standards harness (see docs/adr/0001-*.md)
 # Replaces the flake8 + black + mypy recipes the justfile used to declare but never had installed.
@@ -114,19 +114,19 @@ markdown-it-py==4.2.0
 MarkupSafe==3.0.3
 mdurl==0.1.2
 mypy_extensions==1.1.0
-opentelemetry-exporter-otlp-proto-common==1.44.0
-opentelemetry-instrumentation==0.65b0
-opentelemetry-instrumentation-asgi==0.65b0
-opentelemetry-proto==1.44.0
-opentelemetry-semantic-conventions==0.65b0
-opentelemetry-util-http==0.65b0
+opentelemetry-exporter-otlp-proto-common==1.45.0
+opentelemetry-instrumentation==0.66b0
+opentelemetry-instrumentation-asgi==0.66b0
+opentelemetry-proto==1.45.0
+opentelemetry-semantic-conventions==0.66b0
+opentelemetry-util-http==0.66b0
 packaging==26.3
 pathspec==1.1.1
 pluggy==1.6.0
 protobuf==7.36.2
 pyasn1==0.6.4
 pycparser==3.0
-pydantic_core==2.46.5
+pydantic_core==2.49.0
 Pygments==2.21.0
 PyYAML==6.0.3
 requests==2.34.2
