@@ -52,6 +52,9 @@ async function dashboard(page: Parameters<typeof signedIn>[0]) {
   await expect(page.getByRole('heading', { name: 'Kurssit', level: 1 })).toBeVisible();
 }
 
+/** What the first DOM change that drew a bar shape carried. */
+type FirstFrame = { bars: number; labels: number };
+
 /**
  * Spec 0010 AC-27: the chart's bars do not animate, so the first frame that holds a bar holds every
  * count. Recharts animates in JavaScript, out of reach of `index.css`'s `reduce` block and of
@@ -62,9 +65,6 @@ async function dashboard(page: Parameters<typeof signedIn>[0]) {
  * with a MutationObserver installed before any script runs, the first DOM change that puts a bar
  * shape on screen and how many count labels arrived in that same change.
  */
-/** What the first DOM change that drew a bar shape carried. */
-type FirstFrame = { bars: number; labels: number };
-
 async function firstFrameWithBars(page: Page): Promise<FirstFrame> {
   await page.addInitScript(() => {
     const record = window as unknown as { __firstBars?: FirstFrame };
@@ -104,6 +104,25 @@ test.describe('the chart draws its numbers with its bars', () => {
       expect(first.labels).toBe(first.bars);
     });
   }
+
+  // Decision 5, made deterministic. Recharts sizes itself in an effect, and the page learns the
+  // width from a ResizeObserver; usually the two land in one render, and a chart that drew bars
+  // before the page knew its width failed AC-27 once in a few hundred runs. Delaying every
+  // ResizeObserver report forces the other order on every run, so that chart fails here every time.
+  test('no-preference — the bars wait for the width when the ResizeObserver reports late', async ({
+    page,
+  }) => {
+    await page.addInitScript(() => {
+      const Native = window.ResizeObserver;
+      window.ResizeObserver = class extends Native {
+        constructor(callback: ResizeObserverCallback) {
+          super((entries, observer) => setTimeout(() => callback(entries, observer), 150));
+        }
+      };
+    });
+    const first = await firstFrameWithBars(page);
+    expect(first.labels).toBe(first.bars);
+  });
 });
 
 test.describe('prefers-reduced-motion', () => {
