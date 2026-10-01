@@ -295,13 +295,13 @@ Verdicts are filled by `/verify-live`, per criterion. A task's verdict is the **
 
 | # | Criterion | Proven by | Serves | Verdict |
 |---|---|---|---|---|
-| AC-1 | In every state that renders figures, *Tilastot* reads filter, four totals, chart, per-day table, in that DOM order | `test:` hook seam | US-1, US-2 | pending |
-| AC-2 | The fit function answers yes exactly when every bar gets the threshold width, and no for an unmeasured width of 0; watched failing against an off-by-one at the boundary | `test:` unit | US-6, US-30 | pending |
-| AC-3 | When the counts fit, the walk finds as many count labels and as many date ticks as bars, by day and by month, at both viewports | `test:` e2e | US-3, US-4, US-5, US-8 | pending |
-| AC-4 | On the long fixture, the walk finds no count labels and the hint line under the chart, at both viewports | `test:` e2e | US-6, US-7, US-8 | pending |
-| AC-5 | Before the chart has a measured width, neither the numbers nor the hint render | `test:` hook seam | US-6 | pending |
-| AC-6 | Element screenshots at 320, 390 and 1280 px show every number legible and the tallest bar's number unclipped; the threshold is set from them; the tooltip still answers on hover | `live:` | US-3, US-8, US-9 | pending |
-| AC-7 | The numbers paint in a `card` pair `tokens-contrast.test.ts` already asserts | `test:` token pairs + review | US-3 | pending |
+| AC-1 | In every state that renders figures, *Tilastot* reads filter, four totals, chart, per-day table, in that DOM order | `test:` hook seam | US-1, US-2 | **WORKS**: the hook seam in both states that render figures, red first (table before chart); live, the full-page capture and the keyboard order (Alkaen, Päättyen, then the chart's toggle) read in that order |
+| AC-2 | The fit function answers yes exactly when every bar gets the threshold width, and no for an unmeasured width of 0; watched failing against an off-by-one at the boundary | `test:` unit | US-6, US-30 | **WORKS**: four unit tests; a planted `<` for `<=` failed two of them before it was reverted; live, the rule flips exactly at 7/8 bars (320px), 11/12 (390px) and 41/42 (1280px) |
+| AC-3 | When the counts fit, the walk finds as many count labels and as many date ticks as bars, by day and by month, at both viewports | `test:` e2e | US-3, US-4, US-5, US-8 | **WORKS**: the walk's two aggregate states at 320 and 1280px, red first (0 labels against 4); live on real data, 34 weekly sessions numbered at 1280px (34 counts, 34 dates), 9 months at 1280 and 390px, a narrowed range at every width |
+| AC-4 | On the long fixture, the walk finds no count labels and the hint line under the chart, at both viewports | `test:` e2e | US-6, US-7, US-8 | **WORKS**: the walk's new 90-day state at both widths, red first (no hint); live, the whole course at 390 and 320px and its months at 320px show the hint and no count |
+| AC-5 | Before the chart has a measured width, neither the numbers nor the hint render | `test:` hook seam | US-6 | **WORKS**: the hook seam, watched red against a naive hint; in Chromium the hint never appeared on the way to a numbered chart, 40 loads of 40 |
+| AC-6 | Element screenshots at 320, 390 and 1280 px show every number legible and the tallest bar's number unclipped; the threshold is set from them; the tooltip still answers on hover | `live:` | US-3, US-8, US-9 | **WORKS**, once the chart spanned its card (Spec Deltas): at each width's limit and on live data every count is legible, none collide, the tallest bar's count is whole inside a 20px top margin; the threshold stays 20px; the tooltip answered on hover at all three widths |
+| AC-7 | The numbers paint in a `card` pair `tokens-contrast.test.ts` already asserts | `test:` token pairs + review | US-3 | **WORKS**: counts paint `hsl(var(--foreground))`, computed `rgb(24, 27, 47)`, the light `--foreground` on `card`, a pair `tokens-contrast.test.ts` asserts in both themes |
 | AC-8 | Each of the four `sort_by` values orders the summary as named, attendance ties broken by name ascending, with `skip` and `limit` applied after the sort and a search applied before it | `test:` route | US-17, US-18, US-20 | pending |
 | AC-9 | Any other `sort_by` returns 422; watched failing against today's fallback to `name_asc` | `test:` route | US-28 | pending |
 | AC-10 | The summary stays within `BUDGET_SUMMARY` under all four sort values | `test:` query budget | US-29 | pending |
@@ -321,7 +321,7 @@ Verdicts are filled by `/verify-live`, per criterion. A task's verdict is the **
 | AC-24 | Picking a day closes that end's calendar, for a range the cache has seen and for one it has not | `test:` e2e | US-26 | pending |
 | AC-25 | A failed range change renders the error state, and none of the previous range's figures | `test:` hook seam | US-27 | pending |
 | AC-26 | `API_REFERENCE.md`'s summary section documents the route as built: its parameters, the four sort values, the 422 and the paginated response | review, at `/code-review` | US-32 | pending |
-| AC-27 | The bars do not animate: the first frame that holds the bars holds every count label, under `no-preference` as well as `reduce`; watched failing with the animation turned back on | `test:` e2e, in `e2e/motion.spec.ts` | US-3, US-6 | pending |
+| AC-27 | The bars do not animate: the first frame that holds the bars holds every count label, under `no-preference` as well as `reduce`; watched failing with the animation turned back on | `test:` e2e, in `e2e/motion.spec.ts` | US-3, US-6 | **WORKS**: red as the code stood and again with the animation turned back on (0 counts in the first frame with bars), green with it off under `reduce` and `no-preference`, 200 runs of 200 |
 
 **Invariants touched:** `INV-1`, which does not move. No route is added, and
 `verify_class_ownership` stays `get_attendance_summary`'s first act, so a sort key cannot reach
@@ -446,7 +446,13 @@ the 422 for a value no client sends. Slices 1, 3 and 4 touch the client only.
 
 ## Verification status
 
-Nothing built yet.
+**Slice 1 built and verified on 2026-10-01**, on this branch and not yet merged: AC-1 – AC-7 and
+AC-27 all read **WORKS**, so the slice's verdict is WORKS. The evidence came three ways: the hook
+seam and unit tests; the browser walk with its mocked API, plus 200 repeats of AC-27 and 90 of the
+*Tilastot* states; and a live pass on a local stack, with a real login, the real API, and a weekly
+course since November 2025 created through that API (34 sessions, 391 records), at 320, 390 and
+1280px, with axe and reflow on every captured state and a keyboard-only walk of the surface.
+Slices 2–4 are not started.
 
 ## Spec Deltas
 
@@ -472,3 +478,25 @@ range change, *Kaavion jakso* toggle and resize, taking the numbers off each tim
 `prefers-reduced-motion`, a gap in `A11Y-6`. The Owner chose `isAnimationActive={false}` over
 keeping it and over animating only without reduced motion. AC-27 is new and joins slice 1, and the
 two *Testing Decisions* paragraphs that leaned on the animation are updated.
+
+**2026-10-01 — decision 4's plot was 641px wide, not about 840, until the chart spanned its card.**
+`ChartContainer`'s `aspect-video`, under the 400px height, fixed the chart at ~711px on a desktop
+whatever the card, so at 20px a bar it numbered 32 bars where this decision had reasoned from the
+card's width and expected about 40. Found by slice 1's screenshots. The Owner chose to span the
+card. Measured afterwards: 824px and 41 bars at 1280px, 222px and 11 at 390px, 152px and 7 at
+320px; the phones were already full width. On the live pass a weekly course since November 2025,
+34 sessions, is numbered whole on a desktop and shows the hint on a phone, which is what this
+decision predicted for the day it was written.
+
+**2026-10-01 — the threshold stays 20px.** Open question 2's default, confirmed by slice 1's
+screenshots rather than moved: at each width's limit (7, 11 and 41 bars) every count and every date
+is legible and none collide, and the slanted dates at 1280px would start to touch below it. The
+tallest bar's count needed a 20px top margin to stay whole; the chart's margin and Y-axis width are
+declared once in `ClassStatistics.tsx` and handed to Recharts, so the rule judges the plot drawn.
+
+**2026-10-01 — decision 5 as built: no bars until the width is known, rather than nothing.** The
+chart element renders empty, axes and grid only, until `onChartResize` first reports, and only its
+data waits. Withholding the chart element itself crashed the app: `ResponsiveContainer` reads
+`children.type` of whatever it is given, and the walk caught the blank page once in 200 runs.
+Without any gate the order held by timing alone, since Recharts sizes itself in an effect before
+the ResizeObserver behind `onChartResize` reports.
