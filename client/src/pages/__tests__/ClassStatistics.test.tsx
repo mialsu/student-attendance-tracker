@@ -54,6 +54,37 @@ const STATISTICS = {
 
 const DAY_CHART = 'Läsnäolot päivittäin (kaavio)';
 const MONTH_CHART = 'Läsnäolot kuukausittain (kaavio)';
+const BAR_LABEL_HINT = 'Rajaa lyhyempi aikaväli nähdäksesi luvut pylväissä.';
+
+/**
+ * Ninety days: too many bars to number at any width, so a measured chart would show the hint.
+ * Only `daily_stats` matters to the test that uses it; the totals are STATISTICS' and do not add up.
+ */
+const NINETY_DAYS = {
+  ...STATISTICS,
+  daily_stats: Array.from({ length: 90 }, (_, i) => ({
+    date: new Date(Date.UTC(2026, 5, 23 + i)).toISOString().slice(0, 10),
+    count: 3,
+  })),
+};
+
+/**
+ * Spec 0010 AC-1: the surface reads filter, four totals, chart, per-day table. DOM order is the
+ * order a screen reader and a keyboard meet them in, and it is the visual order too, since nothing
+ * here repositions a section. Sorted by document position rather than asserted pairwise, so a
+ * failure prints the order the page actually has.
+ */
+function sectionOrder(): string[] {
+  const sections: Record<string, HTMLElement> = {
+    filter: screen.getByLabelText('Alkaen'),
+    totals: screen.getByText('Läsnäoloja yhteensä'),
+    chart: screen.getByText(DAY_CHART),
+    table: screen.getByText('Läsnäolot päivittäin'),
+  };
+  return Object.keys(sections).sort((a, b) =>
+    sections[a].compareDocumentPosition(sections[b]) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1
+  );
+}
 
 describe('ClassStatistics — the day/month toggle', () => {
   beforeEach(() => {
@@ -114,6 +145,29 @@ describe('ClassStatistics — the day/month toggle', () => {
 
     await user.keyboard('{ArrowRight}');
     expect(months).toHaveFocus();
+  });
+
+  // Spec 0010 AC-1, decision 2: the chart sits directly under the totals, so the filter that
+  // narrows it is a short scroll above it rather than a whole table's length.
+  it('reads filter, four totals, chart, per-day table, in that order', () => {
+    render(<ClassStatistics classId="c1" />);
+
+    expect(sectionOrder()).toEqual(['filter', 'totals', 'chart', 'table']);
+  });
+
+  // Spec 0010 AC-5, decision 5: nothing about the numbers renders until the chart has measured
+  // itself, so a first frame cannot flash the hint. jsdom never measures, which makes it exactly
+  // that state. Recharts draws no bars here, so the hint is the half this can see, and it is the
+  // half a careless reading of "unmeasured" would show: a width of 0 fits no bar.
+  it('shows neither the numbers nor the hint before the chart has measured itself', () => {
+    vi.mocked(useAttendanceHooks.useAttendanceStatistics).mockReturnValue(
+      asStatistics({ data: NINETY_DAYS, isLoading: false, error: null, refetch: vi.fn() })
+    );
+
+    render(<ClassStatistics classId="c1" />);
+
+    expect(screen.getByText(DAY_CHART)).toBeInTheDocument();
+    expect(screen.queryByText(BAR_LABEL_HINT)).not.toBeInTheDocument();
   });
 
   // The Owner's decision, and the reason the toggle is not simply a replacement: a chart cannot
@@ -276,6 +330,19 @@ describe('ClassStatistics — the timeframe (spec 0008)', () => {
 
     // US-21: 10.9.2026, the way she writes it — not 2026-09-10 and not September 10th.
     expect(screen.getByLabelText(FROM)).toHaveTextContent(DAY.finnish());
+  });
+
+  // Spec 0010 AC-1's other state: a timeframe with figures renders the same four sections, so it
+  // owes the same order.
+  it('keeps the order filter, totals, chart, table under a timeframe', async () => {
+    const user = userEvent.setup();
+    mockByRange({ data: STATISTICS });
+    render(<ClassStatistics classId="c1" />);
+
+    await pick(user, FROM, DAY.number);
+
+    expect(screen.getByText(RANGE_DAYS)).toBeInTheDocument();
+    expect(sectionOrder()).toEqual(['filter', 'totals', 'chart', 'table']);
   });
 
   it('retitles the per-day table, because "kaikki päivät" is false under a timeframe', async () => {

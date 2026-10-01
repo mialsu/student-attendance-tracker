@@ -9,7 +9,7 @@
  * Three things here are decisions rather than markup:
  *
  * 1. **The count is `student_count`, and it names its unit.** A bare number beside a course reads
- *    as either Students or attendances; `sr-only` "opiskelijaa" settles it for assistive
+ *    as either Students or attendances; the link's `aria-label` settles it for assistive
  *    technology, and `tabular-nums` keeps the column steady. The API carries both counts on the
  *    class list itself since 2026-09-11, so the sidebar costs no extra request — see
  *    `class_service.get_classes_for_teacher`.

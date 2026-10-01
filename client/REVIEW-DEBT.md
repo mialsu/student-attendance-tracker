@@ -6,6 +6,42 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 
 <!-- Newest first. -->
 
+## 2026-10-01 — spec 0010 slice 1: what its green tests and its live pass do not prove
+- **What:** *Tilastot* reads filter, totals, chart, table; every bar carries its count and date
+  when all of them fit at 20px a bar, otherwise a one-line hint; the bars do not animate; the chart
+  spans its card. AC-1 – AC-7 and AC-27 all read WORKS in the spec, with the evidence beside each.
+- **What green tests do NOT prove here:**
+  1. **The teacher's own course on her own screen.** The live pass used a weekly course built to
+     the shape `CONTEXT.md` gives hers, 34 sessions, numbered whole at 1280px. The production
+     course's real count was not looked at, and the chart spans its card, so a narrower desktop
+     window numbers fewer bars than 41. Whether she sees numbers or the hint on her screen is
+     unmeasured.
+  2. **Widths between the swept ones.** The walk sweeps 320 and 1280px and the screenshots added
+     390px. A laptop window around 1024px was not looked at.
+  3. **Pixels, still.** The walk counts labels and ticks; it does not look at them. Legibility,
+     collisions and clipping rest on slice 1's screenshots, taken once. A later font or spacing
+     change that crowds the counts would pass every gate.
+  4. **Uncaught page errors.** The walk has no guard for them. Withholding the chart element
+     crashed the whole app once in 200 runs, and it showed only as a missing bar and a blank
+     screenshot. A `pageerror` listener beside `hermetic` in `e2e/fixtures.ts` would have named it
+     on the first failure.
+  5. **Three-digit counts.** Every fixture's counts are one or two digits. A month with a hundred
+     attendances or more draws a three-digit count; months are few and wide, so it should fit, but
+     no screenshot shows one.
+  6. **A width carried across a remount.** `chartWidth` lives in the page, and a range change the
+     cache has not seen unmounts the chart for its loading branch. The remounted chart therefore
+     decides numbers and hint from the old width before its own container reports. That is right
+     unless the window changed size during the load, and then wrong until the next report, a frame
+     or so later. Found by `/code-review`; slice 4 keeps the chart mounted across range changes,
+     which removes it.
+- **Found on the live keyboard pass, left alone as outside this slice:** the *Kaavion jakso*
+  options are `role="radio"`, and ARIA's radio pattern checks an option when an arrow key moves to
+  it. Radix's toggle group only moves focus, and Space selects, so a screen reader announces
+  "Kuukaudet, radio button, not checked" on the focused option until Space is pressed. The
+  2026-09-11 entry on the toggle's grouping role is where this belongs next.
+- **Disposition:** all OPEN, for the Owner. 4 is a small fixture change worth doing before the next
+  slice; the radio semantics are a decision about the toggle's role.
+
 ## 2026-10-01 — the walk had two nondeterminisms, and `retries: 0` was claiming otherwise
 - **What:** two ways the browser walk could fail on a tree that had already passed.
   1. **The clock.** The walk ran on the real date, and the timeframe states pick "the 10th" from a
@@ -42,6 +78,30 @@ cut (`/confess`), read first by any architecture or review session, dispositione
      the pair as a gap: one of them is lying about how the app is built.
 - **Disposition:** both OPEN, for the Owner. Deleting `bun.lockb` settles 2; 1 needs a decision
   only if security updates are switched on.
+
+## 2026-09-30 — the chart's bars still animate under `prefers-reduced-motion: reduce` — CLOSED 2026-10-01
+- **What:** `A11Y-6` was closed on 2026-09-12 for CSS motion, and the chart moves in JavaScript.
+  The `<Bar>` at `src/pages/ClassStatistics.tsx:345` sets no animation prop, so it takes Recharts'
+  defaults: animated in every browser, over 400 ms (`recharts/lib/cartesian/Bar.js:329-332`).
+  Recharts drives that through react-smooth, which takes its JavaScript path for a function child
+  (`react-smooth/lib/Animate.js:262`) and reads no motion preference, so `index.css`'s `reduce`
+  block never reaches it. The animation reruns on every new dataset and every new chart size
+  (`recharts/lib/chart/generateCategoricalChart.js:2028`): on load, on a range change, on the
+  *Kaavion jakso* toggle and on a resize.
+- **How it is known:** traced through the code while resuming spec 0010. Not yet watched in a
+  browser.
+- **What green tests do NOT prove here:** `e2e/motion.spec.ts` reads `getComputedStyle`, which a
+  JavaScript animation never touches, so it stays green with the chart animating. The walk's
+  `settleAnimations` (`e2e/assertions.ts:101`) does not wait for it either:
+  `document.getAnimations()` lists CSS and Web Animations only.
+- **Disposition:** OPEN until spec 0010's slice 1 lands. The Owner decided on 2026-09-30 to turn
+  the bars' animation off (the spec's decision 6), which closes this and the numbers' 400 ms wait
+  together; AC-27 in `e2e/motion.spec.ts` becomes the chart's `A11Y-6` enforcer.
+- **CLOSED 2026-10-01 by slice 1.** The bars do not animate (`isAnimationActive={false}`), and
+  AC-27's two tests in `e2e/motion.spec.ts` are the chart's `A11Y-6` enforcer: they record the
+  first frame that holds a bar and fail if a count arrives later, under `reduce` and
+  `no-preference`. Watched in a browser this time, which this entry could not claim: with the
+  animation on and `reduce` emulated, the first frame with bars carried 0 counts of 4.
 
 ## 2026-09-30 — the page declared English, and the pager spoke it
 - **What:** `index.html` declared `lang="en"` over an all-Finnish interface, so a screen reader
@@ -277,7 +337,7 @@ cut (`/confess`), read first by any architecture or review session, dispositione
   below, and the Owner has not ruled on that one either.
 - **Disposition:** open. Cheap to close alongside the autocomplete sentence, in one pass.
 
-## 2026-09-11 — a full-page screenshot of *Tilastot* shows an empty chart, and the chart is fine
+## 2026-09-11 — a full-page screenshot of *Tilastot* shows an empty chart, and the chart is fine — CLOSED 2026-10-01
 - **What:** slice 6's restyle was checked by screenshot, and every `fullPage: true` shot of the
   statistics tab came back with axes, gridlines and labels drawn but **no bars** — at both
   viewports, and still empty after waiting 2.2s for Recharts' grow-from-zero animation.
@@ -295,7 +355,12 @@ cut (`/confess`), read first by any architecture or review session, dispositione
   surface, and the honest reading of an empty plot is "take an element shot" rather than "file a
   bug". Closing it properly means either a visual check a human makes or
   `isAnimationActive={false}` under test, which changes production code to suit a camera and so
-  wants the Owner's call.
+  wants the Owner's call. **The Owner made that call on 2026-09-30**, for the numbers rather than
+  the camera: spec 0010's decision 6 turns the animation off. Slice 1 takes one full-page capture
+  before this closes.
+- **CLOSED 2026-10-01.** Slice 1 took that capture: at 1280px, with the animation off, a full-page
+  screenshot of *Tilastot* draws every bar and its count. The general gap stays true, and the
+  2026-10-01 slice 1 entry carries it as its item 3: nothing in the walk looks at pixels.
 
 ## 2026-09-11 — the chart toggle's grouping role is judgement, not a gate
 - **What:** the day/month toggle is a Radix `ToggleGroup type="single"`, whose root is
@@ -751,10 +816,12 @@ cut (`/confess`), read first by any architecture or review session, dispositione
   closed 2026-09-12** (spec 0006 slice 8): `index.css` carries a `prefers-reduced-motion: reduce`
   block and `e2e/motion.spec.ts` is its enforcer, with a `no-preference` control so the pair
   proves the media query switches rather than a constant being read back. `active:scale-[0.98]`
-  is out of its scope on purpose and the `A11Y-6` row says why. **`A11Y-8` (200% zoom) and
-  `A11Y-9` (a control announcing itself in the wrong language) stay open**, both still
-  `[review-only]` with nothing behind them, and `A11Y-9` still has the seven English `sr-only`
-  strings in `src/components/ui/**` behind it.
+  is out of its scope on purpose and the `A11Y-6` row says why. **The chart is outside it too**,
+  found 2026-09-30: its bars animate in JavaScript, out of the block's reach (that date's entry).
+  **`A11Y-9` closed 2026-09-30**
+  (#16): the seven strings are Finnish, and `src/__tests__/document-language.test.tsx` holds the
+  page's `lang` and the three primitives the app renders; that date's entry says what it does not
+  prove. **`A11Y-8` (200% zoom) stays open**, still `[review-only]` with nothing behind it.
 
 ## 2026-09-07 — DESIGN.md's loading thresholds are decided but not implemented
 - **What:** §3 decides that nothing shows a spinner before 300ms, that a Card's frame never waits

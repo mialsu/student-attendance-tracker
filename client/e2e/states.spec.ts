@@ -17,7 +17,14 @@
  * `error` branch and its state here goes red. This is the note that said "when it is fixed, the
  * fourth state joins this table" — it has.
  */
-import { EMPTY_REGISTER, KURSSI, LONGEST_NAME, NO_STATISTICS } from './rows';
+import {
+  EMPTY_REGISTER,
+  KURSSI,
+  LONG_STATISTICS,
+  LONGEST_NAME,
+  NO_STATISTICS,
+  STATISTICS,
+} from './rows';
 import {
   failing,
   noKurssi,
@@ -48,6 +55,9 @@ type SweptState = {
 };
 
 const classUrl = `/class/${KURSSI.id}`;
+
+/** The line under a chart too long to number (spec 0010 decision 8, the Owner's ratified copy). */
+const BAR_LABEL_HINT = 'Rajaa lyhyempi aikaväli nähdäksesi luvut pylväissä.';
 
 /** Open one of the three tabs and wait for its own content, not for the tab button. */
 async function openTab(page: Page, name: string, ready: RegExp | string): Promise<void> {
@@ -83,6 +93,36 @@ async function pickDay(page: Page, end: string, day = '10'): Promise<void> {
   await page.getByLabel(end).click();
   await page.getByRole('gridcell', { name: day, exact: true }).click();
   await page.keyboard.press('Escape');
+}
+
+/**
+ * The chart spans its card's content box at every width (the Owner, 2026-10-01). Until then
+ * `ChartContainer`'s 16:9 aspect, under a 400px height, fixed the chart at ~711px wide on a desktop
+ * whatever the card, which capped the numbered bars at 32 where the card has room for 41.
+ */
+async function expectChartSpansItsCard(page: Page): Promise<void> {
+  const { chart, room } = await page.locator('[data-chart]').evaluate((el) => {
+    const card = el.parentElement;
+    if (!card) return { chart: 0, room: -1 };
+    const style = getComputedStyle(card);
+    return {
+      chart: el.getBoundingClientRect().width,
+      room: card.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight),
+    };
+  });
+  expect(chart, 'the chart is narrower than its card').toBeCloseTo(room, 0);
+}
+
+/**
+ * Spec 0010 AC-3: when the counts fit, every bar carries its count and its date tick. Counted
+ * against the fixture rather than sampled from the page, so every count here is a retrying
+ * assertion. Waiting is right for this one: it asserts the numbers arrive at all, and
+ * `e2e/motion.spec.ts` owns "in the same frame as the bars" (AC-27).
+ */
+async function expectEveryBarNumbered(page: Page, bars: number): Promise<void> {
+  await expect(page.locator('.recharts-bar-rectangle')).toHaveCount(bars);
+  await expect(page.locator('.recharts-label-list .recharts-label')).toHaveCount(bars);
+  await expect(page.locator('.recharts-xAxis .recharts-cartesian-axis-tick')).toHaveCount(bars);
 }
 
 const STATES: SweptState[] = [
@@ -308,6 +348,8 @@ const STATES: SweptState[] = [
       await page.goto(classUrl);
       await page.getByRole('tab', { name: 'Tilastot' }).click();
       await expect(page.getByText('Ladataan tilastoja...')).toBeHidden();
+      await expectEveryBarNumbered(page, STATISTICS.daily_stats.length);
+      await expectChartSpansItsCard(page);
     },
   },
   {
@@ -328,6 +370,35 @@ const STATES: SweptState[] = [
       await expect(page.getByText('Ladataan tilastoja...')).toBeHidden();
       await page.getByRole('radio', { name: 'Kuukaudet' }).click();
       await expect(page.getByText('Läsnäolot kuukausittain (kaavio)')).toBeVisible();
+      await expectEveryBarNumbered(page, STATISTICS.monthly_stats.length);
+    },
+  },
+  {
+    /*
+     * Spec 0010 AC-4: ninety days are more bars than either width can number, so none is, and one
+     * line under the chart says how to get them. Decision 3 refuses a partial set, which is why
+     * the assertion is "no count label at all" rather than "fewer than the bars". The hint is
+     * waited for first: its presence means the chart was measured and did not fit, so the label
+     * count that follows is an answer rather than a sample taken too early.
+     */
+    name: 'Tilastot — too many days to number',
+    arrange: async (page) => {
+      await signedIn(page);
+      await oneKurssi(page);
+      await register(page);
+      await statistics(page, LONG_STATISTICS);
+    },
+    reach: async (page) => {
+      await page.goto(classUrl);
+      await page.getByRole('tab', { name: 'Tilastot' }).click();
+      await expect(page.getByText('Ladataan tilastoja...')).toBeHidden();
+      await expect(page.locator('.recharts-bar-rectangle')).toHaveCount(
+        LONG_STATISTICS.daily_stats.length,
+      );
+      // Decision 8's placement as well as its words: a paragraph after the chart, inside the same
+      // card content, so a screenshot of the card carries it.
+      await expect(page.locator('[data-chart] ~ p', { hasText: BAR_LABEL_HINT })).toBeVisible();
+      await expect(page.locator('.recharts-label-list .recharts-label')).toHaveCount(0);
     },
   },
   {
