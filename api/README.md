@@ -26,8 +26,11 @@ venv\Scripts\activate     # Windows
 ### 2. Install Dependencies
 
 ```bash
-pip install -r requirements.txt
+pip install -r requirements-dev.txt   # the runtime lock plus the suite and the gates
 ```
+
+The image installs `requirements.txt` alone. Both `.txt` files are compiled from the `.in` files
+by `just lock` and are never edited by hand (ADR-0010).
 
 ### 3. Configure Environment
 
@@ -141,7 +144,9 @@ student-attendance-tracker-api/
 │   └── middleware/          # Custom middleware
 ├── alembic/                 # Database migrations
 ├── tests/                   # Test suite
-├── requirements.txt         # Python dependencies
+├── requirements.in          # what the API needs to run, and why
+├── requirements-dev.in      # + the suite and the gates
+├── requirements*.txt        # compiled from the .in files by `just lock`
 ├── alembic.ini             # Alembic configuration
 └── .env.example            # Environment variables template
 ```

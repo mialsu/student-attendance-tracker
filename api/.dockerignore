@@ -6,7 +6,7 @@
 #   app/          the application
 #   alembic/      + alembic.ini — the CMD runs `alembic upgrade head` on every start
 #   scripts/      registration_code.py is run with `docker compose exec backend python ...`
-#   requirements.txt
+#   requirements.txt  the runtime lock; the image installs it and nothing else (spec 0007)
 # Everything else is build-host clutter, and some of it is a credential.
 
 # --- secrets. The reason this file exists. ---

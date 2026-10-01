@@ -4,7 +4,7 @@
 # Kept separate on purpose so scripts/drift-check.sh stays byte-identical to devkit's template and
 # future template updates still apply cleanly (ANTI-PATTERNS: two formats for one artifact).
 #
-# Five checks:
+# Seven checks:
 #
 #  1. BANNED COMPOUND IDENTIFIERS. drift-check.sh's vocabulary check splits identifiers into
 #     segments (`pupilName` -> `pupil` + `name`) and compares each segment against CONTEXT.md's
@@ -46,6 +46,16 @@
 #     against an ALLOWLIST (a denylist of name-ish words was defeated by `search=`, `q=` and
 #     `who=student.full_name` in one line each), and a multi-line call is seen whole whether or
 #     not the diff contains its opening line. Watched failing on every one of those forms.
+#
+#  6. A TEST OR LINT PACKAGE IN THE RUNTIME REQUIREMENTS (spec 0007, AC-7). api/Dockerfile installs
+#     requirements.txt and nothing else, so the split between it and requirements-dev.txt is the
+#     only thing keeping pytest, ruff and mypy out of the container that serves student data. Until
+#     2026-10-01 there was one file and the image carried all of them.
+#
+#  7. A COMPILED REQUIREMENT THAT IS NOT EXACT, OR TWO LOCKS THAT DISAGREE (spec 0007, AC-8). The
+#     .txt files are pip-compile's output. A `>=` line in one, or a runtime package at a different
+#     version in each, means the image and the suite no longer install the same thing, which is
+#     the gap spec 0007 exists to close.
 #
 # Escape hatch: `drift-ok` in a comment on the line, same convention as drift-check.sh.
 #
@@ -184,15 +194,15 @@ fi
 #
 # Content is read at the END of the range: the index for `--cached` (what the hook judges), a
 # commit for CI's resolved range, the working tree otherwise. Reading the wrong one is how a
-# check silently judges bytes nobody is committing.
+# check silently judges bytes nobody is committing. Checks 6 and 7 read files the same way.
 case "${RANGE[0]}" in
-  --cached) LOG_LINT_REV=":" ;;
-  HEAD)     LOG_LINT_REV="" ;;
-  *)        LOG_LINT_REV="${RANGE[${#RANGE[@]}-1]##*..}" ;;
+  --cached) END_REV=":" ;;
+  HEAD)     END_REV="" ;;
+  *)        END_REV="${RANGE[${#RANGE[@]}-1]##*..}" ;;
 esac
 
 log_lint_out="$(added_lines | awk -F'\t' -v skip="$SKIP" '$1 !~ skip' | grep -v 'drift-ok' \
-                | python3 scripts/log_lint.py "$LOG_LINT_REV" || true)"
+                | python3 scripts/log_lint.py "$END_REV" || true)"
 
 log_lint_keywords="$(printf '%s\n' "$log_lint_out" | grep -E '^(keyword|unparsed)\b' || true)"
 log_lint_vocab="$(printf '%s\n' "$log_lint_out" | grep -E '^vocab\b' || true)"
@@ -225,6 +235,68 @@ if [ -n "$log_lint_vocab" ]; then
   echo "         INV-<n> exactly as INVARIANTS.md spells it."
   printf '%s\n' "$log_lint_vocab" | head -10 \
     | awk -F'\t' '{ printf "     %s:%s  ->  %s\n", $2, $3, $4 }'
+fi
+
+# --- 6 and 7 judge the requirements FILES, not the diff ---------------------
+# Both read each file as the range leaves it (END_REV, above), so they hold for a Dependabot pull
+# request that never touched a .in file as much as for a hand edit. A file that does not exist at
+# that point reads as empty.
+at_end() {                      # at_end <path under api/>
+  case "$END_REV" in
+    "")  cat "$1" 2>/dev/null ;;
+    ":") git show ":./$1" 2>/dev/null ;;
+    *)   git show "$END_REV:./$1" 2>/dev/null ;;
+  esac
+}
+names() { sed 's/[[:space:]]*#.*//' | grep -oE '^[A-Za-z0-9._-]+' | tr 'A-Z_.' 'a-z--'; }
+pins()  { sed 's/[[:space:]]*#.*//' | grep -E '^[A-Za-z0-9._-]+==' | sed 's/==/ /; s/[[:space:]]*;.*//' \
+            | awk '{ n=tolower($1); gsub(/[_.]+/, "-", n); print n, $2 }' | LC_ALL=C sort; }
+
+# --- 6. a test or lint package in the runtime requirements ------------------
+# spec 0007, AC-7. requirements.txt is what api/Dockerfile installs, so a name here ships into the
+# container that serves student data. The list is AC-6's, plus any pytest plugin. httpx is left
+# off on purpose: it is a general HTTP client a future feature could need at runtime, and the
+# split keeps it out of the image only because nothing in app/ calls it today.
+TEST_AND_LINT='pytest|pytest-.+|faker|aiosqlite|ruff|mypy|import-linter|coverage'
+shipped_tools="$(
+  for f in requirements.in requirements.txt; do
+    at_end "$f" | names | grep -xE "$TEST_AND_LINT" | sed "s|^|$f: |"
+  done
+)"
+if [ -n "$shipped_tools" ]; then
+  violations=$((violations + 1))
+  echo; echo "EXTRA · a test or lint package in the runtime requirements"
+  echo "  ↳ anti-pattern: the image is not what the gates tested — requirements.txt is what"
+  echo "     api/Dockerfile installs, so this ships next to student data (spec 0007, US-4)"
+  echo "  ↳ fix: move it to requirements-dev.in and run \`just lock\`. If production really needs"
+  echo "         it, that is a decision for spec 0007's AC-6 list, not for this file."
+  printf '%s\n' "$shipped_tools" | head -10 | sed 's/^/     /'
+fi
+
+# --- 7. the compiled requirements: exact, and the same in both --------------
+# spec 0007, AC-8, plus the static half of AC-9. Every package line must be `name==version`, and
+# every runtime package must appear in requirements-dev.txt at the same version: `-c
+# requirements.txt` makes pip-compile produce exactly that, so a mismatch means somebody, or a bot,
+# edited one compiled file and not the other, and the suite would test versions that do not deploy.
+not_exact="$(
+  for f in requirements.txt requirements-dev.txt; do
+    at_end "$f" | sed 's/[[:space:]]*#.*//' | grep -vE '^[[:space:]]*$' \
+      | grep -vE '^[A-Za-z0-9._-]+==[^[:space:];]+([[:space:]]*;.*)?$' | sed "s|^|$f: |"
+  done
+)"
+disagreeing="$(LC_ALL=C join <(at_end requirements.txt | pins) <(at_end requirements-dev.txt | pins) \
+               | awk '$2 != $3 { print $1 ": requirements.txt " $2 ", requirements-dev.txt " $3 }')"
+missing_from_dev="$(LC_ALL=C join -v 1 <(at_end requirements.txt | pins) <(at_end requirements-dev.txt | pins) \
+                    | awk '{ print $1 "==" $2 " is in requirements.txt and not in requirements-dev.txt" }')"
+lock_findings="$(printf '%s\n%s\n%s\n' "$not_exact" "$disagreeing" "$missing_from_dev" | grep -v '^$' || true)"
+if [ -n "$lock_findings" ]; then
+  violations=$((violations + 1))
+  echo; echo "EXTRA · a compiled requirement that is not exact, or the two locks disagree"
+  echo "  ↳ anti-pattern: reformatting generated files — requirements*.txt are pip-compile's"
+  echo "     output, and a hand edit lets the suite and the image install different versions"
+  echo "  ↳ fix: put the change in requirements.in or requirements-dev.in and run \`just lock\`,"
+  echo "         which writes both files from one resolution (spec 0007, ADR-0010)."
+  printf '%s\n' "$lock_findings" | head -10 | sed 's/^/     /'
 fi
 
 echo

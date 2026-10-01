@@ -1,0 +1,25 @@
+# What the suite and the gates need on top of the runtime set. requirements-dev.txt is compiled
+# from this file and is what CI, `just install` and scripts/bootstrap.sh install. The image never
+# sees it (spec 0007). Change a line here, then run `just lock`.
+#
+# `-c requirements.txt` holds every runtime package to the version the image runs, so the suite
+# tests the versions that deploy. scripts/drift-extra.sh check 7 fails a diff in which the two
+# compiled files disagree on one.
+-c requirements.txt
+-r requirements.in
+
+# Testing
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+pytest-cov>=4.1.0
+httpx>=0.25.0  # the async test client; nothing in app/ makes an outbound call
+faker>=20.0.0
+aiosqlite>=0.19.0  # tests/test_telemetry.py's throwaway engine; the suite itself runs on PostgreSQL
+
+# Standards harness (see docs/adr/0001-*.md)
+# The ruff and mypy ratchets count findings, so a release that finds one more fails a diff that
+# changed nothing they check. They move by pull request like everything else, and a bump that
+# changes a count is dealt with in that pull request.
+ruff>=0.16.0  # lint + format, one tool
+import-linter>=2.14  # boundary gate: the app.api > app.services > app.models layering
+mypy>=2.3  # type gate (RATCHET, baseline in .harness-baseline) — ADR-0004

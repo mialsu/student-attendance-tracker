@@ -28,8 +28,8 @@ The database it starts is disposable by design (`--rm`, no volume): the fixtures
 If you have PostgreSQL running locally:
 
 ```bash
-# Install dependencies (including test packages)
-pip install -r requirements.txt
+# Install dependencies (the runtime lock plus the test packages)
+pip install -r requirements-dev.txt
 
 # Start the throwaway database and export TEST_DATABASE_URL for it.
 # Do NOT write this URL by hand: the fixtures call drop_all, and a port guessed wrong aims a

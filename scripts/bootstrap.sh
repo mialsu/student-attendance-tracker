@@ -50,10 +50,10 @@ else
   [ -n "$py" ] || { echo "no python3 on PATH; install Python 3.12" >&2; exit 1; }
   if command -v uv >/dev/null 2>&1; then
     ( cd api && uv venv venv --python "$py" >/dev/null && \
-                uv pip install --quiet --python venv/bin/python -r requirements.txt )
+                uv pip install --quiet --python venv/bin/python -r requirements-dev.txt )
     good "api/venv created with uv ($("$py" --version))"
   elif "$py" -c "import ensurepip" 2>/dev/null; then
-    ( cd api && "$py" -m venv venv && ./venv/bin/pip install --quiet -r requirements.txt )
+    ( cd api && "$py" -m venv venv && ./venv/bin/pip install --quiet -r requirements-dev.txt )
     good "api/venv created with python -m venv ($("$py" --version))"
   else
     bad "cannot create api/venv: no uv, and this python has no ensurepip"

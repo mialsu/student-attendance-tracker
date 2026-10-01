@@ -4,6 +4,14 @@
 then the container image tags and `.github/dependabot.yml`, kept apart for the reason under
 *Consequences*.
 
+**Superseded in part by [ADR-0010](0010-compiled-requirements-and-pinned-ci-tools.md),
+2026-10-01.** Decisions 1 and 2 below (one flat file taken from `pip freeze`, `tzdata` the one
+range) and the rejection of `pip-compile` are replaced: two compiled locks, runtime and dev, from
+`requirements.in` and `requirements-dev.in`. **This ADR should have cited
+[spec 0007](../../../specs/0007-operational-gaps.md)**, where the Owner had decided `pip-tools` and
+that split on 2026-09-11 and rejected `pip freeze` by name. It was written without reading the
+spec. Everything else here stands.
+
 On 2026-09-30 a pull request that changed only comments and documentation under `api/` (#17) failed
 both backend jobs, and nothing in it was at fault. `requirements.txt` said `sqlalchemy>=2.0.0`, CI
 resolved **SQLAlchemy 2.1.1**, and 2.1 no longer installs `greenlet` on its own, so
@@ -67,14 +75,15 @@ they check.
   through the scheduled pull requests, or by hand.
 - Adding a package means adding its line and the new transitive lines a fresh `pip freeze` shows.
   The header of `requirements.txt` says so.
-- **A postgres tag change restarts the production database.** The deploy's migration step,
-  `$COMPOSE run --rm backend alembic upgrade head` in `.github/workflows/backend.yml`, passes no
-  `--no-deps`, and `backend` depends on `db`. `docker compose run` recreates a dependency whose
-  definition changed: verified locally with Compose v5.5.1, where the dependency's container id and
-  image both changed. The VM's Compose version was not checked. That is why the image tags land in a
-  pull request of their own: its merge is a scheduled database restart, after the deploy's backup,
-  and so is every later postgres bump. A minor version within 17 keeps the storage format, so no
-  data migration is involved.
+- **A postgres tag change restarts the production database.** The deploy's migration step, `$COMPOSE
+  run --rm backend alembic upgrade head` in `.github/workflows/backend.yml`, passes no `--no-deps`,
+  and `backend` depends on `db`. `docker compose run` recreates a dependency whose definition
+  changed: verified locally with Compose v5.5.1, where the dependency's container id and image both
+  changed. Observed on the VM too, on 2026-10-01: #19's deploy log shows `attendance-db-prod`
+  *Recreate* in its migration step, after the backup, and healthy again before the backend was
+  swapped. That is why the image tags land in a pull request of their own: its merge is a scheduled
+  database restart, after the deploy's backup, and so is every later postgres bump. A minor version
+  within 17 keeps the storage format, so no data migration is involved.
 - `python:3.12-slim` still floats within 3.12, deliberately: its patch releases carry security fixes
   and the OS tz database `zoneinfo` reads first, which a digest pin would freeze (ADR-0008).
 - The CI test service stays `postgres:17-alpine`, also deliberately: it tries each new 17.x before

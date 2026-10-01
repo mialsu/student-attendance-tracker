@@ -138,8 +138,13 @@ Raising a number in `.harness-baseline` gets the same treatment. `[review-only]`
 ## Dependencies & reuse
 
 - A new dependency needs an ADR in `docs/adr/`. `[script]`
-- `requirements.txt` is the **only** dependency manifest. `pyproject.toml` holds tool config and
-  deliberately declares no `[project]` table. `[review-only]`
+- Dependencies are declared in `requirements.in` (what runs in the image) and `requirements-dev.in`
+  (the suite and the gates). `requirements.txt` and `requirements-dev.txt` are compiled from them by
+  `just lock` and never edited by hand: every line exact, the two agreeing on every runtime
+  package, and no test or lint tool in the runtime lock (ADR-0010). `[script]` drift-extra checks
+  6 and 7
+- `pyproject.toml` holds tool config and deliberately declares no `[project]` table.
+  `[review-only]`
 
 ## What tooling already enforces (deliberately not restated above)
 

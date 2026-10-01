@@ -94,10 +94,13 @@ explicit choice. Consequence worth knowing: the backend `deploy` job is a rewrit
 execution *is* its verification, so watch the first run. Both workflows also accept
 `workflow_dispatch` if you want to trigger one deliberately.
 
-**Versions move only by pull request (ADR-0009).** Every dependency and image version is exact, and
-`.github/dependabot.yml` opens a monthly grouped update PR per ecosystem, which CI tests like any
-other. Two arrive alone on purpose: a `postgres` bump, because merging it restarts the production
-database, and `appleboy/ssh-action`, because the deploy it runs is its first test.
+**Versions move only by pull request (ADR-0009, ADR-0010).** The API's two compiled locks, the
+client's lockfile and the compose images are exact, and `.github/dependabot.yml` opens a monthly
+grouped update PR per ecosystem, which CI tests like any other. Two arrive alone on purpose: a
+`postgres` bump, because merging it restarts the production database, and `appleboy/ssh-action`,
+because the deploy it runs is its first test. The tools CI downloads for itself (gitleaks, the Vercel
+CLI, pip-audit, pip) are exact too and move **by hand**, because Dependabot reads none of those
+lines. The actions still float inside their major tag; that one is open in `api/REVIEW-DEBT.md`.
 
 **Manual steps this cannot do for you** (both in `client/REVIEW-DEBT.md`):
 
@@ -160,7 +163,7 @@ grows, and no gate compares a number in prose to a number in the code.
 | Coverage? | the same run — pytest prints `TOTAL` (and CI's Tests job log has it) |
 | Gate baselines? | `cat api/.harness-baseline`, `cat client/.harness-baseline` |
 | How many endpoints? | `GET /openapi.json`, or the routers in `api/app/api/` |
-| Dependency pinning? | `api/requirements.txt` |
+| Dependency pinning? | `api/requirements.in` and `api/requirements-dev.in` (why), the `.txt` locks (what) |
 | What are the known gaps? | `api/REVIEW-DEBT.md` — counts belong there, dated, where a sweep can find them |
 
 An undated number in prose is a claim, not a fact (PRINCIPLES #6). `api/REVIEW-DEBT.md` is where
@@ -233,7 +236,8 @@ Refresh tokens are hashed at rest. The access token lives only in memory (`acces
 **Fixed since the audit: its dependency finding.** `api/requirements.txt` was `>=` ranges with no
 lockfile, so every install resolved to whatever was newest that minute; the audit measured the
 image installing FastAPI 0.141.1 while the tests ran 0.121.3. On 2026-09-30 it failed a docs-only
-PR, when CI resolved SQLAlchemy 2.1.1. Every version is exact now except `tzdata`'s (ADR-0009).
+PR, when CI resolved SQLAlchemy 2.1.1. Every version is exact now, `tzdata`'s included, and the
+image no longer installs the suite's and the gates' tools (ADR-0009, ADR-0010, spec 0007).
 
 **Not fixed, and recorded in the API repo's `REVIEW-DEBT.md`:**
 - **Two leads nothing in a repo can settle:** the real production `CORS_ORIGINS`; and `gitleaks`,
@@ -560,8 +564,10 @@ contracts in `api/pyproject.toml` enforce the layering (`just boundaries`). Migr
 
 ## Key Dependencies (Backend)
 
-`api/requirements.txt` is the list. Every version in it is exact except `tzdata`'s, the packages
-the direct ones pull in included, and SQLAlchemy is held on 2.0 until the OpenTelemetry
+`api/requirements.in` says what the API needs to run and why; `api/requirements-dev.in` adds the
+suite and the gates. `just lock` compiles them into `requirements.txt` (what the image installs) and
+`requirements-dev.txt` (what CI and every venv install), exact to the last transitive package, and
+neither `.txt` is ever edited by hand (ADR-0010). SQLAlchemy is held on 2.0 until the OpenTelemetry
 instrumentation accepts 2.1 (ADR-0009).
 
 ## Environment Variables
@@ -594,8 +600,8 @@ source venv/bin/activate  # Linux/Mac
 # or
 venv\Scripts\activate     # Windows
 
-# Install dependencies
-pip install -r requirements.txt
+# Install dependencies: the runtime lock plus the suite and the gates
+pip install -r requirements-dev.txt
 
 # Configure environment
 cp .env.example .env

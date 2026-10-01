@@ -210,8 +210,11 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
 
+      # EXACT (ADR-0010). `@latest` meant a new CLI major was first run by a production deploy.
+      # 62.1.0 is what deployed #24 on 2026-10-01. Dependabot does not read this line, so the
+      # version moves by hand: `npm view vercel version`, then watch the next deploy.
       - name: Install Vercel CLI
-        run: npm i -g vercel@latest
+        run: npm i -g vercel@62.1.0
 
       # `vercel pull` fails with a single unhelpful line ("Could not retrieve Project Settings")
       # for THREE different causes: a missing secret, a rejected token, or a project the token's

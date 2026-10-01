@@ -386,7 +386,7 @@ docker exec -it attendance-db-local psql -U attendance_user -d attendance_tracke
 # Create virtual environment (first time)
 python3.12 -m venv venv
 source venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements-dev.txt
 
 # Generate initial migration
 alembic revision --autogenerate -m "Initial migration"

@@ -1,0 +1,57 @@
+# What the API needs to RUN, and the reason for every constraint. requirements.txt is compiled from
+# this file and is never edited by hand: change a line here, then run `just lock` (spec 0007,
+# ADR-0010). The image installs requirements.txt alone, so a package that only tests or lints
+# belongs in requirements-dev.in, and scripts/drift-extra.sh check 6 refuses the known ones here.
+#
+# A version moves only when a pull request moves it (ADR-0009). Dependabot recompiles the lock
+# monthly; `./scripts/lock.sh --upgrade-package NAME` moves one package by hand. The floors below
+# are the intent this file carried before every version was pinned. The lock holds the versions.
+
+# Core
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+pydantic>=2.0.0
+pydantic-settings>=2.0.0
+email-validator>=2.0.0  # Required for EmailStr validation
+
+# Database
+# Held below 2.1: opentelemetry-instrumentation-sqlalchemy declares `sqlalchemy < 2.1.0` up to its
+# newest release (0.66b0), and on 2.1 it declines to instrument and logs a conflict, so every SQL
+# span would vanish from Jaeger (ADR-0009). `[asyncio]` pulls greenlet, which 2.1 stops installing
+# on its own; it is declared now so the upgrade does not break the same way twice.
+sqlalchemy[asyncio]>=2.0.0,<2.1
+asyncpg>=0.29.0
+alembic>=1.12.0
+
+# Auth & Security
+python-jose[cryptography]>=3.3.0
+passlib[bcrypt]>=1.7.4
+bcrypt>=4.0.0,<5.0.0  # 4.x for passlib compatibility
+python-multipart>=0.0.6
+
+# Timezones -- zoneinfo falls back to this when the OS carries no tz database. python:3.12-slim
+# does ship one (verified by running the image), but that is Debian's choice and not this
+# project's; spec 0009 makes every reported date depend on it, so it is declared here (ADR-0008).
+# It was the one range left unpinned, so that it updated on every rebuild. pip-compile pins every
+# package it writes, so it now moves with the monthly pull request instead (ADR-0010).
+tzdata>=2024.1
+
+# Observability (see docs/adr/0006-opentelemetry-tracing.md)
+# The instrumentation packages are on the 0.NNbN pre-1.0 line, where a minor bump is free to
+# change span shape. The sdk and the instrumentation pin each other exactly, so the lock can only
+# move them together; after a pull request that does, check a trace in Jaeger once it deploys.
+#
+# HTTP rather than gRPC on purpose: no grpcio binary wheel, and no gRPC-plus-fork interaction
+# with `uvicorn --workers 4`.
+#
+# opentelemetry-instrumentation-asyncpg is deliberately ABSENT. SQLAlchemy's instrumentation
+# hooks before_cursor_execute; asyncpg's patches Connection.execute. Under SQLAlchemy-async-over-
+# asyncpg both fire for one statement, giving two nested spans per query and doubling the volume.
+#
+# opentelemetry-api is listed EXPLICITLY, not left transitive: spec 0005's log formatter imports
+# `opentelemetry.trace` directly to read the current trace id (ADR-0007).
+opentelemetry-api>=1.44.0
+opentelemetry-sdk>=1.44.0
+opentelemetry-exporter-otlp-proto-http>=1.44.0
+opentelemetry-instrumentation-fastapi>=0.65b0
+opentelemetry-instrumentation-sqlalchemy>=0.65b0
