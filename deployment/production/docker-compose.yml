@@ -150,7 +150,7 @@ services:
   # Deliberately absent from the backend's depends_on: a trace store that is down must never hold
   # up the API. The exporter retries on a background thread and then drops the batch.
   jaeger:
-    image: jaegertracing/jaeger:2.20.0
+    image: jaegertracing/jaeger:2.21.0
     container_name: attendance-jaeger-prod
     restart: always
     command: ["--config=file:/jaeger.yaml"]
