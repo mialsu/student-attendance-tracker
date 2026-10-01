@@ -6,6 +6,21 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 
 <!-- Newest first. -->
 
+## 2026-10-01 — Dependabot alerts, on since today, report `ecdsa` with no fix, and it is not reached
+- **What:** turning alerts on put 35 open alerts on `main`: 34 in `client/package-lock.json`,
+  recorded in the client's ledger, and one here. `ecdsa` 0.19.2, pulled in by `python-jose`, is
+  rated high for the Minerva timing attack on P-256 signing, and no fixed version exists; its
+  maintainers treat side channels as out of scope.
+- **Why it is not reached:** this API signs and verifies tokens with HS256 only.
+  `app/core/security.py:97` decodes with `algorithms=[settings.algorithm]`, so a token cannot choose
+  ES256 for itself, and both compose files and `.env.example` set `ALGORITHM=HS256`. No P-256
+  signature is ever made.
+- **Where:** `requirements.txt` (`ecdsa`, transitive), `app/core/security.py`.
+- **What green tests do NOT prove here:** that nobody sets `ALGORITHM` to an ES* value. Nothing
+  refuses one, and that is the configuration under which this alert becomes real.
+- **Disposition:** open, for the Owner. Accept it with the reason above, or replace `python-jose`
+  (which brings `ecdsa`) with PyJWT, a change to the one module that makes tokens.
+
 ## 2026-10-01 — ADR-0009 overrode spec 0007's pinning decision, and never cited it
 - **What:** on 2026-09-11 the Owner decided in `specs/0007-operational-gaps.md` how dependencies
   would be pinned: `pip-tools`, `.in` files, and a runtime lock split from the dev one so the image
