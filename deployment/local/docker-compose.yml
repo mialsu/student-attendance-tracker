@@ -100,7 +100,7 @@ services:
   # to hold up the API. The exporter retries with backoff on its own background thread and then
   # drops the batch, so the worst case is log noise.
   jaeger:
-    image: jaegertracing/jaeger:2.20.0
+    image: jaegertracing/jaeger:2.21.0
     container_name: attendance-jaeger-local
     restart: unless-stopped
     command: ["--config=file:/jaeger.yaml"]
