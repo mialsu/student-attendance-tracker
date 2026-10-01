@@ -130,8 +130,8 @@ export const STATISTICS: AttendanceStatistics = {
 
 /**
  * Ninety days with attendance, one bar each, ending on the walk's pinned today (`FIXED_NOW`).
- * Spec 0010 AC-4: too many bars to number at either swept width, and by a margin. The desktop plot
- * holds about forty at 20px a bar, so a tuned threshold cannot quietly turn this state numbered.
+ * Spec 0010 AC-4: too many bars to number at any swept width, and by a margin. The widest plot,
+ * at 1280px, holds 41 at 20px a bar, so a tuned threshold cannot quietly turn this state numbered.
  * Counts vary so the bars are not one flat block; their sum is the total, as the API's would be.
  */
 const LONG_DAYS = Array.from({ length: 90 }, (_, i) => ({

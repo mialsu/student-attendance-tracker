@@ -3,12 +3,18 @@
  *
  * `docs/adr/0005-playwright-for-the-browser-walk.md` records why Playwright, why the API is mocked
  * at the browser boundary, and the twelve alternatives that lost. Four things are decided *here*
- * rather than there: the port, the two viewports, whether a server may be reused, and who builds.
+ * rather than there: the port, the viewports, whether a server may be reused, and who builds.
  *
  * **Two viewports, because both widths mean something.** 320px is `A11Y-7`'s WCAG 1.4.10 floor and
  * the narrowest width the Owner declared; 1280px clears the register table's `min-w-[34rem]` so it
- * lays out without sideways scroll. They are the two sides of the one-table decision, and a third
- * would be a number nobody chose.
+ * lays out without sideways scroll. They are the two sides of the one-table decision, and the
+ * whole walk runs at both.
+ *
+ * **A third width, for the chart states only.** How many bars *Tilastot* numbers is a function of
+ * the chart's width (spec 0010 decision 4), so the two sides of the table decision say nothing
+ * about a laptop window between them, which slice 1's review debt asked about. `laptop-1024` runs
+ * the states tagged `@chart-width` in `e2e/states.spec.ts` and nothing else, rather than the whole
+ * walk a third time. At 1024px the plot is 568px wide and numbers 28 bars (measured 2026-10-01).
  *
  * **Its own port.** 4174, one off Vite's preview default of 4173, so a preview the Owner already
  * has open is neither reused nor killed by a gate run.
@@ -64,6 +70,12 @@ export default defineConfig({
     {
       name: 'desktop-1280',
       use: { ...devices['Desktop Chrome'], viewport: { width: 1280, height: 800 } },
+    },
+    {
+      name: 'laptop-1024',
+      // The tag a state's `byChartWidth` adds in `e2e/states.spec.ts`. See the note above.
+      grep: /@chart-width/,
+      use: { ...devices['Desktop Chrome'], viewport: { width: 1024, height: 768 } },
     },
   ],
   webServer: {

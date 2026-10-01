@@ -1,6 +1,7 @@
 /**
  * The state sweep: every state `DESIGN.md` §3 lists, at both viewports, through axe with contrast
- * on and past the `A11Y-7` reflow measurement.
+ * on and past the `A11Y-7` reflow measurement. The chart states run at a third width as well,
+ * 1024px; `byChartWidth` below says which and why.
  *
  * Organised **by state, not by journey**, and that is the one structural decision in this file.
  * `specgate`'s `REVIEW-DEBT.md` records why: its walk caught a real `color-contrast` and a real
@@ -52,7 +53,16 @@ type SweptState = {
   arrange: (page: Page) => Promise<void>;
   /** Navigate, then wait for the state to be on screen — never a timer. */
   reach: (page: Page) => Promise<void>;
+  /**
+   * The chart's width decides what this state draws, numbered bars or the hint, so it runs at a
+   * third width too: the `laptop-1024` project in `playwright.config.ts` runs these states and no
+   * others. Off for every other state.
+   */
+  byChartWidth?: true;
 };
+
+/** The tag `laptop-1024` selects on. */
+const CHART_WIDTH_TAG = '@chart-width';
 
 const classUrl = `/class/${KURSSI.id}`;
 
@@ -351,6 +361,7 @@ const STATES: SweptState[] = [
       await expectEveryBarNumbered(page, STATISTICS.daily_stats.length);
       await expectChartSpansItsCard(page);
     },
+    byChartWidth: true,
   },
   {
     // The other half of AC9's toggle. Worth its own swept state rather than a click inside the
@@ -372,11 +383,12 @@ const STATES: SweptState[] = [
       await expect(page.getByText('Läsnäolot kuukausittain (kaavio)')).toBeVisible();
       await expectEveryBarNumbered(page, STATISTICS.monthly_stats.length);
     },
+    byChartWidth: true,
   },
   {
     /*
-     * Spec 0010 AC-4: ninety days are more bars than either width can number, so none is, and one
-     * line under the chart says how to get them. Decision 3 refuses a partial set, which is why
+     * Spec 0010 AC-4: ninety days are more bars than any swept width can number, so none is, and
+     * one line under the chart says how to get them. Decision 3 refuses a partial set, which is why
      * the assertion is "no count label at all" rather than "fewer than the bars". The hint is
      * waited for first: its presence means the chart was measured and did not fit, so the label
      * count that follows is an answer rather than a sample taken too early.
@@ -400,6 +412,7 @@ const STATES: SweptState[] = [
       await expect(page.locator('[data-chart] ~ p', { hasText: BAR_LABEL_HINT })).toBeVisible();
       await expect(page.locator('.recharts-label-list .recharts-label')).toHaveCount(0);
     },
+    byChartWidth: true,
   },
   {
     /*
@@ -629,7 +642,8 @@ const KNOWN_VIOLATIONS: Record<string, string[]> = {
 };
 
 for (const swept of STATES) {
-  test(swept.name, async ({ page }, testInfo) => {
+  const tag = swept.byChartWidth ? [CHART_WIDTH_TAG] : [];
+  test(swept.name, { tag }, async ({ page }, testInfo) => {
     await swept.arrange(page);
     await swept.reach(page);
 

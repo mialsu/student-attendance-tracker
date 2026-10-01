@@ -40,9 +40,15 @@ cut (`/confess`), read first by any architecture or review session, dispositione
      the shape `CONTEXT.md` gives hers, 34 sessions, numbered whole at 1280px. The production
      course's real count was not looked at, and the chart spans its card, so a narrower desktop
      window numbers fewer bars than 41. Whether she sees numbers or the hint on her screen is
-     unmeasured.
+     unmeasured. Item 2's measurement narrows it: a 1024px window numbers 28, so a 34-session
+     course by day shows the hint there.
   2. **Widths between the swept ones.** The walk sweeps 320 and 1280px and the screenshots added
-     390px. A laptop window around 1024px was not looked at.
+     390px. A laptop window around 1024px was not looked at. **CLOSED 2026-10-01:** a third
+     project, `laptop-1024`, runs the states tagged `@chart-width` in `e2e/states.spec.ts`, with
+     the same axe and reflow checks as the other two. At 1024px the four days carry every count and
+     every date, and the ninety show the hint and no count. Measured there: a 638px chart, a 568px
+     plot, so **28 bars** at 20px each; the rule flips at 28/29 (28 counts and 28 dates, then the
+     hint and none), beside 7, 11 and 41 at 320, 390 and 1280px.
   3. **Pixels, still.** The walk counts labels and ticks; it does not look at them. Legibility,
      collisions and clipping rest on slice 1's screenshots, taken once. A later font or spacing
      change that crowds the counts would pass every gate.
@@ -66,8 +72,8 @@ cut (`/confess`), read first by any architecture or review session, dispositione
   it. Radix's toggle group only moves focus, and Space selects, so a screen reader announces
   "Kuukaudet, radio button, not checked" on the focused option until Space is pressed. The
   2026-09-11 entry on the toggle's grouping role is where this belongs next.
-- **Disposition:** 4 CLOSED 2026-10-01; the rest OPEN, for the Owner. The radio semantics are a
-  decision about the toggle's role.
+- **Disposition:** 2 and 4 CLOSED 2026-10-01; the rest OPEN, for the Owner. The radio semantics
+  are a decision about the toggle's role.
 
 ## 2026-10-01 — the walk had two nondeterminisms, and `retries: 0` was claiming otherwise
 - **What:** two ways the browser walk could fail on a tree that had already passed.
