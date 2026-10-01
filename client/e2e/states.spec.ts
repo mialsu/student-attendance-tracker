@@ -1,6 +1,7 @@
 /**
  * The state sweep: every state `DESIGN.md` §3 lists, at both viewports, through axe with contrast
- * on and past the `A11Y-7` reflow measurement.
+ * on and past the `A11Y-7` reflow measurement. The chart states run at a third width as well,
+ * 1024px; `byChartWidth` below says which and why.
  *
  * Organised **by state, not by journey**, and that is the one structural decision in this file.
  * `specgate`'s `REVIEW-DEBT.md` records why: its walk caught a real `color-contrast` and a real
@@ -18,6 +19,7 @@
  * fourth state joins this table" — it has.
  */
 import {
+  BUSY_STATISTICS,
   EMPTY_REGISTER,
   KURSSI,
   LONG_STATISTICS,
@@ -41,6 +43,7 @@ import {
   expectNoAxeViolations,
   expectNoHorizontalScroll,
   expectOverlayWithinViewport,
+  fontsReady,
 } from './assertions';
 import { expect, test } from './fixtures';
 import type { Page } from '@playwright/test';
@@ -52,7 +55,16 @@ type SweptState = {
   arrange: (page: Page) => Promise<void>;
   /** Navigate, then wait for the state to be on screen — never a timer. */
   reach: (page: Page) => Promise<void>;
+  /**
+   * The chart's width decides what this state draws, numbered bars or the hint, so it runs at a
+   * third width too: the `laptop-1024` project in `playwright.config.ts` runs these states and no
+   * others. Off for every other state.
+   */
+  byChartWidth?: true;
 };
+
+/** The tag `laptop-1024` selects on. */
+const CHART_WIDTH_TAG = '@chart-width';
 
 const classUrl = `/class/${KURSSI.id}`;
 
@@ -114,15 +126,65 @@ async function expectChartSpansItsCard(page: Page): Promise<void> {
 }
 
 /**
- * Spec 0010 AC-3: when the counts fit, every bar carries its count and its date tick. Counted
- * against the fixture rather than sampled from the page, so every count here is a retrying
- * assertion. Waiting is right for this one: it asserts the numbers arrive at all, and
- * `e2e/motion.spec.ts` owns "in the same frame as the bars" (AC-27).
+ * Spec 0010 AC-3: when the counts fit, every bar carries its count and its date tick. Checked
+ * against the fixture's own counts, in order, rather than sampled from the page, so every check
+ * here but the last is a retrying assertion. Waiting is right for this one: it asserts the numbers
+ * arrive at all, and `e2e/motion.spec.ts` owns "in the same frame as the bars" (AC-27).
  */
-async function expectEveryBarNumbered(page: Page, bars: number): Promise<void> {
-  await expect(page.locator('.recharts-bar-rectangle')).toHaveCount(bars);
-  await expect(page.locator('.recharts-label-list .recharts-label')).toHaveCount(bars);
-  await expect(page.locator('.recharts-xAxis .recharts-cartesian-axis-tick')).toHaveCount(bars);
+async function expectEveryBarNumbered(page: Page, counts: number[]): Promise<void> {
+  await expect(page.locator('.recharts-bar-rectangle')).toHaveCount(counts.length);
+  await expect(page.locator('.recharts-label-list .recharts-label')).toHaveText(counts.map(String));
+  await expect(page.locator('.recharts-xAxis .recharts-cartesian-axis-tick')).toHaveCount(
+    counts.length,
+  );
+  await expectCountsLegible(page);
+}
+
+/**
+ * Every count drawn whole and on its own: inside the chart's SVG, which clips whatever reaches past
+ * it, and clear of every other count's box. That is the part of "legible" a test can check; until
+ * the three-digit state arrived (slice 1's review debt, item 5) the walk only counted the labels.
+ * Any gap above zero passes, however narrow, and `REVIEW-DEBT.md` has what three digits leave at
+ * the 20px threshold. Measured after the webfont loads, because the boxes are Fira Sans's advance
+ * widths and system-ui's differ.
+ */
+async function expectCountsLegible(page: Page): Promise<void> {
+  await fontsReady(page);
+  const { clipped, overlapping } = await page
+    .locator('[data-chart] .recharts-wrapper > svg')
+    .evaluate((svg) => {
+      const frame = svg.getBoundingClientRect();
+      const labels = [...svg.querySelectorAll('.recharts-label-list .recharts-label')].map((el) => ({
+        text: el.textContent ?? '',
+        box: el.getBoundingClientRect(),
+      }));
+      const clipped = labels
+        .filter(
+          ({ box }) =>
+            box.left < frame.left ||
+            box.right > frame.right ||
+            box.top < frame.top ||
+            box.bottom > frame.bottom,
+        )
+        .map(({ text }) => text);
+      const overlapping = labels.flatMap((a, i) =>
+        labels
+          .slice(i + 1)
+          .filter(
+            (b) =>
+              a.box.left < b.box.right &&
+              b.box.left < a.box.right &&
+              a.box.top < b.box.bottom &&
+              b.box.top < a.box.bottom,
+          )
+          .map((b) => `${a.text} and ${b.text}`),
+      );
+      return { clipped, overlapping };
+    });
+  expect(
+    { clipped, overlapping },
+    'a count reaches past the chart, which clips it, or two counts overlap',
+  ).toEqual({ clipped: [], overlapping: [] });
 }
 
 const STATES: SweptState[] = [
@@ -348,9 +410,10 @@ const STATES: SweptState[] = [
       await page.goto(classUrl);
       await page.getByRole('tab', { name: 'Tilastot' }).click();
       await expect(page.getByText('Ladataan tilastoja...')).toBeHidden();
-      await expectEveryBarNumbered(page, STATISTICS.daily_stats.length);
+      await expectEveryBarNumbered(page, STATISTICS.daily_stats.map((day) => day.count));
       await expectChartSpansItsCard(page);
     },
+    byChartWidth: true,
   },
   {
     // The other half of AC9's toggle. Worth its own swept state rather than a click inside the
@@ -370,13 +433,39 @@ const STATES: SweptState[] = [
       await expect(page.getByText('Ladataan tilastoja...')).toBeHidden();
       await page.getByRole('radio', { name: 'Kuukaudet' }).click();
       await expect(page.getByText('Läsnäolot kuukausittain (kaavio)')).toBeVisible();
-      await expectEveryBarNumbered(page, STATISTICS.monthly_stats.length);
+      await expectEveryBarNumbered(page, STATISTICS.monthly_stats.map((month) => month.count));
     },
+    byChartWidth: true,
   },
   {
     /*
-     * Spec 0010 AC-4: ninety days are more bars than either width can number, so none is, and one
-     * line under the chart says how to get them. Decision 3 refuses a partial set, which is why
+     * Slice 1's review debt, item 5: every other fixture's counts have one or two digits, and a
+     * month in a busy workshop counts a hundred or more. By month because that is where three
+     * digits arrive first, with six bars so 320px numbers them too. `expectEveryBarNumbered`
+     * checks each count is drawn whole inside the chart and clear of its neighbours, here and in
+     * every other numbered state.
+     */
+    name: 'Tilastot — three-digit counts, by month',
+    arrange: async (page) => {
+      await signedIn(page);
+      await oneKurssi(page);
+      await register(page);
+      await statistics(page, BUSY_STATISTICS);
+    },
+    reach: async (page) => {
+      await page.goto(classUrl);
+      await page.getByRole('tab', { name: 'Tilastot' }).click();
+      await expect(page.getByText('Ladataan tilastoja...')).toBeHidden();
+      await page.getByRole('radio', { name: 'Kuukaudet' }).click();
+      await expect(page.getByText('Läsnäolot kuukausittain (kaavio)')).toBeVisible();
+      await expectEveryBarNumbered(page, BUSY_STATISTICS.monthly_stats.map((month) => month.count));
+    },
+    byChartWidth: true,
+  },
+  {
+    /*
+     * Spec 0010 AC-4: ninety days are more bars than any swept width can number, so none is, and
+     * one line under the chart says how to get them. Decision 3 refuses a partial set, which is why
      * the assertion is "no count label at all" rather than "fewer than the bars". The hint is
      * waited for first: its presence means the chart was measured and did not fit, so the label
      * count that follows is an answer rather than a sample taken too early.
@@ -400,6 +489,7 @@ const STATES: SweptState[] = [
       await expect(page.locator('[data-chart] ~ p', { hasText: BAR_LABEL_HINT })).toBeVisible();
       await expect(page.locator('.recharts-label-list .recharts-label')).toHaveCount(0);
     },
+    byChartWidth: true,
   },
   {
     /*
@@ -629,7 +719,8 @@ const KNOWN_VIOLATIONS: Record<string, string[]> = {
 };
 
 for (const swept of STATES) {
-  test(swept.name, async ({ page }, testInfo) => {
+  const tag = swept.byChartWidth ? [CHART_WIDTH_TAG] : [];
+  test(swept.name, { tag }, async ({ page }, testInfo) => {
     await swept.arrange(page);
     await swept.reach(page);
 

@@ -127,6 +127,10 @@ Only what a browser proves. The rows that move:
   and the narrowest width the Owner declared on 2026-09-07, and **1280px** clears the register
   table's `min-w-[34rem]` so it lays out without sideways scroll — the two sides of the one-table
   decision. A third would be a number nobody chose.
+  *2026-10-01, for the chart alone:* that number now has a reason. *Tilastot*'s chart numbers as
+  many bars as its width holds (spec 0010), and slice 1's review debt asked what a laptop window
+  shows, so a `laptop-1024` project runs the states tagged `@chart-width` and nothing else. The
+  rest of the walk stays at the two widths above, for the reason above.
 
 ## Consequences
 

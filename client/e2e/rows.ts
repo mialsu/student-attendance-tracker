@@ -130,8 +130,8 @@ export const STATISTICS: AttendanceStatistics = {
 
 /**
  * Ninety days with attendance, one bar each, ending on the walk's pinned today (`FIXED_NOW`).
- * Spec 0010 AC-4: too many bars to number at either swept width, and by a margin. The desktop plot
- * holds about forty at 20px a bar, so a tuned threshold cannot quietly turn this state numbered.
+ * Spec 0010 AC-4: too many bars to number at any swept width, and by a margin. The widest plot,
+ * at 1280px, holds 41 at 20px a bar, so a tuned threshold cannot quietly turn this state numbered.
  * Counts vary so the bars are not one flat block; their sum is the total, as the API's would be.
  */
 const LONG_DAYS = Array.from({ length: 90 }, (_, i) => ({
@@ -148,6 +148,48 @@ export const LONG_STATISTICS: AttendanceStatistics = {
   monthly_stats: ['2026-06', '2026-07', '2026-08', '2026-09'].map((month) => ({
     year_month: month,
     count: LONG_DAYS.filter((day) => day.date.startsWith(month)).reduce((s, d) => s + d.count, 0),
+  })),
+};
+
+/**
+ * A busier workshop: 25 to 28 Students every Thursday from November 2025 to April 2026, so every
+ * month by *Kuukaudet* counts 104 to 140 and every count on that chart has three digits. Every
+ * other fixture's counts have one or two, which left the widest label the chart draws unswept
+ * (slice 1's review debt, item 5).
+ *
+ * January's 140 is the Y axis's top tick, so its bar reaches the top of the plot and its count sits
+ * in the 20px margin above it, where slice 1 found a count gets clipped if the margin shrinks.
+ *
+ * Six months, not seven: 320px numbers seven bars, and a state sitting on that limit would turn to
+ * the hint the day the 20px threshold is raised, which is the likeliest fix if three-digit counts
+ * ever crowd. Six need 120px of the 152px plot at 320px, so the threshold can rise to 25px first.
+ */
+const BUSY_SESSION: Record<string, number> = {
+  '2025-11': 26,
+  '2025-12': 27,
+  '2026-01': 28,
+  '2026-02': 26,
+  '2026-03': 28,
+  '2026-04': 25,
+};
+
+const BUSY_THURSDAYS = Array.from({ length: 26 }, (_, i) => {
+  const date = new Date(Date.UTC(2025, 10, 6 + 7 * i)).toISOString().slice(0, 10);
+  return { date, count: BUSY_SESSION[date.slice(0, 7)] ?? 0 };
+});
+
+export const BUSY_STATISTICS: AttendanceStatistics = {
+  total_records: BUSY_THURSDAYS.reduce((sum, day) => sum + day.count, 0),
+  total_students: 31,
+  first_date: BUSY_THURSDAYS.at(0)?.date ?? null,
+  last_date: BUSY_THURSDAYS.at(-1)?.date ?? null,
+  daily_stats: BUSY_THURSDAYS,
+  monthly_stats: Object.keys(BUSY_SESSION).map((month) => ({
+    year_month: month,
+    count: BUSY_THURSDAYS.filter((day) => day.date.startsWith(month)).reduce(
+      (sum, day) => sum + day.count,
+      0,
+    ),
   })),
 };
 

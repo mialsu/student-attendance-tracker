@@ -6,6 +6,55 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 
 <!-- Newest first. -->
 
+## 2026-10-01 — Dependabot alerts report 34 in the lockfile, and the two in the bundle are not reached
+- **What:** alerts were turned on today and put 34 open alerts on `client/package-lock.json`: 19
+  high, 14 medium, 1 low. The API's one is in its own ledger. Two of these packages are in the
+  production bundle; the rest are build tools that run on a developer's machine and in CI.
+  1. **react-router 6.30.6**, through `react-router-dom`: two medium advisories, both fixed only in
+     7.18.0, a major. One is server-rendering only, and this app renders in the browser. The other
+     is an open redirect through a backslash in `<Link>` or `useNavigate`, and every navigation
+     target here is a literal or `/class/${classId}`, which `ClassView.tsx:40` pushes only after the
+     API has returned that class. No path a user typed reaches a link.
+  2. **lodash 4.17.21**, through recharts: one high advisory in `_.template` and two medium ones in
+     `_.unset` and `_.omit`. The app imports no lodash, and recharts calls only `_.omit`, on its own
+     props. The fix, 4.18.0, is a transitive move, and Dependabot's version updates move direct
+     dependencies only.
+  3. **Build tools**: vite 5.4.21 and esbuild 0.21.5 (fixed only with vite 6, a major), rollup,
+     glob, minimatch, brace-expansion, picomatch, js-yaml, ws, postcss-selector-parser and
+     @humanfs/node. They matter where `npm run dev` or a build runs, not in what Vercel serves.
+- **Where:** `package-lock.json`; the navigation targets at `src/pages/ClassView.tsx:40`,
+  `src/components/layouts/Breadcrumbs.tsx:37` and `src/components/layouts/UserMenu.tsx:50`.
+- **What green tests do NOT prove here:** that a later change keeps what a user typed out of `to=`
+  and `navigate()`. Nothing refuses it.
+- **Disposition:** open, for the Owner. Security-update pull requests would move lodash and the
+  transitive build tools, and each would be the lockfile-only shape drift check 4 refuses (the
+  2026-09-30 entry below). vite 6 and react-router 7 are majors, decisions of their own.
+
+## 2026-10-01 — the walk fails on an uncaught error now, and what that guard cannot see
+- **What:** `noUncaughtErrors`, a third auto fixture in `e2e/fixtures.ts`, fails every walk test
+  whose page throws an error nothing catches, and names it. Over the whole walk it found none: 88
+  of 88 passed with it on, so no swept state or journey was hiding a crash. Planted in two swept
+  states at both viewports: a render error in `NotFound.tsx` went red naming it, beside the heading
+  timeout it causes; a throw inside a `setTimeout` and an unhandled rejection on the *Kaavion
+  jakso* toggle went red naming both, in a state that passes without the guard.
+- **Found on the way in: the walk's fixed clock hid errors thrown in timers.** `fixedClock` installs
+  Playwright's clock, which runs every timer and animation-frame callback inside its own try/catch
+  and logs what it catches with `console.error`. The planted `setTimeout` throw never reached
+  `pageerror`; only the rejection did. The guard now also counts a `console.error` whose first
+  argument is an Error, and `e2e/guards.spec.ts` holds it there: it plants a click-handler throw, a
+  rejection, a timer throw and a logged string, and expects exactly the three errors. Watched red
+  with the console channel removed (the timer error missing) and with every `console.error`
+  counted (the string present). Dependabot moves `@playwright/test` monthly, which is why the
+  clock's behaviour has a test rather than a note.
+- **Any other `console.error` does not fail a test, measured:** 28 of them in 10 of the 88 tests,
+  and no warnings. 26 are Chromium's "Failed to load resource" for the 500s and 401s the walk
+  serves on purpose, and 2 are `NotFound.tsx` logging the address it could not find. None is an
+  Error.
+- **What green tests do NOT prove here:** an Error logged just as the page navigates away. The
+  guard asks the page whether a logged value is an Error, a document that has gone cannot answer,
+  and that one report is dropped rather than failed on timing.
+- **Disposition:** OPEN, for the Owner, so nobody reads the guard as complete.
+
 ## 2026-10-01 — spec 0010 slice 1: what its green tests and its live pass do not prove
 - **What:** *Tilastot* reads filter, totals, chart, table; every bar carries its count and date
   when all of them fit at 20px a bar, otherwise a one-line hint; the bars do not animate; the chart
@@ -15,19 +64,38 @@ cut (`/confess`), read first by any architecture or review session, dispositione
      the shape `CONTEXT.md` gives hers, 34 sessions, numbered whole at 1280px. The production
      course's real count was not looked at, and the chart spans its card, so a narrower desktop
      window numbers fewer bars than 41. Whether she sees numbers or the hint on her screen is
-     unmeasured.
+     unmeasured. Item 2's measurement narrows it: a 1024px window numbers 28, so a 34-session
+     course by day shows the hint there.
   2. **Widths between the swept ones.** The walk sweeps 320 and 1280px and the screenshots added
-     390px. A laptop window around 1024px was not looked at.
+     390px. A laptop window around 1024px was not looked at. **CLOSED 2026-10-01:** a third
+     project, `laptop-1024`, runs the states tagged `@chart-width` in `e2e/states.spec.ts`, with
+     the same axe and reflow checks as the other two. At 1024px the four days carry every count and
+     every date, and the ninety show the hint and no count. Measured there: a 638px chart, a 568px
+     plot, so **28 bars** at 20px each; the rule flips at 28/29 (28 counts and 28 dates, then the
+     hint and none), beside 7, 11 and 41 at 320, 390 and 1280px.
   3. **Pixels, still.** The walk counts labels and ticks; it does not look at them. Legibility,
      collisions and clipping rest on slice 1's screenshots, taken once. A later font or spacing
-     change that crowds the counts would pass every gate.
+     change that crowds the counts would pass every gate. *Narrowed 2026-10-01 by item 5:* every
+     numbered state now fails if a count reaches past the chart or overlaps another count's box,
+     at every swept width. The slanted dates are still only counted, and a gap above zero
+     passes however small it is.
   4. **Uncaught page errors.** The walk has no guard for them. Withholding the chart element
      crashed the whole app once in 200 runs, and it showed only as a missing bar and a blank
      screenshot. A `pageerror` listener beside `hermetic` in `e2e/fixtures.ts` would have named it
-     on the first failure.
+     on the first failure. **CLOSED 2026-10-01:** `noUncaughtErrors` in `e2e/fixtures.ts` fails
+     every walk test whose page throws an error nothing catches, and names the error. The entry
+     above has the reds, and the blind spot the walk's own clock had made.
   5. **Three-digit counts.** Every fixture's counts are one or two digits. A month with a hundred
      attendances or more draws a three-digit count; months are few and wide, so it should fit, but
-     no screenshot shows one.
+     no screenshot shows one. **CLOSED 2026-10-01:** *Tilastot — three-digit counts, by month*
+     sweeps six months of 104 to 140 (`BUSY_STATISTICS` in `e2e/rows.ts`) at 320, 1024 and
+     1280px, with axe. Each count must read as its number, sit wholly inside the chart's SVG, and
+     overlap no other count; January's 140 is the axis's top tick, so its count sits in the 20px
+     margin. They fit: at 320px the closest two are 5.8px apart. At the 20px threshold itself,
+     measured at 390px with eleven daily counts of 180 to 198, three-digit counts keep 1.7 to
+     2.2px apart where two-digit ones keep 6.7 to 7.2px; a 3x screenshot reads, tightly. The
+     threshold was tuned on two digits (spec 0010 decision 4), so whether that is close enough is
+     the Owner's call, and three-digit days need a bulk log to happen at all.
   6. **A width carried across a remount.** `chartWidth` lives in the page, and a range change the
      cache has not seen unmounts the chart for its loading branch. The remounted chart therefore
      decides numbers and hint from the old width before its own container reports. That is right
@@ -39,8 +107,8 @@ cut (`/confess`), read first by any architecture or review session, dispositione
   it. Radix's toggle group only moves focus, and Space selects, so a screen reader announces
   "Kuukaudet, radio button, not checked" on the focused option until Space is pressed. The
   2026-09-11 entry on the toggle's grouping role is where this belongs next.
-- **Disposition:** all OPEN, for the Owner. 4 is a small fixture change worth doing before the next
-  slice; the radio semantics are a decision about the toggle's role.
+- **Disposition:** 2, 4 and 5 CLOSED 2026-10-01; 1, 3 and 6 OPEN, for the Owner, 3 narrowed. The
+  radio semantics are a decision about the toggle's role.
 
 ## 2026-10-01 — the walk had two nondeterminisms, and `retries: 0` was claiming otherwise
 - **What:** two ways the browser walk could fail on a tree that had already passed.
