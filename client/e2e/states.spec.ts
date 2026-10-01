@@ -17,7 +17,7 @@
  * `error` branch and its state here goes red. This is the note that said "when it is fixed, the
  * fourth state joins this table" — it has.
  */
-import { EMPTY_REGISTER, KURSSI, LONGEST_NAME, NO_STATISTICS } from './rows';
+import { EMPTY_REGISTER, KURSSI, LONGEST_NAME, NO_STATISTICS, STATISTICS } from './rows';
 import {
   failing,
   noKurssi,
@@ -83,6 +83,18 @@ async function pickDay(page: Page, end: string, day = '10'): Promise<void> {
   await page.getByLabel(end).click();
   await page.getByRole('gridcell', { name: day, exact: true }).click();
   await page.keyboard.press('Escape');
+}
+
+/**
+ * Spec 0010 AC-3: when the counts fit, every bar carries its count and its date tick. Counted
+ * against the fixture rather than sampled from the page, so every count here is a retrying
+ * assertion. Waiting is right for this one: it asserts the numbers arrive at all, and
+ * `e2e/motion.spec.ts` owns "in the same frame as the bars" (AC-27).
+ */
+async function expectEveryBarNumbered(page: Page, bars: number): Promise<void> {
+  await expect(page.locator('.recharts-bar-rectangle')).toHaveCount(bars);
+  await expect(page.locator('.recharts-label-list .recharts-label')).toHaveCount(bars);
+  await expect(page.locator('.recharts-xAxis .recharts-cartesian-axis-tick')).toHaveCount(bars);
 }
 
 const STATES: SweptState[] = [
@@ -308,6 +320,7 @@ const STATES: SweptState[] = [
       await page.goto(classUrl);
       await page.getByRole('tab', { name: 'Tilastot' }).click();
       await expect(page.getByText('Ladataan tilastoja...')).toBeHidden();
+      await expectEveryBarNumbered(page, STATISTICS.daily_stats.length);
     },
   },
   {
@@ -328,6 +341,7 @@ const STATES: SweptState[] = [
       await expect(page.getByText('Ladataan tilastoja...')).toBeHidden();
       await page.getByRole('radio', { name: 'Kuukaudet' }).click();
       await expect(page.getByText('Läsnäolot kuukausittain (kaavio)')).toBeVisible();
+      await expectEveryBarNumbered(page, STATISTICS.monthly_stats.length);
     },
   },
   {

@@ -4,12 +4,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { useAttendanceStatistics } from '@/hooks/useAttendance';
 import { format } from 'date-fns';
 import { fi } from 'date-fns/locale';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, LabelList } from 'recharts';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import type { ChartConfig } from '@/components/ui/chart';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { QueryErrorState } from '@/components/QueryErrorState';
 import { StatisticsRangeFilter } from '@/components/StatisticsRangeFilter';
+import { countsFit } from '@/lib/barLabels';
 
 interface ClassStatisticsProps {
   classId: string;
@@ -21,6 +22,14 @@ const chartConfig = {
     color: 'hsl(var(--primary))',
   },
 } satisfies ChartConfig;
+
+/**
+ * The chart's frame, declared once and handed to Recharts, so the plot width `countsFit` judges is
+ * the plot Recharts draws. The 20px top is the room a count needs above the tallest bar, which
+ * reaches the top of the plot and would otherwise have its number cut off by the SVG's edge.
+ */
+const CHART_MARGIN = { top: 20, right: 5, bottom: 5, left: 5 };
+const Y_AXIS_WIDTH = 60;
 
 /**
  * The empty-timeframe sentence, naming the dates the teacher picked back to her.
@@ -48,6 +57,10 @@ const ClassStatistics = ({ classId }: ClassStatisticsProps) => {
   // Which granularity the one chart is drawing. Days first: it is the view the table beside it
   // agrees with, and the one a teacher reads during a course rather than after it.
   const [granularity, setGranularity] = useState<'day' | 'month'>('day');
+
+  // The width the chart's container last measured. 0 until it has measured once, which in jsdom is
+  // forever; spec 0010 decision 5 renders neither numbers nor the hint until then.
+  const [chartWidth, setChartWidth] = useState(0);
 
   // The timeframe. Empty by default, so the page opens on the whole Kurssi and configures nothing
   // (US-4). It lives here and resets on reload: the tab this surface sits in is not persisted
@@ -197,6 +210,10 @@ const ClassStatistics = ({ classId }: ClassStatisticsProps) => {
           dataKey: 'displayMonth',
         };
 
+  // Spec 0010 decision 3: every bar carries its count and its date, or none does.
+  const plotWidth = chartWidth - CHART_MARGIN.left - CHART_MARGIN.right - Y_AXIS_WIDTH;
+  const numbered = countsFit(chart.data.length, plotWidth);
+
   return (
     <div className="space-y-8">
       {rangeFilter}
@@ -295,22 +312,32 @@ const ClassStatistics = ({ classId }: ClassStatisticsProps) => {
               viewport, so at 320px the page itself scrolled sideways — a WCAG 1.4.10 failure on
               A11Y-7, found by the Playwright sweep on 2026-09-07. The cap changes nothing at
               desktop widths, where 711px already fitted. */}
-          <ChartContainer config={chartConfig} className="h-[400px] max-w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chart.data}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis
-                  dataKey={chart.dataKey}
-                  angle={-45}
-                  textAnchor="end"
-                  height={100}
-                  fontSize={12}
-                />
-                <YAxis />
-                <ChartTooltip content={<ChartTooltipContent />} />
-                <Bar dataKey="count" fill="hsl(var(--primary))" />
-              </BarChart>
-            </ResponsiveContainer>
+          <ChartContainer
+            config={chartConfig}
+            className="h-[400px] max-w-full"
+            onChartResize={(width) => setChartWidth(width)}
+          >
+            <BarChart data={chart.data} margin={CHART_MARGIN}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis
+                dataKey={chart.dataKey}
+                angle={-45}
+                textAnchor="end"
+                height={100}
+                fontSize={12}
+                // Every date when every bar is numbered, so each count has its day under it;
+                // otherwise Recharts thins the ticks as it always has.
+                interval={numbered ? 0 : 'preserveEnd'}
+              />
+              <YAxis width={Y_AXIS_WIDTH} />
+              <ChartTooltip content={<ChartTooltipContent />} />
+              <Bar dataKey="count" fill="hsl(var(--primary))">
+                {numbered && (
+                  // `foreground` on `card`, a pair tokens-contrast.test.ts already gates (decision 7).
+                  <LabelList dataKey="count" position="top" fontSize={12} fill="hsl(var(--foreground))" />
+                )}
+              </Bar>
+            </BarChart>
           </ChartContainer>
         </CardContent>
       </Card>
