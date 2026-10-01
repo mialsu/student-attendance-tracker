@@ -54,6 +54,16 @@ const STATISTICS = {
 
 const DAY_CHART = 'Läsnäolot päivittäin (kaavio)';
 const MONTH_CHART = 'Läsnäolot kuukausittain (kaavio)';
+const BAR_LABEL_HINT = 'Rajaa lyhyempi aikaväli nähdäksesi luvut pylväissä.';
+
+/** Ninety days: too many bars to number at any width, so a measured chart would show the hint. */
+const LONG_STATISTICS = {
+  ...STATISTICS,
+  daily_stats: Array.from({ length: 90 }, (_, i) => ({
+    date: new Date(Date.UTC(2026, 5, 23 + i)).toISOString().slice(0, 10),
+    count: 3,
+  })),
+};
 
 /**
  * Spec 0010 AC-1: the surface reads filter, four totals, chart, per-day table. DOM order is the
@@ -140,6 +150,21 @@ describe('ClassStatistics — the day/month toggle', () => {
     render(<ClassStatistics classId="c1" />);
 
     expect(sectionOrder()).toEqual(['filter', 'totals', 'chart', 'table']);
+  });
+
+  // Spec 0010 AC-5, decision 5: nothing about the numbers renders until the chart has measured
+  // itself, so a first frame cannot flash the hint. jsdom never measures, which makes it exactly
+  // that state. Recharts draws no bars here, so the hint is the half this can see, and it is the
+  // half a careless reading of "unmeasured" would show: a width of 0 fits no bar.
+  it('shows neither the numbers nor the hint before the chart has measured itself', () => {
+    vi.mocked(useAttendanceHooks.useAttendanceStatistics).mockReturnValue(
+      asStatistics({ data: LONG_STATISTICS, isLoading: false, error: null, refetch: vi.fn() })
+    );
+
+    render(<ClassStatistics classId="c1" />);
+
+    expect(screen.getByText(DAY_CHART)).toBeInTheDocument();
+    expect(screen.queryByText(BAR_LABEL_HINT)).not.toBeInTheDocument();
   });
 
   // The Owner's decision, and the reason the toggle is not simply a replacement: a chart cannot

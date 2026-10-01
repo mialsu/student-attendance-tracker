@@ -128,6 +128,29 @@ export const STATISTICS: AttendanceStatistics = {
   monthly_stats: [{ year_month: '2026-09', count: 43 }],
 };
 
+/**
+ * Ninety days with attendance, one bar each, ending on the walk's pinned today (`FIXED_NOW`).
+ * Spec 0010 AC-4: too many bars to number at either swept width, and by a margin. The desktop plot
+ * holds about forty at 20px a bar, so a tuned threshold cannot quietly turn this state numbered.
+ * Counts vary so the bars are not one flat block; their sum is the total, as the API's would be.
+ */
+const LONG_DAYS = Array.from({ length: 90 }, (_, i) => ({
+  date: new Date(Date.UTC(2026, 5, 23 + i)).toISOString().slice(0, 10),
+  count: 3 + (i % 7),
+}));
+
+export const LONG_STATISTICS: AttendanceStatistics = {
+  total_records: LONG_DAYS.reduce((sum, day) => sum + day.count, 0),
+  total_students: 12,
+  first_date: LONG_DAYS.at(0)?.date ?? null,
+  last_date: LONG_DAYS.at(-1)?.date ?? null,
+  daily_stats: LONG_DAYS,
+  monthly_stats: ['2026-06', '2026-07', '2026-08', '2026-09'].map((month) => ({
+    year_month: month,
+    count: LONG_DAYS.filter((day) => day.date.startsWith(month)).reduce((s, d) => s + d.count, 0),
+  })),
+};
+
 export const NO_STATISTICS: AttendanceStatistics = {
   total_records: 0,
   total_students: 0,

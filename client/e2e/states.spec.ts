@@ -17,7 +17,14 @@
  * `error` branch and its state here goes red. This is the note that said "when it is fixed, the
  * fourth state joins this table" — it has.
  */
-import { EMPTY_REGISTER, KURSSI, LONGEST_NAME, NO_STATISTICS, STATISTICS } from './rows';
+import {
+  EMPTY_REGISTER,
+  KURSSI,
+  LONG_STATISTICS,
+  LONGEST_NAME,
+  NO_STATISTICS,
+  STATISTICS,
+} from './rows';
 import {
   failing,
   noKurssi,
@@ -48,6 +55,9 @@ type SweptState = {
 };
 
 const classUrl = `/class/${KURSSI.id}`;
+
+/** The line under a chart too long to number (spec 0010 decision 8, the Owner's ratified copy). */
+const BAR_LABEL_HINT = 'Rajaa lyhyempi aikaväli nähdäksesi luvut pylväissä.';
 
 /** Open one of the three tabs and wait for its own content, not for the tab button. */
 async function openTab(page: Page, name: string, ready: RegExp | string): Promise<void> {
@@ -342,6 +352,32 @@ const STATES: SweptState[] = [
       await page.getByRole('radio', { name: 'Kuukaudet' }).click();
       await expect(page.getByText('Läsnäolot kuukausittain (kaavio)')).toBeVisible();
       await expectEveryBarNumbered(page, STATISTICS.monthly_stats.length);
+    },
+  },
+  {
+    /*
+     * Spec 0010 AC-4: ninety days are more bars than either width can number, so none is, and one
+     * line under the chart says how to get them. Decision 3 refuses a partial set, which is why
+     * the assertion is "no count label at all" rather than "fewer than the bars". The hint is
+     * waited for first: its presence means the chart was measured and did not fit, so the label
+     * count that follows is an answer rather than a sample taken too early.
+     */
+    name: 'Tilastot — a range too long to number',
+    arrange: async (page) => {
+      await signedIn(page);
+      await oneKurssi(page);
+      await register(page);
+      await statistics(page, LONG_STATISTICS);
+    },
+    reach: async (page) => {
+      await page.goto(classUrl);
+      await page.getByRole('tab', { name: 'Tilastot' }).click();
+      await expect(page.getByText('Ladataan tilastoja...')).toBeHidden();
+      await expect(page.locator('.recharts-bar-rectangle')).toHaveCount(
+        LONG_STATISTICS.daily_stats.length,
+      );
+      await expect(page.getByText(BAR_LABEL_HINT)).toBeVisible();
+      await expect(page.locator('.recharts-label-list .recharts-label')).toHaveCount(0);
     },
   },
   {

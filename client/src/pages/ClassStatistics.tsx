@@ -210,9 +210,12 @@ const ClassStatistics = ({ classId }: ClassStatisticsProps) => {
           dataKey: 'displayMonth',
         };
 
-  // Spec 0010 decision 3: every bar carries its count and its date, or none does.
+  // Spec 0010 decision 3: every bar carries its count and its date, or none does. An unmeasured
+  // width fits nothing, so `numbered` needs no guard; the hint does, or a first frame would flash
+  // it before the chart knew its width (decision 5).
   const plotWidth = chartWidth - CHART_MARGIN.left - CHART_MARGIN.right - Y_AXIS_WIDTH;
   const numbered = countsFit(chart.data.length, plotWidth);
+  const hinted = chartWidth > 0 && !numbered;
 
   return (
     <div className="space-y-8">
@@ -339,6 +342,13 @@ const ClassStatistics = ({ classId }: ClassStatisticsProps) => {
               </Bar>
             </BarChart>
           </ChartContainer>
+          {/* Plain muted text, deliberately not a live region: one would announce itself on every
+              range change (decision 8). `muted-foreground` on `card` is a gated pair. */}
+          {hinted && (
+            <p className="mt-2 text-sm text-muted-foreground">
+              Rajaa lyhyempi aikaväli nähdäksesi luvut pylväissä.
+            </p>
+          )}
         </CardContent>
       </Card>
 
