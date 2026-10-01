@@ -107,6 +107,18 @@ just lock --upgrade-package fastapi        # move one package by hand
 It needs `python3.12` on the PATH and network access to PyPI, and runs pip-tools from a throwaway
 venv, so nothing is installed into `venv/`. Dependabot recompiles the same files monthly.
 
+**Two families Dependabot cannot move.** It unlocks one package at a time, and a package another
+one pins exactly cannot move alone, so these only move by hand, every member in one run:
+
+```bash
+# the eleven OpenTelemetry packages, which pin each other exactly; check a trace in Jaeger after
+# the deploy that ships them
+just lock $(grep -oE '^opentelemetry-[a-z-]+' requirements.txt | sed 's/^/--upgrade-package /')
+
+# pydantic, which pins pydantic-core exactly
+just lock --upgrade-package pydantic --upgrade-package pydantic-core
+```
+
 ---
 
 ## Prerequisites

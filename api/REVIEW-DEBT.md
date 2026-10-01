@@ -48,16 +48,26 @@ cut (`/confess`), read first by any architecture or review session, dispositione
   checks 6 and 7, the two install steps in `.github/workflows/backend.yml`.
 - **Criterion:** spec 0007 AC-6, "The production image installs **no** test or lint package", and
   AC-9, "The versions `just check` installs and the versions in the built image are
-  **identical**": both PARTIAL.
+  **identical**": both **WORKS** since #26's deploy log was read (item 1).
 - **What green tests do NOT prove here:**
   1. **The production image.** AC-6 and AC-9 were proven on an image built locally from this
      branch; the VM builds its own during the merge's deploy. Its build log lists every package it
-     installs, and reading that log is the live half.
-  2. **Dependabot against two layered locks.** Whether it recompiles `requirements-dev.txt` when a
-     runtime package moves is unobserved until its first run after the merge. Check 7 fails a pull
-     request that leaves the two disagreeing, so a failure would be loud. #23 edits the flat file
-     this replaces and should be closed; the OpenTelemetry bump it carried comes back from the
-     compiled files.
+     installs, and reading that log is the live half. **Closed 2026-10-01:** #26's deploy built the
+     image on the VM, and its `pip install` step collected exactly the 60 packages
+     `requirements.txt` pins, at those versions, which are also the versions the suite ran on. None
+     of the nine test and lint packages was among them.
+  2. **Dependabot against two layered locks.** **Observed 2026-10-01**, minutes after #26 merged.
+     Dependabot found pip-compile 7.6.1 and recompiled both locks, the `-c requirements.txt` layering
+     included, without error. It then closed #23 as "no longer updatable", and that is the real
+     limit: it unlocks **one package at a time** (`pip-compile -P <name>`), and a package another one
+     pins exactly cannot move alone. Reproduced locally: `-P opentelemetry-api` or
+     `-P opentelemetry-sdk` alone leaves the whole family on 1.44.0, and `-P pydantic`, with
+     pre-releases allowed, leaves it on 2.13.5 because `pydantic-core` holds it. Two families
+     therefore never arrive by Dependabot: the eleven `opentelemetry-*` packages, and `pydantic` with
+     `pydantic-core`. They move by hand, all members unlocked in one run (`scripts/README.md` has the
+     command). Unlocking all eleven was tried in a scratch copy: it compiles, the two locks agree, and
+     1.45.0 replaces `requests` in the HTTP exporter with two new OpenTelemetry transport packages,
+     so that bump changes the runtime set and wants its own pull request and a trace in Jaeger.
   3. **The image's own pip** is the base image's 25.0.1, not the 26.2.1 CI installs. It installs
      exact pins either way, and it floats with `python:3.12-slim`, which ADR-0009 leaves floating.
   4. **The four CI tool versions** move by hand, and nothing reminds anyone they exist.
@@ -68,7 +78,9 @@ cut (`/confess`), read first by any architecture or review session, dispositione
      checkout's venv differed from the pins in 23 packages, ruff 0.16.5 against 0.16.9 among them,
      so a commit from there ran the ratchets on tools CI does not use. The cure for one machine is
      `./venv/bin/pip install -r requirements-dev.txt` inside `api/`; nothing detects the next one.
-- **Disposition:** 1 closes when the merge's deploy log is read. 2 to 6 are open, for the Owner.
+- **Disposition:** 1 is **closed**. 2 is **accepted** as how Dependabot works, with the two
+  families moved by hand; whether and when to move OpenTelemetry to 1.45.0 is the Owner's. 3 to 6
+  are open, for the Owner.
 
 ## 2026-10-01 — the deploy's health check logs `000000` for a refused connection
 - **What:** `code="$(curl -s -o /dev/null -w '%{http_code}' ... || echo 000)"`. When the connection

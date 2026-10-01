@@ -82,7 +82,10 @@ itself.
   name appears.
 - Dependabot recompiles both locks from the command in their headers. Whether it handles the
   `-c requirements.txt` layering cleanly is unobserved until its first run after this lands;
-  check 7 fails the pull request if it does not.
+  check 7 fails the pull request if it does not. **Observed the same day:** it handles the layering,
+  and it unlocks one package at a time, so a package another one pins exactly cannot move alone.
+  The eleven `opentelemetry-*` packages, and `pydantic` with `pydantic-core`, therefore move by hand,
+  every member unlocked in one `just lock` (`REVIEW-DEBT.md`, 2026-10-01).
 - The local backend container (`deployment/local`) builds from the same Dockerfile, so it has no
   pytest any more. The suite runs from `api/venv`, as CI's does.
 - The image keeps the pip of `python:3.12-slim` (25.0.1 on 2026-10-01) to install its lock. It

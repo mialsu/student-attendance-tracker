@@ -1,7 +1,7 @@
 # Spec 0007 — the gaps between what the repo proves and what production does
 
-**Status:** shaped 2026-09-11; all three open questions resolved the same day. **Slices 3 and 4 built
-2026-10-01** (ADR-0010); slices 1, 2 and 5 not started
+**Status:** shaped 2026-09-11; all three open questions resolved the same day. **Slices 3 and 4 shipped
+2026-10-01** in #26 (ADR-0010); slices 1, 2 and 5 not started
 **Weight:** Standard
 **Domain dial:** on (project-wide); this spec touches no `INV-n` directly — see *Invariants touched*
 
@@ -186,10 +186,10 @@ Verdicts are filled by `/verify-live`, per criterion. A task's verdict is the **
 | AC-3 | `backup-db.sh` exits **non-zero** when `pg_dump` fails, and writes no archive that passes `gzip -t`, watched failing on a planted failure | `test:` | US-2 | |
 | AC-4 | Never more than **14** archives on disk, and the oldest is 14 days old | `live:` | US-3 | |
 | AC-5 | 14 archives, measured, leave the CX21 disk with headroom — a number, taken on the VM | `live:` | US-3 | |
-| AC-6 | The production image installs **no** test or lint package: `pytest`, `pytest-asyncio`, `pytest-cov`, `faker`, `aiosqlite`, `ruff`, `mypy`, `import-linter`, `coverage` all absent from `pip list` in the built image | `live:` | US-4 | **PARTIAL.** An image built locally from this branch's `api/Dockerfile` on 2026-10-01 lists 61 packages: the 60 in `requirements.txt` and the base image's pip. None of the nine is among them. The production image is built on the VM by the merge's deploy, and its build log is the evidence still owed |
+| AC-6 | The production image installs **no** test or lint package: `pytest`, `pytest-asyncio`, `pytest-cov`, `faker`, `aiosqlite`, `ruff`, `mypy`, `import-linter`, `coverage` all absent from `pip list` in the built image | `live:` | US-4 | **WORKS.** #26's deploy built the production image on the VM on 2026-10-01, and its `pip install` step collected exactly the 60 packages in `requirements.txt`, none of the nine among them. A local build of the same files lists those 60 and the base image's pip |
 | AC-7 | A dev dependency added to the runtime requirements file fails the diff, watched failing on a planted line | `gate:` drift-extra | US-4 | **WORKS.** Check 6. Red on `pytest==9.1.1` planted in `requirements.txt` and on `ruff>=0.16.0` planted in `requirements.in`; red again with the plant staged and the working tree clean, which is how the hook runs it (`--cached`). Clean on the real files before and after |
 | AC-8 | Every line in both compiled requirements files pins with `==`, watched failing on a planted range | `gate:` drift-extra | US-5 | **WORKS.** Check 7. Red on `fastapi>=0.142.2` planted in `requirements.txt`, and on the two disagreements it also catches: `fastapi` at another version in `requirements-dev.txt`, and `fastapi` missing from it. Clean on the real files |
-| AC-9 | The versions `just check` installs and the versions in the built image are **identical**, compared field by field | `live:` | US-5 | **PARTIAL.** Field by field on 2026-10-01: all 60 packages in the locally built image have the versions `api/venv` installs from `requirements-dev.txt`. The one difference is pip, the image's own 25.0.1 against CI's 26.2.1: the installer, not a locked package. The production image is the half still owed, after the deploy. Check 7 makes the two locks' agreement a gate on every diff |
+| AC-9 | The versions `just check` installs and the versions in the built image are **identical**, compared field by field | `live:` | US-5 | **WORKS.** Field by field on 2026-10-01: the 60 packages the VM's build collected for #26 have exactly the versions in `requirements.txt` and in a venv built from `requirements-dev.txt`, the one the suite passed in. pip is left out: the image keeps its base image's 25.0.1, CI installs 26.2.1, and neither is a locked package. Check 7 makes the two locks' agreement a gate on every diff |
 | AC-10 | The full suite passes against the split and pinned set, with the ratchets unchanged | `test:` | US-4, US-5 | **WORKS.** 2026-10-01, on a venv built from `requirements-dev.txt` alone: 540 passed in 7 minutes, coverage 89%. ruff 91 and mypy 14, both at baseline; import-linter 5 contracts kept; `.harness-baseline` unchanged |
 | AC-11 | `logs.sh production backend --json` **terminates** when stdout is not a terminal, and still follows when it is | `test:` | US-6 | |
 | AC-12 | Step 6's comment in `backend.yml` describes what the deploy does to the database, and names step 5 as the reason | `review-only` | US-7 | |
