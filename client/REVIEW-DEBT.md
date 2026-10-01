@@ -6,6 +6,30 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 
 <!-- Newest first. -->
 
+## 2026-10-01 — Dependabot alerts report 34 in the lockfile, and the two in the bundle are not reached
+- **What:** alerts were turned on today and put 34 open alerts on `client/package-lock.json`: 19
+  high, 14 medium, 1 low. The API's one is in its own ledger. Two of these packages are in the
+  production bundle; the rest are build tools that run on a developer's machine and in CI.
+  1. **react-router 6.30.6**, through `react-router-dom`: two medium advisories, both fixed only in
+     7.18.0, a major. One is server-rendering only, and this app renders in the browser. The other
+     is an open redirect through a backslash in `<Link>` or `useNavigate`, and every navigation
+     target here is a literal or `/class/${classId}`, which `ClassView.tsx:40` pushes only after the
+     API has returned that class. No path a user typed reaches a link.
+  2. **lodash 4.17.21**, through recharts: one high advisory in `_.template` and two medium ones in
+     `_.unset` and `_.omit`. The app imports no lodash, and recharts calls only `_.omit`, on its own
+     props. The fix, 4.18.0, is a transitive move, and Dependabot's version updates move direct
+     dependencies only.
+  3. **Build tools**: vite 5.4.21 and esbuild 0.21.5 (fixed only with vite 6, a major), rollup,
+     glob, minimatch, brace-expansion, picomatch, js-yaml, ws, postcss-selector-parser and
+     @humanfs/node. They matter where `npm run dev` or a build runs, not in what Vercel serves.
+- **Where:** `package-lock.json`; the navigation targets at `src/pages/ClassView.tsx:40`,
+  `src/components/layouts/Breadcrumbs.tsx:37` and `src/components/layouts/UserMenu.tsx:50`.
+- **What green tests do NOT prove here:** that a later change keeps what a user typed out of `to=`
+  and `navigate()`. Nothing refuses it.
+- **Disposition:** open, for the Owner. Security-update pull requests would move lodash and the
+  transitive build tools, and each would be the lockfile-only shape drift check 4 refuses (the
+  2026-09-30 entry below). vite 6 and react-router 7 are majors, decisions of their own.
+
 ## 2026-10-01 — the walk fails on an uncaught error now, and what that guard cannot see
 - **What:** `noUncaughtErrors`, a third auto fixture in `e2e/fixtures.ts`, fails every walk test
   whose page throws an error nothing catches, and names it. Over the whole walk it found none: 88
