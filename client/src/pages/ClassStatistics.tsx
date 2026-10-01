@@ -310,14 +310,16 @@ const ClassStatistics = ({ classId }: ClassStatisticsProps) => {
           </ToggleGroup>
         </CardHeader>
         <CardContent>
-          {/* max-w-full because ChartContainer carries `aspect-video`, and overriding only the
-              height leaves 16:9 driving the WIDTH: 400px tall became ~711px wide whatever the
-              viewport, so at 320px the page itself scrolled sideways — a WCAG 1.4.10 failure on
-              A11Y-7, found by the Playwright sweep on 2026-09-07. The cap changes nothing at
-              desktop widths, where 711px already fitted. */}
+          {/* The card's width, at every width. ChartContainer carries `aspect-video`, and with
+              only the height overridden 16:9 drove the WIDTH: 400px tall became ~711px wide
+              whatever the viewport. At 320px that scrolled the page sideways (A11Y-7, 2026-09-07),
+              which `max-w-full` fixed; on a desktop it left the chart at 711px inside an 894px
+              card, which held the numbered bars to 32 where the card has room for about 42
+              (spec 0010 slice 1, the Owner's call on 2026-10-01). `aspect-auto` drops the ratio,
+              so the height is the 400px and the width is the card's. */}
           <ChartContainer
             config={chartConfig}
-            className="h-[400px] max-w-full"
+            className="aspect-auto h-[400px] w-full"
             onChartResize={(width) => setChartWidth(width)}
           >
             {/* No bars until this page knows the width (decision 5), so the first frame that holds

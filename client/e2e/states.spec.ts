@@ -101,6 +101,24 @@ async function pickDay(page: Page, end: string, day = '10'): Promise<void> {
  * assertion. Waiting is right for this one: it asserts the numbers arrive at all, and
  * `e2e/motion.spec.ts` owns "in the same frame as the bars" (AC-27).
  */
+/**
+ * The chart spans its card's content box at every width (the Owner, 2026-10-01). Until then
+ * `ChartContainer`'s 16:9 aspect, under a 400px height, fixed the chart at ~711px wide on a desktop
+ * whatever the card, which capped the numbered bars at 32 where the card had room for about 42.
+ */
+async function expectChartSpansItsCard(page: Page): Promise<void> {
+  const { chart, room } = await page.locator('[data-chart]').evaluate((el) => {
+    const card = el.parentElement;
+    if (!card) return { chart: 0, room: -1 };
+    const style = getComputedStyle(card);
+    return {
+      chart: el.getBoundingClientRect().width,
+      room: card.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight),
+    };
+  });
+  expect(chart, 'the chart is narrower than its card').toBeCloseTo(room, 0);
+}
+
 async function expectEveryBarNumbered(page: Page, bars: number): Promise<void> {
   await expect(page.locator('.recharts-bar-rectangle')).toHaveCount(bars);
   await expect(page.locator('.recharts-label-list .recharts-label')).toHaveCount(bars);
@@ -331,6 +349,7 @@ const STATES: SweptState[] = [
       await page.getByRole('tab', { name: 'Tilastot' }).click();
       await expect(page.getByText('Ladataan tilastoja...')).toBeHidden();
       await expectEveryBarNumbered(page, STATISTICS.daily_stats.length);
+      await expectChartSpansItsCard(page);
     },
   },
   {
