@@ -17,8 +17,8 @@ set -euo pipefail
 # Resolve the tree being committed from GIT, not from where this script happens to live.
 #
 # This used to be `cd "$(dirname "${BASH_SOURCE[0]}")/.."`, and that is wrong the moment anyone
-# commits from a `git worktree`. `core.hooksPath` holds ONE repository-wide value, and in this
-# clone it is an ABSOLUTE path into the main checkout — `api/justfile`'s `install-hooks` writes it
+# commits from a `git worktree`. `core.hooksPath` holds ONE repository-wide value, and a clone was
+# found carrying an ABSOLUTE path into the main checkout — `api/justfile`'s `install-hooks` writes it
 # relative, which would have been fine, so something else made it absolute (husky's installer is
 # the likely culprit; it owned this setting for client/ before the merge). Whatever the cause, an
 # absolute value means every worktree's commit executes the MAIN checkout's copy of this file:
@@ -47,7 +47,8 @@ cd "$(git rev-parse --show-toplevel)"
 # repo-root paths against package-relative patterns. On 2026-09-30 that made the API's ADR check
 # miss a staged ADR. Unset, git finds the repository from wherever it is run, as outside a hook;
 # GIT_INDEX_FILE still names the index being committed. api/.githooks/pre-commit repeats this,
-# because a worktree runs the MAIN checkout's copy of this file until main carries the change.
+# because under an absolute `core.hooksPath` a worktree runs the MAIN checkout's copy of this file,
+# which may predate the change.
 unset GIT_DIR
 
 staged="$(git diff --cached --name-only --diff-filter=ACMR)"
