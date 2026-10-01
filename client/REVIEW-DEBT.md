@@ -6,6 +6,28 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 
 <!-- Newest first. -->
 
+## 2026-10-01 — the walk had two nondeterminisms, and `retries: 0` was claiming otherwise
+- **What:** two ways the browser walk could fail on a tree that had already passed.
+  1. **The clock.** The walk ran on the real date, and the timeframe states pick "the 10th" from a
+     calendar that refuses future days, so every run on the 1st to the 9th of a month failed four
+     of them, two states at both viewports. It first fired on 2026-10-01, two weeks after the
+     states were written: 4 failed and 76 passed locally that morning. `FIXED_NOW` in
+     `e2e/fixtures.ts`, an auto fixture, now pins every walk test to 2026-09-20 12:00 +03:00, and
+     `setFixedTime` leaves timers running. On the same morning, with it: 80 passed.
+  2. **The drawer state.** `Valikko — the navigation, however the width serves it` sampled the
+     trigger with `count()`, which never waits. On #17's push run (2026-09-30) it ran 5 ms after
+     `/auth/refresh` answered and before `/auth/me` had, found no trigger, skipped the drawer, and
+     timed out on the sidebar link; the PR run on the same tree had passed. The state now waits for
+     the `Kurssit` heading first. Planted with a 500 ms delay on `/auth/refresh`: red without the
+     wait (`element(s) not found` at 320px), green with it.
+- **What the walk no longer proves:** anything the real clock decides. A defect that shows only on
+  a month's last day or across a DST change cannot appear in the walk now; it belongs in unit
+  tests that name their dates, as `ClassStatistics.test.tsx` and spec 0009's tests do.
+- **Already paid:** #17's frontend deploy was skipped by the drawer race, so Vercel kept #16's build
+  until the next frontend deploy. #17 changed no application code.
+- **Disposition:** both fixed in the commit that adds this entry. `count()` was the walk's only
+  sample that does not wait; `textContent()` in `timeframe.spec.ts` waits for its element.
+
 ## 2026-09-30 — the page declared English, and the pager spoke it
 - **What:** `index.html` declared `lang="en"` over an all-Finnish interface, so a screen reader
   read every Finnish name by English rules. It declares `fi` now. The UI primitives' English

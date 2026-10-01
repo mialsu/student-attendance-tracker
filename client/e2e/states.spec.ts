@@ -74,8 +74,10 @@ async function openTilastot(page: Page): Promise<void> {
  * and refuses future days, so the day has to be one that has already happened whenever the walk
  * runs — and it has to be unambiguous in the grid, which rules out the first few and last few days
  * where a neighbouring month's padding shows the same numbers. The 10th satisfies both for any
- * month, on any day from the 10th onward. `exact` is what makes the strictness real: without it
- * Playwright's string form matches a substring, so "10" would also find 1 and 30.
+ * month, on any day from the 10th onward — which is why the walk's clock is pinned to the 20th
+ * (`FIXED_NOW` in `fixtures.ts`): on the real clock, a run on the 1st to the 9th found the 10th
+ * disabled and failed. `exact` is what makes the strictness real: without it Playwright's string
+ * form matches a substring, so "10" would also find 1 and 30.
  */
 async function pickDay(page: Page, end: string, day = '10'): Promise<void> {
   await page.getByLabel(end).click();
@@ -457,6 +459,13 @@ const STATES: SweptState[] = [
     },
     reach: async (page) => {
       await page.goto('/dashboard');
+      // `count()` below samples once and never waits, so it may only run once the shell is on
+      // screen. On 2026-09-30 it ran 5ms after `/auth/refresh` answered and before `/auth/me` had,
+      // so the shell was not mounted: it counted no trigger, skipped the drawer, and the link
+      // assertion then timed out on a closed one, while the run before it on the same tree passed.
+      // The page heading renders inside the shell, and `useMediaQuery` decides the width on the
+      // first render, so once the heading is visible a missing trigger means the desktop width.
+      await expect(page.getByRole('heading', { name: 'Kurssit', level: 1 })).toBeVisible();
       // The trigger exists only while the shell is collapsed, so its presence IS the width
       // question — no viewport branch needed. The assertion below is unconditional either way.
       const open = page.getByRole('button', { name: 'Avaa valikko' });

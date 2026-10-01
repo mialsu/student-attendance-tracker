@@ -38,9 +38,10 @@ export default defineConfig({
   /**
    * No retries. After self-hosting the webfont there is no network, no database, no clock and no
    * real API left to be nondeterministic, so `0` is a claim rather than a hope — and an
-   * intermittent pass would hide the race a gate exists to catch. The ADR's policy for the first
-   * red run that is not the app: revert the assertion and file the nondeterminism as debt. Never
-   * add a retry.
+   * intermittent pass would hide the race a gate exists to catch. The clock half has been true
+   * only since 2026-10-01, when `FIXED_NOW` in `e2e/fixtures.ts` pinned it; before that a run on
+   * the 1st to the 9th of a month failed. The ADR's policy for the first red run that is not the
+   * app: revert the assertion and file the nondeterminism as debt. Never add a retry.
    */
   retries: 0,
   /** `.only` silences a suite. `scripts/drift-check.sh` check 2 catches it in a diff; this catches it here. */
