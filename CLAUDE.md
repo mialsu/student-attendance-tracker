@@ -94,10 +94,13 @@ explicit choice. Consequence worth knowing: the backend `deploy` job is a rewrit
 execution *is* its verification, so watch the first run. Both workflows also accept
 `workflow_dispatch` if you want to trigger one deliberately.
 
-**Versions move only by pull request (ADR-0009).** Every dependency and image version is exact, and
-`.github/dependabot.yml` opens a monthly grouped update PR per ecosystem, which CI tests like any
-other. Two arrive alone on purpose: a `postgres` bump, because merging it restarts the production
-database, and `appleboy/ssh-action`, because the deploy it runs is its first test.
+**Versions move only by pull request (ADR-0009)**, for the API's packages, the client's lockfile and
+the compose images, which are exact (`tzdata` aside, ADR-0008). `.github/dependabot.yml` opens a
+monthly grouped update PR per ecosystem, which CI tests like any other. Two arrive alone on purpose:
+a `postgres` bump, because merging it restarts the production database, and `appleboy/ssh-action`,
+because the deploy it runs is its first test. Two gaps are open in `api/REVIEW-DEBT.md`: the tools CI
+downloads for itself install at whatever is newest, and the flat Python file can be handed an update
+that cannot install.
 
 **Manual steps this cannot do for you** (both in `client/REVIEW-DEBT.md`):
 

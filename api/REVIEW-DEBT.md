@@ -6,6 +6,35 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 
 <!-- Newest first. -->
 
+## 2026-10-01 — CI installs its own tools at whatever is newest, so "every version is exact" overclaims
+- **What:** ADR-0009 pinned the API's packages and the compose images, and the CLAUDE.md paragraph
+  that went in with them (#19) says every dependency and image version is exact. The workflows
+  download four tools for themselves, and none is pinned or in an ecosystem Dependabot reads:
+  1. **gitleaks.** `security.yml:41` asks the GitHub API for the latest release on every run, with
+     no token. On #21 that call returned 403 at 09:08:07Z and failed the secret scan of a pull
+     request that changed only Jaeger's tag; #22's scan, started 11 seconds later, passed. `curl -f`
+     discards the response body, so the log does not name the cause. The suspected one is the
+     runner's address running out of GitHub's allowance for anonymous API calls.
+  2. **The Vercel CLI.** `frontend.yml:214` installs `vercel@latest` inside the production deploy
+     job, so a new CLI major is first run by a deploy.
+  3. **pip-audit.** `backend.yml:249`, unpinned. Its report is advisory, so a new release costs a
+     different report.
+  4. **pip.** `backend.yml:70` and `:163` upgrade pip before it reads `requirements.txt`, so the
+     resolver that reads the pins moves on its own.
+
+  The actions are referenced by major tag (`actions/checkout@v7` and its siblings), which their
+  maintainers move, and `.github/dependabot.yml` ignores majors, so nothing proposes a change there
+  either. `appleboy/ssh-action` is pinned to a release.
+- **Where:** the lines above, as of 5505a13 (#19).
+- **What green tests do NOT prove here:** that the next run uses the tools this one did. A green
+  run proves the gitleaks, Vercel CLI and pip of that minute.
+- **Found the same day:** Dependabot alerts and Dependabot security updates are both off for the
+  repository (`GET /repos/mialsu/student-attendance-tracker/vulnerability-alerts` answers 404, and
+  `automated-security-fixes` reports `enabled: false`), so a CVE fix in a pinned package waits for
+  the monthly run. Security updates would also open the lockfile-only npm pull request the client's
+  drift check 4 refuses (`client/REVIEW-DEBT.md`, 2026-09-30); alerts alone open no pull requests.
+- **Disposition:** open, for the Owner.
+
 ## 2026-09-30 — every dependency is pinned, and what the pins do not prove
 - **What:** `requirements.txt` lists every package at an exact version except `tzdata`, transitive
   ones included, frozen from a fresh venv the full suite passed in; SQLAlchemy is held on 2.0
@@ -18,8 +47,14 @@ cut (`/confess`), read first by any architecture or review session, dispositione
      file does not list, pip installs it at whatever is newest, and nothing fails or says so.
      Refreeze whenever a package is added or bumped by hand.
   3. **Updates.** ~~Nothing proposes one until `.github/dependabot.yml` lands.~~ It exists since
-     the follow-up. Its first runs are unobserved, and whether its grouped pip updates keep this
-     flat file consistent is the trigger ADR-0009 names for moving to `pip-compile`.
+     the follow-up. Whether its grouped pip updates keep this flat file consistent is the trigger
+     ADR-0009 names for moving to `pip-compile`. **Observed on 2026-10-01: they do not.** The first
+     pip run, #23, cannot install. It moved `pydantic_core` to 2.49.0 on its own line, while
+     `pydantic` 2.13.5, the newest stable release, pins `pydantic-core==2.46.5`; 2.49.0 serves the
+     2.14 pre-releases. A flat file has no resolver behind it, so the bot weighs each line alone,
+     and it will propose this one every month until pydantic 2.14 ships. The rest of #23, eleven
+     OpenTelemetry pins and `tzdata`'s floor, resolves with `pydantic_core` held at 2.46.5: a dry
+     run installs 84 packages.
   4. **The images.** ~~`nginx:alpine` and `postgres:17-alpine` still float.~~ Exact since the
      follow-up. The first deploy after that merge restarts the production database onto 17.11,
      after its backup. That is expected, and it rests on `compose run` recreating a changed
@@ -27,8 +62,9 @@ cut (`/confess`), read first by any architecture or review session, dispositione
      2026-10-01:** #19's deploy pulled `postgres:17.11-alpine`, recreated `attendance-db-prod` in
      its *Migrations* group after the backup, and reported it healthy before the backend swap.
 - **Disposition:** 1 **closed** — #18 deployed on 2026-09-30, both health checks passed and
-  `/health` answers 200. 2 is accepted as a consequence in ADR-0009. 3 and 4 are fixed, each with
-  the open half named above.
+  `/health` answers 200. 2 is accepted as a consequence in ADR-0009. 4 is **closed**: the restart
+  it predicted was observed on the VM. 3's trigger has fired and waits for the Owner: move to
+  `pip-compile`, as ADR-0009 says, or hold `pydantic_core` by hand on every run until 2.14.
 
 ## 2026-09-16 — a clone could commit with no gates at all, and nothing said so
 - **What:** `core.hooksPath` lives in the untracked `.git/config`, so it does not arrive with a
