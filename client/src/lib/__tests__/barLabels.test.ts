@@ -26,5 +26,13 @@ describe('countsFit', () => {
   // a first frame both report 0, so 0 must never read as "fits".
   it('does not fit an unmeasured width of 0, however few the bars', () => {
     expect(countsFit(1, 0)).toBe(false);
+    // AC-2's own words: no for an unmeasured width of 0, with no bars as with some.
+    expect(countsFit(0, 0)).toBe(false);
+  });
+
+  // What the page actually passes before it has measured: the container's 0 less the chart's
+  // margins and Y axis.
+  it('does not fit the negative plot width an unmeasured chart leaves', () => {
+    expect(countsFit(4, -70)).toBe(false);
   });
 });

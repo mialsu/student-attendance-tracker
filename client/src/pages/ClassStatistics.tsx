@@ -215,7 +215,8 @@ const ClassStatistics = ({ classId }: ClassStatisticsProps) => {
   // it before the chart knew its width (decision 5).
   const plotWidth = chartWidth - CHART_MARGIN.left - CHART_MARGIN.right - Y_AXIS_WIDTH;
   const numbered = countsFit(chart.data.length, plotWidth);
-  const hinted = chartWidth > 0 && !numbered;
+  const measured = chartWidth > 0;
+  const hinted = measured && !numbered;
 
   return (
     <div className="space-y-8">
@@ -314,7 +315,7 @@ const ClassStatistics = ({ classId }: ClassStatisticsProps) => {
               only the height overridden 16:9 drove the WIDTH: 400px tall became ~711px wide
               whatever the viewport. At 320px that scrolled the page sideways (A11Y-7, 2026-09-07),
               which `max-w-full` fixed; on a desktop it left the chart at 711px inside an 894px
-              card, which held the numbered bars to 32 where the card has room for about 42
+              card, which held the numbered bars to 32 where the card has room for 41
               (spec 0010 slice 1, the Owner's call on 2026-10-01). `aspect-auto` drops the ratio,
               so the height is the 400px and the width is the card's. */}
           <ChartContainer
@@ -328,7 +329,7 @@ const ClassStatistics = ({ classId }: ClassStatisticsProps) => {
                 one render and sometimes they do not. The chart element itself must stay: with a
                 null child, ResponsiveContainer reads `children.type` and the whole app unmounts,
                 which the walk caught once in 200 runs on 2026-10-01. So the data waits. */}
-            <BarChart data={chartWidth > 0 ? chart.data : []} margin={CHART_MARGIN}>
+            <BarChart data={measured ? chart.data : []} margin={CHART_MARGIN}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis
                 dataKey={chart.dataKey}

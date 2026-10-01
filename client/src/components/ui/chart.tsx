@@ -36,7 +36,7 @@ const ChartContainer = React.forwardRef<
     children: React.ComponentProps<typeof RechartsPrimitive.ResponsiveContainer>["children"];
     /**
      * The size the chart's own ResponsiveContainer measured, each time it changes. Not `onResize`:
-     * that name is already the div's DOM event prop. Spec 0010 decision 5 reads the plot width
+     * that name is already the div's DOM event prop. Spec 0010 decision 5 derives the plot width
      * from here, so the one element that sizes the chart is also the one that reports it.
      */
     onChartResize?: (width: number, height: number) => void;

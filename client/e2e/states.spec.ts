@@ -96,15 +96,9 @@ async function pickDay(page: Page, end: string, day = '10'): Promise<void> {
 }
 
 /**
- * Spec 0010 AC-3: when the counts fit, every bar carries its count and its date tick. Counted
- * against the fixture rather than sampled from the page, so every count here is a retrying
- * assertion. Waiting is right for this one: it asserts the numbers arrive at all, and
- * `e2e/motion.spec.ts` owns "in the same frame as the bars" (AC-27).
- */
-/**
  * The chart spans its card's content box at every width (the Owner, 2026-10-01). Until then
  * `ChartContainer`'s 16:9 aspect, under a 400px height, fixed the chart at ~711px wide on a desktop
- * whatever the card, which capped the numbered bars at 32 where the card had room for about 42.
+ * whatever the card, which capped the numbered bars at 32 where the card has room for 41.
  */
 async function expectChartSpansItsCard(page: Page): Promise<void> {
   const { chart, room } = await page.locator('[data-chart]').evaluate((el) => {
@@ -119,6 +113,12 @@ async function expectChartSpansItsCard(page: Page): Promise<void> {
   expect(chart, 'the chart is narrower than its card').toBeCloseTo(room, 0);
 }
 
+/**
+ * Spec 0010 AC-3: when the counts fit, every bar carries its count and its date tick. Counted
+ * against the fixture rather than sampled from the page, so every count here is a retrying
+ * assertion. Waiting is right for this one: it asserts the numbers arrive at all, and
+ * `e2e/motion.spec.ts` owns "in the same frame as the bars" (AC-27).
+ */
 async function expectEveryBarNumbered(page: Page, bars: number): Promise<void> {
   await expect(page.locator('.recharts-bar-rectangle')).toHaveCount(bars);
   await expect(page.locator('.recharts-label-list .recharts-label')).toHaveCount(bars);
@@ -381,7 +381,7 @@ const STATES: SweptState[] = [
      * waited for first: its presence means the chart was measured and did not fit, so the label
      * count that follows is an answer rather than a sample taken too early.
      */
-    name: 'Tilastot — a range too long to number',
+    name: 'Tilastot — too many days to number',
     arrange: async (page) => {
       await signedIn(page);
       await oneKurssi(page);
@@ -395,7 +395,9 @@ const STATES: SweptState[] = [
       await expect(page.locator('.recharts-bar-rectangle')).toHaveCount(
         LONG_STATISTICS.daily_stats.length,
       );
-      await expect(page.getByText(BAR_LABEL_HINT)).toBeVisible();
+      // Decision 8's placement as well as its words: a paragraph after the chart, inside the same
+      // card content, so a screenshot of the card carries it.
+      await expect(page.locator('[data-chart] ~ p', { hasText: BAR_LABEL_HINT })).toBeVisible();
       await expect(page.locator('.recharts-label-list .recharts-label')).toHaveCount(0);
     },
   },

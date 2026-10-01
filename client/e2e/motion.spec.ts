@@ -6,7 +6,7 @@
  * teacher who had asked her operating system for less motion got the full 300ms fade and slide on
  * every signed-in surface anyway.
  *
- * **Two tests, and the second is the one that makes the first mean anything.** Asserting
+ * **The CSS motion is a pair, and the second test is what makes the first mean anything.** Asserting
  * "duration is 0.01ms under reduce" alone would also pass if the app had no animation whatsoever,
  * or if someone deleted the keyframes. The control asserts the motion is *there* without the
  * preference — 0.3s and 0.2s, the authored values — so the pair proves the media query is doing
@@ -62,9 +62,14 @@ async function dashboard(page: Parameters<typeof signedIn>[0]) {
  * with a MutationObserver installed before any script runs, the first DOM change that puts a bar
  * shape on screen and how many count labels arrived in that same change.
  */
-async function firstFrameWithBars(page: Page): Promise<{ bars: number; labels: number }> {
+/** What the first DOM change that drew a bar shape carried. */
+type FirstFrame = { bars: number; labels: number };
+
+async function firstFrameWithBars(page: Page): Promise<FirstFrame> {
   await page.addInitScript(() => {
-    const record = window as unknown as { __firstBars?: { bars: number; labels: number } };
+    const record = window as unknown as { __firstBars?: FirstFrame };
+    // A drawn bar is a `path` inside its `.recharts-bar-rectangle` group; the group exists from the
+    // first render, the path only once the bar has a height, which is the moment that matters here.
     new MutationObserver((_changes, observer) => {
       const bars = document.querySelectorAll('.recharts-bar-rectangle path').length;
       if (bars === 0) return;
@@ -85,7 +90,7 @@ async function firstFrameWithBars(page: Page): Promise<{ bars: number; labels: n
     STATISTICS.daily_stats.length,
   );
   const first = await page.evaluate(
-    () => (window as unknown as { __firstBars?: { bars: number; labels: number } }).__firstBars,
+    () => (window as unknown as { __firstBars?: FirstFrame }).__firstBars,
   );
   expect(first, 'no DOM change ever put a bar on screen').toBeDefined();
   return first ?? { bars: 0, labels: 0 };

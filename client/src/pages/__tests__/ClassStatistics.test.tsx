@@ -56,8 +56,11 @@ const DAY_CHART = 'Läsnäolot päivittäin (kaavio)';
 const MONTH_CHART = 'Läsnäolot kuukausittain (kaavio)';
 const BAR_LABEL_HINT = 'Rajaa lyhyempi aikaväli nähdäksesi luvut pylväissä.';
 
-/** Ninety days: too many bars to number at any width, so a measured chart would show the hint. */
-const LONG_STATISTICS = {
+/**
+ * Ninety days: too many bars to number at any width, so a measured chart would show the hint.
+ * Only `daily_stats` matters to the test that uses it; the totals are STATISTICS' and do not add up.
+ */
+const NINETY_DAYS = {
   ...STATISTICS,
   daily_stats: Array.from({ length: 90 }, (_, i) => ({
     date: new Date(Date.UTC(2026, 5, 23 + i)).toISOString().slice(0, 10),
@@ -158,7 +161,7 @@ describe('ClassStatistics — the day/month toggle', () => {
   // half a careless reading of "unmeasured" would show: a width of 0 fits no bar.
   it('shows neither the numbers nor the hint before the chart has measured itself', () => {
     vi.mocked(useAttendanceHooks.useAttendanceStatistics).mockReturnValue(
-      asStatistics({ data: LONG_STATISTICS, isLoading: false, error: null, refetch: vi.fn() })
+      asStatistics({ data: NINETY_DAYS, isLoading: false, error: null, refetch: vi.fn() })
     );
 
     render(<ClassStatistics classId="c1" />);

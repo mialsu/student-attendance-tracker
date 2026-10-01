@@ -28,6 +28,12 @@ cut (`/confess`), read first by any architecture or review session, dispositione
   5. **Three-digit counts.** Every fixture's counts are one or two digits. A month with a hundred
      attendances or more draws a three-digit count; months are few and wide, so it should fit, but
      no screenshot shows one.
+  6. **A width carried across a remount.** `chartWidth` lives in the page, and a range change the
+     cache has not seen unmounts the chart for its loading branch. The remounted chart therefore
+     decides numbers and hint from the old width before its own container reports. That is right
+     unless the window changed size during the load, and then wrong until the next report, a frame
+     or so later. Found by `/code-review`; slice 4 keeps the chart mounted across range changes,
+     which removes it.
 - **Found on the live keyboard pass, left alone as outside this slice:** the *Kaavion jakso*
   options are `role="radio"`, and ARIA's radio pattern checks an option when an arrow key moves to
   it. Radix's toggle group only moves focus, and Space selects, so a screen reader announces
