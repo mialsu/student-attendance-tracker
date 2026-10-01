@@ -55,6 +55,24 @@ const STATISTICS = {
 const DAY_CHART = 'Läsnäolot päivittäin (kaavio)';
 const MONTH_CHART = 'Läsnäolot kuukausittain (kaavio)';
 
+/**
+ * Spec 0010 AC-1: the surface reads filter, four totals, chart, per-day table. DOM order is the
+ * order a screen reader and a keyboard meet them in, and it is the visual order too, since nothing
+ * here repositions a section. Sorted by document position rather than asserted pairwise, so a
+ * failure prints the order the page actually has.
+ */
+function sectionOrder(): string[] {
+  const sections: Record<string, HTMLElement> = {
+    filter: screen.getByLabelText('Alkaen'),
+    totals: screen.getByText('Läsnäoloja yhteensä'),
+    chart: screen.getByText(DAY_CHART),
+    table: screen.getByText('Läsnäolot päivittäin'),
+  };
+  return Object.keys(sections).sort((a, b) =>
+    sections[a].compareDocumentPosition(sections[b]) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1
+  );
+}
+
 describe('ClassStatistics — the day/month toggle', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -114,6 +132,14 @@ describe('ClassStatistics — the day/month toggle', () => {
 
     await user.keyboard('{ArrowRight}');
     expect(months).toHaveFocus();
+  });
+
+  // Spec 0010 AC-1, decision 2: the chart sits directly under the totals, so the filter that
+  // narrows it is a short scroll above it rather than a whole table's length.
+  it('reads filter, four totals, chart, per-day table, in that order', () => {
+    render(<ClassStatistics classId="c1" />);
+
+    expect(sectionOrder()).toEqual(['filter', 'totals', 'chart', 'table']);
   });
 
   // The Owner's decision, and the reason the toggle is not simply a replacement: a chart cannot
@@ -276,6 +302,19 @@ describe('ClassStatistics — the timeframe (spec 0008)', () => {
 
     // US-21: 10.9.2026, the way she writes it — not 2026-09-10 and not September 10th.
     expect(screen.getByLabelText(FROM)).toHaveTextContent(DAY.finnish());
+  });
+
+  // Spec 0010 AC-1's other state: a timeframe with figures renders the same four sections, so it
+  // owes the same order.
+  it('keeps the order filter, totals, chart, table under a timeframe', async () => {
+    const user = userEvent.setup();
+    mockByRange({ data: STATISTICS });
+    render(<ClassStatistics classId="c1" />);
+
+    await pick(user, FROM, DAY.number);
+
+    expect(screen.getByText(RANGE_DAYS)).toBeInTheDocument();
+    expect(sectionOrder()).toEqual(['filter', 'totals', 'chart', 'table']);
   });
 
   it('retitles the per-day table, because "kaikki päivät" is false under a timeframe', async () => {

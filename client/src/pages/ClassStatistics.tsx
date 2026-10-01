@@ -255,45 +255,11 @@ const ClassStatistics = ({ classId }: ClassStatisticsProps) => {
         </Card>
       </div>
 
-      {/* Daily Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Läsnäolot päivittäin</CardTitle>
-          {/* "Kaikki päivät" is a claim, and a timeframe makes it false — spec 0008 decision 13.
-              It stays when there is no range, where it is both true and the more useful of the
-              two sentences. */}
-          <CardDescription>
-            {hasRange
-              ? 'Päivät valitulla aikavälillä'
-              : 'Kaikki päivät, joilta läsnäoloja on kirjattu'}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Päivämäärä</TableHead>
-                  <TableHead className="text-right">Läsnäolot</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {dailyData.map((item) => (
-                  <TableRow key={item.date}>
-                    <TableCell className="font-medium">{item.displayDate}</TableCell>
-                    <TableCell className="text-right">{item.count}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
-
       {/* One chart, two granularities (AC9 / US-22). This was two near-identical cards, one per
           granularity, with no toggle: "day/month bar chart" was served by showing both at once.
-          The per-day TABLE above stays — a chart cannot be read to the day, and she reads it to
-          the day (Owner, 2026-09-11). */}
+          The per-day TABLE below stays — a chart cannot be read to the day, and she reads it to
+          the day (Owner, 2026-09-11). The chart comes first since spec 0010 (decision 2): with
+          the table above it, the filter that narrows it was a whole table's length away. */}
       <Card>
         <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="space-y-1.5">
@@ -346,6 +312,41 @@ const ClassStatistics = ({ classId }: ClassStatisticsProps) => {
               </BarChart>
             </ResponsiveContainer>
           </ChartContainer>
+        </CardContent>
+      </Card>
+
+      {/* Daily Table */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Läsnäolot päivittäin</CardTitle>
+          {/* "Kaikki päivät" is a claim, and a timeframe makes it false — spec 0008 decision 13.
+              It stays when there is no range, where it is both true and the more useful of the
+              two sentences. */}
+          <CardDescription>
+            {hasRange
+              ? 'Päivät valitulla aikavälillä'
+              : 'Kaikki päivät, joilta läsnäoloja on kirjattu'}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Päivämäärä</TableHead>
+                  <TableHead className="text-right">Läsnäolot</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {dailyData.map((item) => (
+                  <TableRow key={item.date}>
+                    <TableCell className="font-medium">{item.displayDate}</TableCell>
+                    <TableCell className="text-right">{item.count}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
         </CardContent>
       </Card>
     </div>
