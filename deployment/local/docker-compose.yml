@@ -3,7 +3,7 @@ version: '3.8'
 services:
   # PostgreSQL Database
   db:
-    image: postgres:17-alpine
+    image: postgres:17.11-alpine  # the same exact tag as production (ADR-0009)
     container_name: attendance-db-local
     restart: unless-stopped
     volumes:
@@ -33,7 +33,7 @@ services:
 
   # PostgreSQL Test Database (for running tests with real database)
   db-test:
-    image: postgres:17-alpine
+    image: postgres:17.11-alpine
     container_name: attendance-db-test
     restart: unless-stopped
     environment:

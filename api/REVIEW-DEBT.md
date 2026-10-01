@@ -17,11 +17,17 @@ cut (`/confess`), read first by any architecture or review session, dispositione
   2. **A new transitive dependency.** When a pinned package's next version needs a package this
      file does not list, pip installs it at whatever is newest, and nothing fails or says so.
      Refreeze whenever a package is added or bumped by hand.
-  3. **Updates.** Nothing proposes one until `.github/dependabot.yml` lands in the follow-up pull
-     request. Until then a version moves only by hand.
-  4. **The images.** `nginx:alpine` and `postgres:17-alpine` still float until that same follow-up.
-- **Disposition:** 3 and 4 close with the follow-up; 1 closes with the first deploy after merge; 2
-  is accepted as a consequence in ADR-0009.
+  3. **Updates.** ~~Nothing proposes one until `.github/dependabot.yml` lands.~~ It exists since
+     the follow-up. Its first runs are unobserved, and whether its grouped pip updates keep this
+     flat file consistent is the trigger ADR-0009 names for moving to `pip-compile`.
+  4. **The images.** ~~`nginx:alpine` and `postgres:17-alpine` still float.~~ Exact since the
+     follow-up. The first deploy after that merge restarts the production database onto 17.11,
+     after its backup. That is expected, and it rests on `compose run` recreating a changed
+     dependency, which was observed with Compose v5.5.1 locally and never checked on the VM: the
+     deploy log's *Migrations* group shows `attendance-db-prod` either way.
+- **Disposition:** 1 **closed** — #18 deployed on 2026-09-30, both health checks passed and
+  `/health` answers 200. 2 is accepted as a consequence in ADR-0009. 3 and 4 are fixed, each with
+  the open half named above.
 
 ## 2026-09-16 — a clone could commit with no gates at all, and nothing said so
 - **What:** `core.hooksPath` lives in the untracked `.git/config`, so it does not arrive with a

@@ -104,8 +104,15 @@ jobs:
       # mount path resolved to `api/deployment/production/nginx.conf` and docker failed with
       # exit 125 mounting a path that does not exist. An absolute workspace path does not care
       # what the working directory is.
+      #
+      # The image is read from the production compose file rather than written here a second
+      # time: this check has to run the nginx production runs, and a Dependabot bump of that tag
+      # is exactly the change it should judge (ADR-0009).
       - name: nginx.conf is valid
         run: |
+          NGINX_IMAGE="$(awk '/^  nginx:/ { svc = 1 } svc && /^    image:/ { print $2; exit }' "$COMPOSE_FILE")"
+          test -n "$NGINX_IMAGE" || { echo "no nginx image in $COMPOSE_FILE"; exit 1; }
+          echo "validating with $NGINX_IMAGE"
           CERTS=/tmp/nginx-validate/live/attendance-api.kotoio.fi
           mkdir -p "$CERTS" /tmp/nginx-validate-webroot
           openssl req -x509 -newkey rsa:2048 -nodes -days 1 \
@@ -116,9 +123,10 @@ jobs:
             -v "$CONF:/etc/nginx/nginx.conf:ro" \
             -v /tmp/nginx-validate:/etc/letsencrypt:ro \
             -v /tmp/nginx-validate-webroot:/var/www/certbot:ro \
-            nginx:alpine nginx -t
+            "$NGINX_IMAGE" nginx -t
         env:
           CONF: ${{ github.workspace }}/deployment/production/nginx.conf
+          COMPOSE_FILE: ${{ github.workspace }}/deployment/production/docker-compose.yml
 
   test:
     name: Tests
@@ -434,7 +442,7 @@ jobs:
             #          Order still matters, for the reason the old comment gave: `nginx -t` resolves
             #          upstream hostnames, so it needs the backend up. Validation runs in a THROWAWAY
             #          container on the compose network, against the NEW file and the same
-            #          nginx:alpine image production runs -- validating with the running container is
+            #          nginx image production runs -- validating with the running container is
             #          what the stale mount makes meaningless.
             # ---- 7b. Put the proxy onto the current nginx.conf. UNCONDITIONALLY. ------------
             #
