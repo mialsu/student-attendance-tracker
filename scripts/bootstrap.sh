@@ -27,13 +27,34 @@ good() { printf '  ✓ %s\n' "$*"; ok=$((ok+1)); }
 bad()  { printf '  ✗ %s\n' "$*"; missing=$((missing+1)); }
 
 say "▸ pre-commit hook"
-if [ "$(git config core.hooksPath || true)" = ".githooks" ]; then
+# core.hooksPath is ONE value for the whole repository, every worktree included, and git reads a
+# relative value against the root of the working tree being committed. Any value that points at
+# this repository's .githooks gates every commit, however it is spelled, so the check resolves it
+# rather than comparing strings. Repair still writes `.githooks` over anything else: under it a
+# worktree commits through its own copy of the hook, and under an absolute path through the main
+# checkout's. scripts/bootstrap.test.sh runs every case.
+hooks="$(git config --type=path core.hooksPath || true)"
+dir=""
+if [ -n "$hooks" ]; then
+  case "$hooks" in /*) dir="$hooks" ;; *) dir="$PWD/$hooks" ;; esac
+  dir="$(cd "$dir" 2>/dev/null && pwd -P)" || dir=""
+fi
+main="$(git worktree list --porcelain | sed -n '1s/^worktree //p')"
+ours=0
+for tree in "$PWD" "$main"; do
+  if [ -n "$dir" ] && [ "$dir" = "$(cd "$tree" && pwd -P)/.githooks" ]; then ours=1; fi
+done
+if [ "$hooks" = ".githooks" ]; then
   good "core.hooksPath -> .githooks"
-elif [ "$CHECK" -eq 1 ]; then
+elif [ "$CHECK" -eq 1 ] && [ "$ours" -eq 1 ]; then
+  good "core.hooksPath -> $hooks (gated; without --check this rewrites it as .githooks)"
+elif [ "$CHECK" -eq 1 ] && [ -z "$hooks" ]; then
   bad "core.hooksPath is not set -- commits from this clone run NO gates"
+elif [ "$CHECK" -eq 1 ]; then
+  bad "core.hooksPath is $hooks, not this repo's .githooks -- commits from this clone skip its gates"
 else
   git config core.hooksPath .githooks
-  good "core.hooksPath -> .githooks (set)"
+  good "core.hooksPath -> .githooks (set${hooks:+, was $hooks})"
 fi
 
 say "▸ api/venv (the api hook calls ./venv/bin/{lint-imports,ruff,mypy})"
