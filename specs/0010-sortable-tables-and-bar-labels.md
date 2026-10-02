@@ -1,8 +1,9 @@
 # Spec 0010 — numbers on the *Tilastot* bars, the chart above the table, and sortable tables
 
 **Status:** shaped 2026-09-30 (`/grilling` → `/to-prd`), eighteen decisions, seven seams.
-`ready-for-agent` once the search-fix branch has merged to `main` (decision 17); each open question
-is answered before the slice that needs it.
+**Slice 1 shipped 2026-10-01** in #25; slices 2–4 not started. `ready-for-agent`, since the
+search-fix branch merged to `main` as #16 (decision 17); each open question is answered before the
+slice that needs it.
 **Weight:** Standard
 **Domain dial:** on (project-wide). This spec moves no invariant; `INV-1`, `INV-2` and `INV-9` are
 adjacent, see *Invariants touched*.
@@ -446,8 +447,8 @@ the 422 for a value no client sends. Slices 1, 3 and 4 touch the client only.
 
 ## Verification status
 
-**Slice 1 built and verified on 2026-10-01**, on this branch and not yet merged: AC-1 – AC-7 and
-AC-27 all read **WORKS**, so the slice's verdict is WORKS. The evidence came three ways: the hook
+**Slice 1 built and verified on 2026-10-01**, and merged the same day as #25, whose own frontend
+run deployed it: AC-1 – AC-7 and AC-27 all read **WORKS**, so the slice's verdict is WORKS. The evidence came three ways: the hook
 seam and unit tests; the browser walk with its mocked API, plus 200 repeats of AC-27 and 90 of the
 *Tilastot* states; and a live pass on a local stack, with a real login, the real API, and a weekly
 course since November 2025 created through that API (34 sessions, 391 records), at 320, 390 and
@@ -500,3 +501,8 @@ data waits. Withholding the chart element itself crashed the app: `ResponsiveCon
 `children.type` of whatever it is given, and the walk caught the blank page once in 200 runs.
 Without any gate the order held by timing alone, since Recharts sizes itself in an effect before
 the ResizeObserver behind `onChartResize` reports.
+
+**2026-10-01 — the status line and *Verification status* still called slice 1 unmerged, found on
+resuming.** Both were written on the branch before #25 merged, and the squash carried them to
+`main` unchanged. Corrected in place: slice 1 shipped in #25, and decision 17's condition had been
+met since #16 merged on 2026-09-30.

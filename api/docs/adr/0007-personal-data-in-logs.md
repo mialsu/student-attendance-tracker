@@ -1,7 +1,8 @@
 # ADR-0007 — Structured logs carry ids, never Student names
 
-**Status:** accepted, 2026-09-09. **Not yet implemented** — `specs/0005-application-logging.md`
-holds the acceptance criteria, and this file will not claim otherwise until they carry verdicts.
+**Status:** accepted, 2026-09-09. **Implemented** in #8 (`d25ec29`, 2026-09-11): every acceptance
+criterion in `specs/0005-application-logging.md` carries a WORKS verdict, the condition this line
+waited on while it said "not yet implemented". Corrected 2026-10-01, on resuming.
 
 Numbered 0007: **ADR-0005** stays reserved by `specs/0004-shared-classes.md` for the
 `class_teachers` schema decision, and 0006 is tracing.

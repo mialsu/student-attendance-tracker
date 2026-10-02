@@ -1,6 +1,8 @@
 # Spec 0008 — a timeframe filter on *Tilastot*
 
-**Status:** shaped 2026-09-14 (`/grill-with-docs` → `/to-spec`), eleven decisions, four seams — `ready-for-agent`
+**Status:** shaped 2026-09-14 (`/grill-with-docs` → `/to-spec`), eleven decisions, four seams.
+**Closed 2026-09-16:** all three slices shipped in #15 (`cd262c1`) with spec 0009 and deployed the
+same day; AC-1 – AC-16 all read WORKS (gates)
 **Weight:** Standard
 **Domain dial:** on (project-wide); this spec touches `INV-1` without moving it — see *Invariants touched*
 
@@ -476,3 +478,8 @@ corrected the word order on review: noun first, which is also how its three neig
 included, so the old form now appears only in this entry. **Nothing else had to change:** no test,
 no `e2e` spec and no swept state selected on that string — the card is reached by position and by
 its value, which is why a copy fix here cost one line rather than a sweep.
+
+**2026-10-01 — the status line said `ready-for-agent` for two weeks after #15 shipped this spec,
+found on resuming.** In this repo the `Status:` line is the triage label
+(`docs/agents/triage-labels.md`), so the spec went on advertising itself as work an agent could
+pick up. Corrected to closed, in the form spec 0006 uses.

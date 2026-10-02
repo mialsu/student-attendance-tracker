@@ -960,12 +960,12 @@ Closes #123
 
 ## Current Task Context
 
-**Timeframe filter on *Tilastot*** (spec 0008): two date pickers, `Alkaen` / `Päättyen`, empty by
-default. Every figure on the surface describes the chosen timeframe — the four summary cards
-included, which is a **change in what "Läsnäoloja yhteensä" counts** and drops that figure once on
-deploy, to what the charts have been drawing all along. The Owner undertook to warn the teacher.
-*Tilastot* has **two** empty states now, and the order they are checked in matters —
-`client/DESIGN.md` §3 is the record. Every date is a local day (spec 0009, ADR-0008).
+**In flight: spec 0010** (`specs/0010-sortable-tables-and-bar-labels.md`), numbers on the
+*Tilastot* bars and then sortable tables, in four slices with blocking edges. Its `Status:` line
+says which have shipped, and each open question is answered before the slice that needs it. Spec
+0007's `Status:` line names its own unstarted slices. The timeframe filter (spec 0008) and local
+days (spec 0009) shipped together in #15; `client/DESIGN.md` §3 records *Tilastot*'s empty states
+and the order they are checked in.
 
 `cd client && npm run check` runs every client gate, e2e included; `.harness-baseline` holds the
 current figures.
