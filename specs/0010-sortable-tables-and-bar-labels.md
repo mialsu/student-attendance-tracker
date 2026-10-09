@@ -1,10 +1,9 @@
 # Spec 0010 — numbers on the *Tilastot* bars, the chart above the table, and sortable tables
 
 **Status:** shaped 2026-09-30 (`/grilling` → `/to-prd`), eighteen decisions, seven seams.
-**Slice 1 shipped 2026-10-01** in #25. **Slice 2 built 2026-10-09**, AC-8 – AC-11 verified and
-AC-26 waiting on review; slices 3 and 4 not started. `ready-for-agent`, since the search-fix branch
-merged to `main` as #16 (decision 17); each open question is answered before the slice that needs
-it.
+**Slice 1 shipped 2026-10-01** in #25. **Slice 2 built and verified 2026-10-09**; slices 3 and 4
+not started. `ready-for-agent`, since the search-fix branch merged to `main` as #16 (decision 17);
+each open question is answered before the slice that needs it.
 **Weight:** Standard
 **Domain dial:** on (project-wide). This spec moves no invariant; `INV-1`, `INV-2` and `INV-9` are
 adjacent, see *Invariants touched*.
@@ -322,7 +321,7 @@ Verdicts are filled by `/verify-live`, per criterion. A task's verdict is the **
 | AC-23 | A range change leaves the previous figures and the filter on screen until the new figures arrive; past 300 ms they fade | `test:` hook seam + `live:` for the timing | US-25 | pending |
 | AC-24 | Picking a day closes that end's calendar, for a range the cache has seen and for one it has not | `test:` e2e | US-26 | pending |
 | AC-25 | A failed range change renders the error state, and none of the previous range's figures | `test:` hook seam | US-27 | pending |
-| AC-26 | `API_REFERENCE.md`'s summary section documents the route as built: its parameters, the four sort values, the 422 and the paginated response | review, at `/code-review` | US-32 | pending review: rewritten 2026-10-09, its parameters and response shape checked against a live response; the verdict is dev-review's |
+| AC-26 | `API_REFERENCE.md`'s summary section documents the route as built: its parameters, the four sort values, the 422 and the paginated response | review, at `/code-review` | US-32 | **WORKS**: dev-review passed the section, every statement in it matching the code and a live response; its one note, a 422 list one cause short, is folded in, and each cause it now names (`sort_by`, `skip`, `limit`, `legacy`, `class_id`) was checked live as a 422 |
 | AC-27 | The bars do not animate: the first frame that holds the bars holds every count label, under `no-preference` as well as `reduce`; watched failing with the animation turned back on | `test:` e2e, in `e2e/motion.spec.ts` | US-3, US-6 | **WORKS**: red as the code stood and again with the animation turned back on (0 counts in the first frame with bars), green with it off under `reduce` and `no-preference`, 200 runs of 200 |
 
 **Invariants touched:** `INV-1`, which does not move. No route is added, and
@@ -465,8 +464,9 @@ seam and unit tests; the browser walk with its mocked API, plus 200 repeats of A
 course since November 2025 created through that API (34 sessions, 391 records), at 320, 390 and
 1280px, with axe and reflow on every captured state and a keyboard-only walk of the surface.
 
-**Slice 2 built on 2026-10-09**: AC-8 – AC-11 read **WORKS**, and AC-26 waits on
-dev-review, its proof route, so the slice's verdict waits with it. The evidence: the route tests
+**Slice 2 built and verified on 2026-10-09**: AC-8 – AC-11 and AC-26 all read **WORKS**, so the
+slice's verdict is WORKS. dev-review re-proved AC-8 – AC-11 in its own worktree and database, with
+plants of its own, and passed AC-26 by review. The evidence: the route tests
 and the budget rows, each watched red first and again against planted faults; a fifth key planted
 in `SummarySortKey` with no service branch, which failed the type gate (mypy 15 against a baseline
 of 14); the full suite; and a live pass with curl against a real uvicorn and

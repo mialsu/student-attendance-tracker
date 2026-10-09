@@ -716,8 +716,9 @@ production's `postgres:17.11-alpine`; spec 0010's open question 3 records the ch
 - `401 Unauthorized`: Invalid or missing token
 - `403 Forbidden`: You don't own this class
 - `404 Not Found`: Class not found
-- `422 Unprocessable Entity`: `sort_by` is not one of the four orders, or `skip` or `limit` is out
-  of range. Checked before ownership, so the answer is the same for any class id.
+- `422 Unprocessable Entity`: a parameter fails validation: `sort_by` is not one of the four orders,
+  `skip` or `limit` is out of range or not an integer, `legacy` is not a boolean, or `class_id` is
+  not a UUID. Checked before ownership, so the answer is the same for any class id.
 
 ---
 
