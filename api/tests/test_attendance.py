@@ -1,12 +1,16 @@
 """Tests for attendance tracking endpoints."""
 
 from datetime import datetime, timedelta, timezone
+from typing import get_args
 
 import pytest
+import pytest_asyncio
 from httpx import AsyncClient
 
 from app.models.attendance import AttendanceRecord
 from app.models.class_ import Class
+from app.models.student import Student
+from app.schemas.attendance import SummarySortKey
 
 
 @pytest.mark.asyncio
@@ -258,8 +262,46 @@ class TestDeleteAttendance:
     ):
         """Test deleting attendance without authentication."""
         response = await client.delete(f"/api/attendance/{test_attendance.id}")
-        
+
         assert response.status_code == 401
+
+
+# Five Students whose names start with five different ASCII letters, so every collation agrees on
+# their order and the tests below assert the sort rather than the database's alphabet (spec 0010,
+# open question 3). Aino and Liisa tie on attendance, which is what proves the tie-break; Ville has
+# no records, which is what proves an attendance sort keeps a Student the outer join finds nothing
+# for.
+SORTABLE_ATTENDANCE = {"Aino": 2, "Eero": 3, "Kalle": 1, "Liisa": 2, "Ville": 0}
+
+# Each sort key's order of those five, attendance ties broken by name ascending (AC-8). The tests
+# run once per key the route accepts, so a key added to SummarySortKey without an order here fails
+# them rather than going untested.
+SORTED_SUMMARY = {
+    "attendance_desc": ["Eero", "Aino", "Liisa", "Kalle", "Ville"],
+    "attendance_asc": ["Ville", "Kalle", "Aino", "Liisa", "Eero"],
+    "name_asc": ["Aino", "Eero", "Kalle", "Liisa", "Ville"],
+    "name_desc": ["Ville", "Liisa", "Kalle", "Eero", "Aino"],
+}
+
+
+@pytest_asyncio.fixture
+async def sortable_class(db, test_class: Class) -> Class:
+    """test_class holding the Students of SORTABLE_ATTENDANCE, each with that many records."""
+    now = datetime.now(timezone.utc)
+    for name, count in SORTABLE_ATTENDANCE.items():
+        student = Student(name=name, class_id=test_class.id, course_credit_received=False)
+        db.add(student)
+        await db.flush()
+        for day in range(count):
+            db.add(
+                AttendanceRecord(
+                    class_id=test_class.id,
+                    student_id=student.id,
+                    timestamp=now - timedelta(days=day),
+                )
+            )
+    await db.commit()
+    return test_class
 
 
 @pytest.mark.asyncio
@@ -511,6 +553,109 @@ class TestAttendanceSummary:
         # Verify alphabetical order
         names = [s["student_name"] for s in items]
         assert names == sorted(names)
+
+    @pytest.mark.parametrize("sort_by", get_args(SummarySortKey))
+    async def test_summary_sorts_as_named(
+        self, client: AsyncClient, auth_headers: dict, sortable_class: Class, sort_by: str
+    ):
+        """Each sort key orders the Students as its name says (AC-8)."""
+        response = await client.get(
+            f"/api/classes/{sortable_class.id}/attendance/summary?sort_by={sort_by}",
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 200
+        names = [s["student_name"] for s in response.json()["items"]]
+        assert names == SORTED_SUMMARY[sort_by]
+
+    async def test_summary_defaults_to_attendance_desc(
+        self, client: AsyncClient, auth_headers: dict, sortable_class: Class
+    ):
+        """No sort_by is attendance_desc, so Läsnäolot opens as it always has."""
+        response = await client.get(
+            f"/api/classes/{sortable_class.id}/attendance/summary",
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 200
+        names = [s["student_name"] for s in response.json()["items"]]
+        assert names == SORTED_SUMMARY["attendance_desc"]
+
+    @pytest.mark.parametrize("sort_by", get_args(SummarySortKey))
+    async def test_summary_sorts_before_it_pages(
+        self, client: AsyncClient, auth_headers: dict, sortable_class: Class, sort_by: str
+    ):
+        """Pages of two, read in turn, make up the sorted list: skip and limit apply after it."""
+        names: list[str] = []
+        for skip in range(0, len(SORTABLE_ATTENDANCE), 2):
+            response = await client.get(
+                f"/api/classes/{sortable_class.id}/attendance/summary"
+                f"?sort_by={sort_by}&skip={skip}&limit=2",
+                headers=auth_headers,
+            )
+            assert response.status_code == 200
+            assert response.json()["total"] == len(SORTABLE_ATTENDANCE)
+            names += [s["student_name"] for s in response.json()["items"]]
+
+        assert names == SORTED_SUMMARY[sort_by]
+
+    @pytest.mark.parametrize("sort_by", get_args(SummarySortKey))
+    async def test_summary_searches_before_it_sorts(
+        self, client: AsyncClient, auth_headers: dict, sortable_class: Class, sort_by: str
+    ):
+        """A search narrows the Students, the sort orders what it found, and the page comes last."""
+        found = [name for name in SORTED_SUMMARY[sort_by] if "i" in name.lower()]
+
+        response = await client.get(
+            f"/api/classes/{sortable_class.id}/attendance/summary"
+            f"?search=i&sort_by={sort_by}&limit=2",
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total"] == len(found) == 3
+        assert [s["student_name"] for s in data["items"]] == found[:2]
+
+    @pytest.mark.parametrize("sort_by", ["nmae_desc", "name", "NAME_ASC", "attendance", ""])
+    async def test_summary_refuses_an_unknown_sort_key(
+        self, client: AsyncClient, auth_headers: dict, sortable_class: Class, sort_by: str
+    ):
+        """Anything outside the four is a 422. Before spec 0010 it got 200, as name_asc (AC-9)."""
+        response = await client.get(
+            f"/api/classes/{sortable_class.id}/attendance/summary?sort_by={sort_by}",
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 422
+
+    async def test_an_unknown_sort_key_says_nothing_about_the_class(
+        self,
+        client: AsyncClient,
+        auth_headers: dict,
+        other_teacher_headers: dict,
+        test_class: Class,
+    ):
+        """The 422 depends on the query string alone, so refusing it before ownership leaks nothing.
+
+        The owner, a second teacher and a class id that does not exist get the same answer, byte
+        for byte. That is the claim spec 0010's *Invariants touched* makes for INV-1.
+        """
+        missing = "00000000-0000-0000-0000-000000000000"
+        answers = []
+        for class_id, headers in [
+            (test_class.id, auth_headers),
+            (test_class.id, other_teacher_headers),
+            (missing, auth_headers),
+        ]:
+            response = await client.get(
+                f"/api/classes/{class_id}/attendance/summary?sort_by=nmae_desc",
+                headers=headers,
+            )
+            answers.append((response.status_code, response.content))
+
+        assert answers[0][0] == 422
+        assert answers == [answers[0]] * len(answers)
 
     async def test_summary_no_auth(self, client: AsyncClient, test_class: Class):
         """Test getting summary without authentication."""

@@ -21,6 +21,7 @@ single-process pytest session being asked to configure it twice.
 
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
+from typing import get_args
 
 import pytest
 import pytest_asyncio
@@ -29,6 +30,7 @@ from sqlalchemy import event, select
 from app.models.attendance import AttendanceRecord
 from app.models.class_ import Class
 from app.models.student import Student
+from app.schemas.attendance import SummarySortKey
 
 # Big enough that a per-row query is unmistakable, small enough to stay a fast test.
 STUDENT_COUNT = 25
@@ -109,6 +111,17 @@ async def populated_class(db, test_class):
         ),
         ("attendance_list", "/api/classes/{cid}/attendance?limit=100", BUDGET_ATTENDANCE_LIST),
         ("summary", "/api/classes/{cid}/attendance/summary?limit=25", BUDGET_SUMMARY),
+        # Spec 0010 slice 2: one row per sort key, generated from the set the route accepts, so a
+        # key added there is under this ceiling without anyone remembering to list it here. The
+        # row above reaches attendance_desc as the default, without a sort_by.
+        *(
+            (
+                f"summary_{key}",
+                f"/api/classes/{{cid}}/attendance/summary?limit=25&sort_by={key}",
+                BUDGET_SUMMARY,
+            )
+            for key in get_args(SummarySortKey)
+        ),
         (
             "statistics",
             "/api/classes/{cid}/attendance/statistics?date_from=2000-01-01",

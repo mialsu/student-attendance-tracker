@@ -1,2 +1,2 @@
-ruff=91
+ruff=90
 mypy=14

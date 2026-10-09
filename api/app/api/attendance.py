@@ -15,6 +15,7 @@ from app.schemas.attendance import (
     AttendanceSummary,
     PaginatedAttendanceResponse,
     PaginatedAttendanceSummaryResponse,
+    SummarySortKey,
 )
 from app.services import attendance_service
 
@@ -266,9 +267,13 @@ async def get_attendance_summary(
     search: str | None = Query(None, description="Filter by student name (case-insensitive partial match)"),
     skip: int = Query(0, ge=0, description="Pagination offset (number of items to skip)"),
     limit: int = Query(20, ge=1, le=100, description="Items per page (max 100)"),
-    sort_by: str = Query(
+    sort_by: SummarySortKey = Query(
         "attendance_desc",
-        description="Sort field: 'attendance_desc' (most attendances first) or 'name_asc' (alphabetical)"
+        description=(
+            "Order: 'attendance_desc' (most attendances first, the default), 'attendance_asc', "
+            "'name_asc' or 'name_desc'. Attendance ties break by name ascending. "
+            "Any other value is refused with 422."
+        ),
     ),
     legacy: bool | None = Query(
         None,
@@ -291,7 +296,8 @@ async def get_attendance_summary(
     - search: Filter students by name (case-insensitive, partial match)
     - skip: Number of students to skip (for pagination)
     - limit: Maximum number of students to return (default 20, max 100)
-    - sort_by: Sort order - 'attendance_desc' (default) or 'name_asc'
+    - sort_by: Sort order - 'attendance_desc' (default), 'attendance_asc', 'name_asc' or
+      'name_desc'
     - legacy: Show students whose first attendance is over five years old (default: hidden)
 
     Args:
@@ -305,6 +311,7 @@ async def get_attendance_summary(
     Raises:
         404: If class not found
         403: If user doesn't own the class
+        422: If sort_by is not one of the four orders, before ownership is checked
     """
     summary, total, legacy_hidden = await attendance_service.get_attendance_summary(
         db=db,

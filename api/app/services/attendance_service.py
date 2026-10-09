@@ -1,6 +1,7 @@
 """Attendance service - Business logic for attendance tracking."""
 
 from datetime import date, datetime, time, timedelta, timezone
+from typing import assert_never
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
@@ -17,7 +18,7 @@ from app.core.exceptions import (
 from app.models.attendance import AttendanceRecord
 from app.models.student import Student
 from app.models.user import User
-from app.schemas.attendance import AttendanceRecordCreate
+from app.schemas.attendance import AttendanceRecordCreate, SummarySortKey
 from app.services import class_service, student_service
 
 
@@ -328,7 +329,7 @@ async def get_attendance_summary(
     search: str | None = None,
     skip: int = 0,
     limit: int = 20,
-    sort_by: str = "attendance_desc",
+    sort_by: SummarySortKey = "attendance_desc",
     legacy: bool | None = None,
 ) -> tuple[list[dict], int, int]:
     """
@@ -343,7 +344,7 @@ async def get_attendance_summary(
         search: Optional search term to filter students by name
         skip: Number of records to skip (pagination offset)
         limit: Maximum number of records to return (page size)
-        sort_by: Sort field - 'attendance_desc' or 'name_asc'
+        sort_by: One of the four SummarySortKey orders; attendance ties break by name ascending
         legacy: True reveals legacy Students; None or False hides them
 
     Returns:
@@ -378,18 +379,29 @@ async def get_attendance_summary(
     count_result = await db.execute(count_query)
     total = count_result.scalar_one()
 
-    # Apply sorting
-    if sort_by == "attendance_desc":
-        # Sort by attendance count descending, then by name ascending
-        # We need to join with attendance_records and count them
+    # Apply sorting. A name sort has no ties to break: INV-2 makes a name unique within its Class.
+    if sort_by == "attendance_desc" or sort_by == "attendance_asc":
+        # Count each Student's records, ties by name ascending. The outer join keeps a Student
+        # with no records, at 0.
+        attendance = func.count(AttendanceRecord.id)
         query = (
             query
             .outerjoin(AttendanceRecord, Student.id == AttendanceRecord.student_id)
             .group_by(Student.id)
-            .order_by(func.count(AttendanceRecord.id).desc(), Student.name.asc())
+            .order_by(
+                attendance.desc() if sort_by == "attendance_desc" else attendance.asc(),
+                Student.name.asc(),
+            )
         )
-    else:  # name_asc (default)
+    elif sort_by == "name_asc":
         query = query.order_by(Student.name.asc())
+    elif sort_by == "name_desc":
+        query = query.order_by(Student.name.desc())
+    else:
+        # A fifth key added to SummarySortKey and not here fails the type gate, and a value from
+        # outside the set raises rather than sorting as something it is not. The route already
+        # refuses one with 422, so no request reaches this line.
+        assert_never(sort_by)
 
     # Apply pagination
     query = query.offset(skip).limit(limit)

@@ -6,6 +6,25 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 
 <!-- Newest first. -->
 
+## 2026-10-09 — a name sort's alphabet is measured, and nothing fails when it changes
+- **What:** spec 0010 slice 2 leaves the summary's name sorts on the database's default collation,
+  the Owner's answer to that spec's open question 3. Today that is byte order: `datcollate` is
+  `en_US.utf8`, but musl compares bytes, so Å, Ä and Ö sort after Z as Ä, Å, Ö, and other accented
+  initials sort after Z too. `docs/API_REFERENCE.md` states it, dated, with the two images it was
+  measured on.
+- **Where:** `attendance_service.get_attendance_summary`, in the `name_asc` and `name_desc` branches
+  and in the attendance sorts' name tie-break. The order itself comes from the image:
+  `postgres:17.11-alpine` in production, `postgres:17-alpine` in CI and in `scripts/test-db.sh`.
+- **What green tests do NOT prove here:** the documented order. The route tests use five names
+  starting with distinct ASCII letters on purpose, so they assert the sort and not the alphabet. A
+  move to a glibc-based image, or a collation set when a cluster is initialised, would reorder Å, Ä,
+  Ö and É against Z with every test green and the reference wrong.
+- **How to check:** the probe in spec 0010's open question 3, run with `psql` against the database
+  in question.
+- **Disposition:** open, for the Owner. The order was the Owner's choice on 2026-10-09; whether it
+  also gets a test pinning it was not asked. One test with the probe's names would turn a change of
+  base image into a red suite.
+
 ## 2026-10-01 — Jaeger 2.21.0 runs in production, and no trace has been looked at since
 - **What:** #21 moved `jaegertracing/jaeger` from 2.20.0 to 2.21.0. Its deploy pulled the image,
   recreated `attendance-jaeger-prod`, and both health checks passed. Neither touches tracing: the

@@ -2,10 +2,17 @@
 
 import uuid
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
 from app.schemas.student import StudentInAttendance
+
+# The attendance summary's four orders (spec 0010 decision 13), declared once, in the leaf both
+# the route and the service import. The route refuses any other value with 422. Until spec 0010
+# the parameter was a plain `str` and the service read every value it did not know as name_asc,
+# so a typo answered 200 in an order nobody chose.
+SummarySortKey = Literal["attendance_desc", "attendance_asc", "name_asc", "name_desc"]
 
 
 class AttendanceRecordBase(BaseModel):

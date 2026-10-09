@@ -650,50 +650,74 @@ No response body.
 ---
 
 ### GET /api/classes/{class_id}/attendance/summary
-Get attendance summary grouped by student.
+One row per Student in the class, with their attendance count and every record they have. Searched,
+sorted and paginated on the server.
 
 **Headers:**
 ```
 Authorization: Bearer <access_token>
 ```
 
+**Query Parameters:**
+- `search` (optional): Filter Students by name (case-insensitive, partial match)
+- `skip` (optional): Number of Students to skip (default: 0, minimum 0)
+- `limit` (optional): Students per page (1-100, default: 20)
+- `sort_by` (optional): One of four orders. Any other value is refused with `422`.
+  - `attendance_desc` (default): most attendances first
+  - `attendance_asc`: fewest attendances first, so Students with none come first
+  - `name_asc`: by name, ascending
+  - `name_desc`: by name, descending
+- `legacy` (optional): `true` also lists legacy Students, whose first attendance is over five
+  years old. Omitted or `false` hides them and counts them in `legacy_hidden`.
+
+The search applies first, then the sort, then `skip` and `limit`. Attendance sorts break ties by
+name ascending. A name sort has no ties to break, because a name is unique within its class in any
+casing.
+
+Names compare byte by byte, which is not Finnish alphabetical order. The database's collation is
+`en_US.utf8`, but the musl C library in the `postgres:17-alpine` images compares bytes, so Å, Ä and
+Ö sort after Z in the order Ä, Å, Ö, where Finnish reads Å, Ä, Ö. Other accented initials sort after
+Z too: Élise comes after Zacharias. Measured on 2026-10-09 on `postgres:17-alpine` (17.6) and on
+production's `postgres:17.11-alpine`; spec 0010's open question 3 records the choice.
+
 **Response (200 OK):**
 ```json
-[
-  {
-    "student_first_name": "John",
-    "student_last_name": "Doe",
-    "total_attendance": 15,
-    "records": [
-      {
-        "id": "123e4567-e89b-12d3-a456-426614174000",
-        "timestamp": "2025-10-26T14:30:00Z"
-      },
-      {
-        "id": "123e4567-e89b-12d3-a456-426614174001",
-        "timestamp": "2025-10-25T14:30:00Z"
-      }
-    ]
-  },
-  {
-    "student_first_name": "Jane",
-    "student_last_name": "Smith",
-    "total_attendance": 12,
-    "records": [...]
-  }
-]
+{
+  "items": [
+    {
+      "student_id": "123e4567-e89b-12d3-a456-426614174000",
+      "student_name": "Eero Virtanen",
+      "course_credit_received": false,
+      "total_attendance": 2,
+      "records": [
+        {
+          "id": "123e4567-e89b-12d3-a456-426614174001",
+          "timestamp": "2025-10-26T14:30:00Z"
+        },
+        {
+          "id": "123e4567-e89b-12d3-a456-426614174002",
+          "timestamp": "2025-10-19T14:30:00Z"
+        }
+      ]
+    }
+  ],
+  "total": 1,
+  "skip": 0,
+  "limit": 20,
+  "legacy_hidden": 0
+}
 ```
 
-**Features:**
-- Students grouped case-insensitively ("john doe" and "John Doe" are the same)
-- Display name uses proper capitalization from most recent record
-- Sorted by last name, then first name
-- Includes all attendance records for each student
+- `total`: Students matching the search, after the legacy filter and before `skip` and `limit`
+- `records`: every attendance record the Student has, newest first
+- `legacy_hidden`: legacy Students held back under the current search; `0` when `legacy=true`
 
 **Errors:**
 - `401 Unauthorized`: Invalid or missing token
 - `403 Forbidden`: You don't own this class
 - `404 Not Found`: Class not found
+- `422 Unprocessable Entity`: `sort_by` is not one of the four orders, or `skip` or `limit` is out
+  of range. Checked before ownership, so the answer is the same for any class id.
 
 ---
 
@@ -738,7 +762,20 @@ curl -X DELETE http://localhost:8000/api/attendance/{attendance_id} \
 
 ### Get Attendance Summary
 ```bash
+# Default order: most attendances first
 curl -X GET http://localhost:8000/api/classes/{class_id}/attendance/summary \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
+
+# By name, descending, second page of 20
+curl -X GET "http://localhost:8000/api/classes/{class_id}/attendance/summary?sort_by=name_desc&skip=20&limit=20" \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
+
+# A search and a sort together: the matching Students, fewest attendances first
+curl -X GET "http://localhost:8000/api/classes/{class_id}/attendance/summary?search=virta&sort_by=attendance_asc" \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
+
+# Any other sort_by: 422
+curl -X GET "http://localhost:8000/api/classes/{class_id}/attendance/summary?sort_by=nmae_desc" \
   -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
 ```
 
