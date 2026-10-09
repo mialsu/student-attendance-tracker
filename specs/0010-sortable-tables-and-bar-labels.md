@@ -1,9 +1,9 @@
 # Spec 0010 — numbers on the *Tilastot* bars, the chart above the table, and sortable tables
 
 **Status:** shaped 2026-09-30 (`/grilling` → `/to-prd`), eighteen decisions, seven seams.
-**Slice 1 shipped 2026-10-01** in #25; slices 2–4 not started. `ready-for-agent`, since the
-search-fix branch merged to `main` as #16 (decision 17); each open question is answered before the
-slice that needs it.
+**Slice 1 shipped 2026-10-01** in #25. **Slice 2 built and verified 2026-10-09**; slices 3 and 4
+not started. `ready-for-agent`, since the search-fix branch merged to `main` as #16 (decision 17);
+each open question is answered before the slice that needs it.
 **Weight:** Standard
 **Domain dial:** on (project-wide). This spec moves no invariant; `INV-1`, `INV-2` and `INV-9` are
 adjacent, see *Invariants touched*.
@@ -303,10 +303,10 @@ Verdicts are filled by `/verify-live`, per criterion. A task's verdict is the **
 | AC-5 | Before the chart has a measured width, neither the numbers nor the hint render | `test:` hook seam | US-6 | **WORKS**: the hook seam, watched red against a naive hint; in Chromium the hint never appeared on the way to a numbered chart, 40 loads of 40; the numbers half by `e2e/motion.spec.ts`, which delays every ResizeObserver report so bars could come before the width: 20 of 20 green, and 20 of 20 red with the data gate removed |
 | AC-6 | Element screenshots at 320, 390 and 1280 px show every number legible and the tallest bar's number unclipped; the threshold is set from them; the tooltip still answers on hover | `live:` | US-3, US-8, US-9 | **WORKS**, once the chart spanned its card (Spec Deltas): at each width's limit and on live data every count is legible, none collide, the tallest bar's count is whole inside a 20px top margin; the threshold stays 20px; the tooltip answered on hover at all three widths |
 | AC-7 | The numbers paint in a `card` pair `tokens-contrast.test.ts` already asserts | `test:` token pairs + review | US-3 | **WORKS**: counts paint `hsl(var(--foreground))`, computed `rgb(24, 27, 47)`, the light `--foreground` on `card`, a pair `tokens-contrast.test.ts` asserts in both themes |
-| AC-8 | Each of the four `sort_by` values orders the summary as named, attendance ties broken by name ascending, with `skip` and `limit` applied after the sort and a search applied before it | `test:` route | US-17, US-18, US-20 | pending |
-| AC-9 | Any other `sort_by` returns 422; watched failing against today's fallback to `name_asc` | `test:` route | US-28 | pending |
-| AC-10 | The summary stays within `BUDGET_SUMMARY` under all four sort values | `test:` query budget | US-29 | pending |
-| AC-11 | `tests/test_authorization.py` stays green and untouched: no route is added, and `verify_class_ownership` stays `get_attendance_summary`'s first act | `test:` authorization | US-33 | pending |
+| AC-8 | Each of the four `sort_by` values orders the summary as named, attendance ties broken by name ascending, with `skip` and `limit` applied after the sort and a search applied before it | `test:` route | US-17, US-18, US-20 | **WORKS**: the route tests, one per key, red first where the old fallback differed (`attendance_asc` and `name_desc` came back in `name_asc` order), and red again against a planted swapped direction per key and a swapped tie-break; pages of two read in turn, and a search with each sort; live with curl against a real API on `postgres:17.11-alpine`, eight Students with a tie at 2 and five at 1: each key ordered as named, ties by name, the default `attendance_desc`, `skip=3&limit=3` after the sort and `search=i` before it |
+| AC-9 | Any other `sort_by` returns 422; watched failing against today's fallback to `name_asc` | `test:` route | US-28 | **WORKS**: `nmae_desc`, `name`, `NAME_ASC`, `attendance` and the empty string each 422, all five red first as 200 against the fallback; the owner, a second teacher and a missing class id get the same bytes, in the tests and live; the live 422 lists the four values, and a request with no token is 401 before the key is read |
+| AC-10 | The summary stays within `BUDGET_SUMMARY` under all four sort values | `test:` query budget | US-29 | **WORKS**: one budget row per key, generated from `SummarySortKey`, each at 6 statements against `BUDGET_SUMMARY = 6`; a query planted in the attendance branch reddened the default row and both attendance rows, and one planted in each name branch reddened that row alone |
+| AC-11 | `tests/test_authorization.py` stays green and untouched: no route is added, and `verify_class_ownership` stays `get_attendance_summary`'s first act | `test:` authorization | US-33 | **WORKS**: the file is untouched (`git diff main` is empty) and green in the full suite, and `verify_class_ownership` is still the service's first act; live, a second teacher got 403 under all four keys and with a search, each logged as an `INV-1` denial whose route holds no query string |
 | AC-12 | A sortable header is a button inside its `th`, named by the visible header text; only the sorted column's `th` carries `aria-sort`, and its direction also shows as an icon | `test:` component + axe in the walk | US-21, US-23 | pending |
 | AC-13 | The header renders the same in `DataTable`'s loading, empty and data branches | `test:` component | US-16 | pending |
 | AC-14 | Tab reaches every sort button, and Enter or Space presses it, on both tables | `test:` component (keyboard) | US-22 | pending |
@@ -321,7 +321,7 @@ Verdicts are filled by `/verify-live`, per criterion. A task's verdict is the **
 | AC-23 | A range change leaves the previous figures and the filter on screen until the new figures arrive; past 300 ms they fade | `test:` hook seam + `live:` for the timing | US-25 | pending |
 | AC-24 | Picking a day closes that end's calendar, for a range the cache has seen and for one it has not | `test:` e2e | US-26 | pending |
 | AC-25 | A failed range change renders the error state, and none of the previous range's figures | `test:` hook seam | US-27 | pending |
-| AC-26 | `API_REFERENCE.md`'s summary section documents the route as built: its parameters, the four sort values, the 422 and the paginated response | review, at `/code-review` | US-32 | pending |
+| AC-26 | `API_REFERENCE.md`'s summary section documents the route as built: its parameters, the four sort values, the 422 and the paginated response | review, at `/code-review` | US-32 | **WORKS**: dev-review passed the section, every statement in it matching the code and a live response; its one note, a 422 list one cause short, is folded in, and each cause it now names (`sort_by`, `skip`, `limit`, `legacy`, `class_id`) was checked live as a 422 |
 | AC-27 | The bars do not animate: the first frame that holds the bars holds every count label, under `no-preference` as well as `reduce`; watched failing with the animation turned back on | `test:` e2e, in `e2e/motion.spec.ts` | US-3, US-6 | **WORKS**: red as the code stood and again with the animation turned back on (0 counts in the first frame with bars), green with it off under `reduce` and `no-preference`, 200 runs of 200 |
 
 **Invariants touched:** `INV-1`, which does not move. No route is added, and
@@ -431,6 +431,16 @@ the 422 for a value no client sends. Slices 1, 3 and 4 touch the client only.
    `pg_database`, and an ordered probe of such names) before anyone claims either answer. The
    Owner then chooses between the measured order and pinning a Finnish collation on the name sort,
    which depends on the image carrying ICU.
+   **Answered 2026-10-09: the measured order.** Measured on the test database
+   (`postgres:17-alpine`, 17.6) and on a throwaway container of production's exact tag
+   (`postgres:17.11-alpine`), with one result. `datcollate` is `en_US.utf8` with the libc
+   provider, and musl compares bytes, so `ORDER BY name` equals `COLLATE "C"`: the probe sorted
+   Aaro, Eero, Ville, Wilhelm, Yrjö, Zacharias, Äijö, Åsa, Élise, Örjan, Øystein, Ülle. Both images
+   carry ICU with its full data, and `COLLATE "fi-FI-x-icu"` sorted the same names Aaro, Eero,
+   Élise, Ville, Wilhelm, Ülle, Yrjö, Zacharias, Åsa, Äijö, Örjan, Øystein. The Owner chose the
+   measured order over pinning that collation, which the agent had recommended; pinning would also
+   have needed a check that production's own catalog, created in October 2025, holds it. Decision
+   14 stands as written, and `API_REFERENCE.md` states the byte order.
 
 4. **Should *Kirjaa läsnäolo*'s date picker close on pick too?** Spec 0008 decision 9 made the two
    pickers one idiom. Decision 15 makes the *Tilastot* ends close on pick, while
@@ -453,7 +463,18 @@ seam and unit tests; the browser walk with its mocked API, plus 200 repeats of A
 *Tilastot* states; and a live pass on a local stack, with a real login, the real API, and a weekly
 course since November 2025 created through that API (34 sessions, 391 records), at 320, 390 and
 1280px, with axe and reflow on every captured state and a keyboard-only walk of the surface.
-Slices 2–4 are not started.
+
+**Slice 2 built and verified on 2026-10-09**: AC-8 – AC-11 and AC-26 all read **WORKS**, so the
+slice's verdict is WORKS. dev-review re-proved AC-8 – AC-11 in its own worktree and database, with
+plants of its own, and passed AC-26 by review. The evidence: the route tests
+and the budget rows, each watched red first and again against planted faults; a fifth key planted
+in `SummarySortKey` with no service branch, which failed the type gate (mypy 15 against a baseline
+of 14); the full suite; and a live pass with curl against a real uvicorn and
+`postgres:17.11-alpine` on a throwaway database, through a real sign-up and login, attacking
+`INV-1` as a second teacher and `INV-2` with a duplicate name in another casing (refused, 400). No
+surface changed, so there was no browser walk: the deployed client's only caller,
+`StudentLogs.tsx`, sends `attendance_desc`, which the live API answered 200. Slices 3 and 4 are not
+started.
 
 ## Spec Deltas
 
@@ -506,3 +527,13 @@ the ResizeObserver behind `onChartResize` reports.
 resuming.** Both were written on the branch before #25 merged, and the squash carried them to
 `main` unchanged. Corrected in place: slice 1 shipped in #25, and decision 17's condition had been
 met since #16 merged on 2026-09-30.
+
+**2026-10-09 — *Invariants touched* holds for this app's own log lines only.** It says a refused
+`sort_by` adds nothing that could carry a Student's name to a log line, because the request context
+holds the path without its query string. That is true of every line `app/core/logging.py` writes,
+and it was checked live: a 422 writes no app line at all. But production leaves uvicorn's access log
+on (`deployment/production/docker-compose.yml` runs `uvicorn` with no `--no-access-log`), and that
+line prints the whole request line, so a refused key reaches the container log through uvicorn, as
+every `search=` already does. `INV-9` scopes itself to the app's own lines on purpose. Whether
+uvicorn's access line needs the same rule is the Owner's call, raised on 2026-10-09 and not yet
+decided.
