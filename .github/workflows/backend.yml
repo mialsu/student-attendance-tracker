@@ -116,11 +116,15 @@ jobs:
           NGINX_IMAGE="$(awk '/^  nginx:/ { svc = 1 } svc && /^    image:/ { print $2; exit }' "$COMPOSE_FILE")"
           test -n "$NGINX_IMAGE" || { echo "no nginx image in $COMPOSE_FILE"; exit 1; }
           echo "validating with $NGINX_IMAGE"
-          CERTS=/tmp/nginx-validate/live/attendance-api.kotoio.fi
-          mkdir -p "$CERTS" /tmp/nginx-validate-webroot
-          openssl req -x509 -newkey rsa:2048 -nodes -days 1 \
-            -keyout "$CERTS/privkey.pem" -out "$CERTS/fullchain.pem" \
-            -subj "/CN=validate-only" 2>/dev/null
+          # One per server block that names a certificate: prep-api is prep-planner's.
+          for host in attendance-api.kotoio.fi prep-api.kotoio.fi; do
+            CERTS="/tmp/nginx-validate/live/$host"
+            mkdir -p "$CERTS"
+            openssl req -x509 -newkey rsa:2048 -nodes -days 1 \
+              -keyout "$CERTS/privkey.pem" -out "$CERTS/fullchain.pem" \
+              -subj "/CN=validate-only" 2>/dev/null
+          done
+          mkdir -p /tmp/nginx-validate-webroot
           test -f "$CONF" || { echo "no nginx.conf at $CONF"; exit 1; }
           docker run --rm --add-host backend:127.0.0.1 \
             -v "$CONF:/etc/nginx/nginx.conf:ro" \
