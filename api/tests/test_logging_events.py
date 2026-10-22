@@ -607,7 +607,7 @@ async def test_the_client_still_receives_starlettes_own_500(
 # would read serving a real request, and rows inserted behind the app's back are the one way to
 # make a passing count meaningless.
 #
-# Every act here is destructive by decision, not by accident -- `CONTEXT.md` calls this app a
+# Every act here is destructive by decision, not by accident -- `GLOSSARY.md` calls this app a
 # tally sheet and the school holds the credit -- so the line records THAT it happened and HOW
 # MUCH it moved, and cannot reverse it (ADR-0007, and spec 0005's non-goals).
 
@@ -775,7 +775,7 @@ async def test_the_delete_line_names_the_student_by_id_only(
 ):
     """AC-7 and US-6: a deleted Student leaves no name behind in the log.
 
-    `CONTEXT.md` treats deletion as complete, and ADR-0007 scopes that honestly -- seven
+    `GLOSSARY.md` treats deletion as complete, and ADR-0007 scopes that honestly -- seven
     `pg_dump` backups still hold the name. What this asserts is the half that is achievable:
     the record of the deletion does not itself become the copy that outlives it.
     """

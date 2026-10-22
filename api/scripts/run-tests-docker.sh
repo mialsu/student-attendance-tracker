@@ -32,7 +32,7 @@ if pgrep -x pytest >/dev/null 2>&1 || pgrep -f "[p]ython.* -m pytest" >/dev/null
 fi
 
 # Fail by name rather than as a bare "command not found": there is no venv in a fresh clone,
-# and CLAUDE.md's Backend Development section is what creates one.
+# and AGENTS.md's Backend Development section is what creates one.
 if ! command -v pytest >/dev/null 2>&1; then
     echo -e "${RED}pytest is not on PATH.${NC}" >&2
     echo "Create the venv first: python3.12 -m venv venv && source venv/bin/activate" >&2

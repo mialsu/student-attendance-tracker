@@ -95,11 +95,11 @@ Enforced by `[tool.importlinter]` in `pyproject.toml`; each contract was proven 
 
 ## Language
 
-- Every domain concept is named with its `CONTEXT.md` term. `[script]` (`_Avoid_` words)
+- Every domain concept is named with its `GLOSSARY.md` term. `[script]` (`_Avoid_` words)
 - `student_first_name` / `studentFirstName` are dead vocabulary — the Student entity replaced them
   with a single normalized `name`. `[script]` (`scripts/drift-extra.sh`, a **separate** enforcer
   because `drift-check.sh` matches identifier *segments* and cannot ban a compound)
-- `_Avoid_` entries in `CONTEXT.md` must be **single words**, or they are silently dead.
+- `_Avoid_` entries in `GLOSSARY.md` must be **single words**, or they are silently dead.
   `[review-only]`
 - This repo and `client-app` describe one domain. A word that disagrees between them is a bug.
   `[review-only]`

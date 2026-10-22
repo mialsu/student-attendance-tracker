@@ -3,7 +3,7 @@
 # have one home.
 
 [tool.ruff]
-line-length = 100          # matches CLAUDE.md's "Max line length: 100 characters"
+line-length = 100          # matches AGENTS.md's "Max line length: 100 characters"
 target-version = "py312"
 extend-exclude = ["venv", "alembic/versions", "htmlcov"]
 

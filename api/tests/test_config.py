@@ -148,7 +148,7 @@ class TestCookieScope:
 
     /audit, 2026-09-02: production set `COOKIE_DOMAIN: .kotoio.fi`, which sends the 30-day
     refresh token to EVERY kotoio.fi host. That already included app-attendance.kotoio.fi —
-    Vercel, a third party with no need for it — and CLAUDE.md documents the VM as
+    Vercel, a third party with no need for it — and AGENTS.md documents the VM as
     multi-backend, so more siblings were planned. The API is the only host that needs this
     cookie, and a host-only cookie is what sends it to exactly that host.
 

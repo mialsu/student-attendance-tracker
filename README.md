@@ -21,7 +21,8 @@ api/          FastAPI backend. Gates, tests, invariants, ADRs, review debt.
 client/       React frontend.
 deployment/   Docker Compose, nginx, SSL and backup scripts for the Hetzner VM,
               and the operational notes that go with them.
-CLAUDE.md     How the whole thing is built, and what the gates do and do not prove.
+AGENTS.md     How the whole thing is built, and what the gates do and do not prove.
+              Codex reads it directly; CLAUDE.md imports it for Claude Code.
 BACKLOG.html  What is owed, ranked, with the evidence for each item.
 ```
 

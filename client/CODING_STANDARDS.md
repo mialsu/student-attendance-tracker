@@ -58,18 +58,18 @@ This paragraph said no enforcer existed at all until 2026-09-07.
 
 ## Language
 
-- Every domain concept is named with its `CONTEXT.md` term. New concept → add the term first,
+- Every domain concept is named with its `GLOSSARY.md` term. New concept → add the term first,
   then write the code. `[script]` (`_Avoid_` words), `[review-only]` (missing terms)
 - `studentFirstName` / `studentLastName` / `student_first_name` are dead vocabulary — the Student
   entity replaced them with a single normalized `name`. They must not return. `[script]`
   (`npm run drift:extra` — a **separate** enforcer, because `drift-check.sh` matches identifier
   *segments* and structurally cannot ban a camelCase compound. Found by breaking it on purpose.)
-- `_Avoid_` entries in `CONTEXT.md` must be **single words**. A compound written there is silently
+- `_Avoid_` entries in `GLOSSARY.md` must be **single words**. A compound written there is silently
   dead. `[review-only]`
 - `course` / `courseCredit` is legitimate, distinct vocabulary (the per-Student credit flag), not a
   synonym for Class. Deliberately not banned. `[review-only]`
-- `CONTEXT.md` is currently a **gate seed, not a domain model** — `/crunch-domain` still owes the
-  real glossary. Don't cite it as settled. `[review-only]`
+- A term marked `_Unresolved_:` in `GLOSSARY.md` is open, not settled. Don't cite it as a decision.
+  `[review-only]`
 
 ## Shape & boundaries
 
