@@ -1,6 +1,6 @@
 # Invariants — Student Attendance Tracker
 
-The rules this domain is not allowed to break, in the words of `CONTEXT.md`. Each names the
+The rules this domain is not allowed to break, in the words of `GLOSSARY.md`. Each names the
 **enforcer that fails the moment it is violated**. An invariant naming no enforcer is prose
 pretending to be a guarantee (ANTI-PATTERNS: *the pseudo-artifact*).
 
@@ -52,7 +52,7 @@ the collision went unnoticed through both specs' reviews because neither number 
 The Owner settled it on 2026-09-10 — spec 0005 takes `INV-9`, since a number belongs to the rule
 that will have an enforcer — and spec 0004's is now deliberately unnumbered until it is built. The
 same shape had already cost the project once: ADR-0005 took the number spec 0004 had reserved for
-the `class_teachers` decision, which the root `CLAUDE.md` records.
+the `class_teachers` decision, which the root `AGENTS.md` records.
 
 ## Deliberately not invariants
 
@@ -61,7 +61,7 @@ the Owner and declined, with the reason.
 
 | Candidate | Verdict | Why |
 |---|---|---|
-| "A Student who reaches 14–15 Attendance records has earned the course credit" | **not a rule** | The teacher decides and ticks the box. 14–15 is her rule of thumb, not the system's. Nothing counts attendances, and `course_credit_received` is set only by `PUT /api/students/{id}`. Recorded in `CONTEXT.md` as vocabulary |
+| "A Student who reaches 14–15 Attendance records has earned the course credit" | **not a rule** | The teacher decides and ticks the box. 14–15 is her rule of thumb, not the system's. Nothing counts attendances, and `course_credit_received` is set only by `PUT /api/students/{id}`. Recorded in `GLOSSARY.md` as vocabulary |
 | "Deleting a Student must not destroy the record of a granted credit" | **not a rule** | The school holds the credit; this app is a tally sheet. The cascade at `app/models/student.py:55` is correct as built |
 | "Attendance on an inactive Class becomes read-only" | **not a rule** | Offered and not taken. Closing a Class blocks new records only; existing ones stay editable and deletable |
 | "A superadmin may read any Teacher's data" | **not a rule — the role no longer exists** | Resolved 2026-09-01 (ADR-0003): the Owner removed the superadmin role rather than decide what it may see. A signed-in person is a Teacher, INV-1 grants no exception to anyone, and there is nothing left to grant one to |

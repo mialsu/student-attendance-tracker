@@ -5,7 +5,7 @@
 # same shape in either repo.
 #
 # WHY THIS EXISTS. drift-check.sh's vocabulary check splits every identifier into segments
-# (`pupilName` -> `pupil` + `name`) and compares each segment against CONTEXT.md's `_Avoid_` list.
+# (`pupilName` -> `pupil` + `name`) and compares each segment against GLOSSARY.md's `_Avoid_` list.
 # That design is what stops it firing on `runtime` or `courseCredit`, and it is the right default.
 # But it means a MULTI-WORD identifier can never be banned there: `studentFirstName` lowercases to
 # `studentfirstname`, which equals no single segment, so the entry is silently dead.
@@ -41,7 +41,7 @@ EOT
 # that fires on the document describing it teaches you to add `drift-ok` to prose, which is how an
 # escape hatch becomes a habit. Only this one file, not all HTML: a template with real code in it
 # should still be judged.
-SKIP='(^|/)(CHANGELOG|README|REVIEW-DEBT|CODING_STANDARDS|CONTEXT|CONTEXT-MAP)\.md$|\.(md|txt|snap|svg|png|jpg|lock)$|(^|/)(vendor|node_modules|dist|build|coverage)/|-lock\.(json|yaml)$|(^|/)bun\.lockb$|(^|/)scripts/drift-extra\.sh$|(^|/)BACKLOG\.html$'
+SKIP='(^|/)(CHANGELOG|README|REVIEW-DEBT|CODING_STANDARDS|GLOSSARY|GLOSSARY-MAP)\.md$|\.(md|txt|snap|svg|png|jpg|lock)$|(^|/)(vendor|node_modules|dist|build|coverage)/|-lock\.(json|yaml)$|(^|/)bun\.lockb$|(^|/)scripts/drift-extra\.sh$|(^|/)BACKLOG\.html$'
 
 RANGE=("$@")
 if [ ${#RANGE[@]} -eq 0 ]; then RANGE=(HEAD); fi

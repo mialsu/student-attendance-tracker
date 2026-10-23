@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     cookie_samesite: str = "lax"
     # Leave this UNSET. A host-only cookie goes to the API and nowhere else.
     # Setting a parent domain (".kotoio.fi") sends the 30-day refresh token to every host
-    # under it — that meant app-attendance.kotoio.fi on Vercel, and CLAUDE.md plans more
+    # under it — that meant app-attendance.kotoio.fi on Vercel, and AGENTS.md plans more
     # backends on the same VM. Removed from production 2026-09-02 by /audit; guarded by
     # tests/test_config.py::TestCookieScope.
     cookie_domain: str | None = None

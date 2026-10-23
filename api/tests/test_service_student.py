@@ -189,7 +189,7 @@ class TestGetOrCreateStudent:
     ):
         """A Student row belongs to one Class.
 
-        CONTEXT.md's per-Class row model: the same person attending two Kurssit is two Student
+        GLOSSARY.md's per-Class row model: the same person attending two Kurssit is two Student
         rows, and uniqueness is scoped to the Class rather than the school.
         """
         other_class = await make_class(db, test_user, "Toinen kurssi")

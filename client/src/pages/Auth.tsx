@@ -15,7 +15,7 @@ import { BarChart3, CheckCircle2, Eye, EyeOff, UserPlus } from 'lucide-react';
  * US-2 asks the login screen to "plainly describe what the app does, so that it feels like a
  * personal utility and not a sales pitch", and AC8 makes "no sales copy" a criterion. These three
  * are the app's three functions, named with the same words the rest of the UI uses — the glossary
- * in `client/CONTEXT.md`, not a synonym for it.
+ * in `client/GLOSSARY.md`, not a synonym for it.
  */
 const FUNCTIONS = [
   { icon: UserPlus, title: 'Läsnäolon kirjaus', detail: 'Nimellä, 1–50 kerralla' },

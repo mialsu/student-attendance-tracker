@@ -61,7 +61,7 @@ cut (`/confess`), read first by any architecture or review session, dispositione
   spans its card. AC-1 – AC-7 and AC-27 all read WORKS in the spec, with the evidence beside each.
 - **What green tests do NOT prove here:**
   1. **The teacher's own course on her own screen.** The live pass used a weekly course built to
-     the shape `CONTEXT.md` gives hers, 34 sessions, numbered whole at 1280px. The production
+     the shape `GLOSSARY.md` gives hers, 34 sessions, numbered whole at 1280px. The production
      course's real count was not looked at, and the chart spans its card, so a narrower desktop
      window numbers fewer bars than 41. Whether she sees numbers or the hint on her screen is
      unmeasured. Item 2's measurement narrows it: a 1024px window numbers 28, so a 34-session
@@ -1051,7 +1051,7 @@ cut (`/confess`), read first by any architecture or review session, dispositione
   `INVARIANTS.md` here would be two files for one artifact (ANTI-PATTERNS: *two formats for one
   artifact*), so this repo has none.
 - **Where:** `scripts/drift-check.sh` check 7, which matches `INVARIANTS.md` rows and therefore never
-  fires in this repo; `CONTEXT.md`'s pointer block
+  fires in this repo; `GLOSSARY.md`'s pointer block
 - **What green tests do NOT prove here:** that the UI respects any invariant. It does not enforce
   them and is not trusted to — the API refuses regardless of what a screen shows. A future session
   must not read "no INVARIANTS.md" as "no rules".
@@ -1136,7 +1136,7 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 
 ## 2026-09-01 — devkit's vocabulary check cannot express compound identifiers
 - **What:** `scripts/drift-check.sh`'s vocabulary check splits each identifier into segments
-  (`pupilName` → `pupil` + `name`) and compares each segment against `CONTEXT.md`'s `_Avoid_` list.
+  (`pupilName` → `pupil` + `name`) and compares each segment against `GLOSSARY.md`'s `_Avoid_` list.
   A camelCase or snake_case **compound** entry therefore never matches: `studentFirstName`
   lowercases to `studentfirstname`, which equals no single segment. The first `_Avoid_` list written
   during this install was exactly that, and the gate reported clean while the banned word sat in the

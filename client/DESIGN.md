@@ -26,7 +26,7 @@ made `main` a flex item, which broke `A11Y-7` in three states until `min-w-0` le
 
 **A note on the numbers in §5 and §6.** They used to be spelled out — "seventeen states", "ten
 pairs" — and on 2026-09-11 two of them disagreed inside one section ("thirteen token pairs" in the
-`A11Y-4` row against "ten pairs" four lines below it). `CLAUDE.md`'s *Why this file quotes no test
+`A11Y-4` row against "ten pairs" four lines below it). `AGENTS.md`'s *Why this file quotes no test
 counts* is the rule that applies: **name the command, not the count.**
 
 **The conversion is finished as of slice 4**, and finishing it was not tidiness. Slice 3 converted
@@ -36,7 +36,7 @@ added a fourteenth pair, so the stale number became a *wrong* number the same da
 alone. That is the whole argument for the rule, demonstrated at a cost of one commit.
 
 **The scope source is not a brief.** This project predates Stage 0 and has no `PRODUCT-BRIEF.md`,
-so §1 reconciles against `CONTEXT.md` plus the feature set actually in production, and §3's
+so §1 reconciles against `GLOSSARY.md` plus the feature set actually in production, and §3's
 empty/refused/error answers came from the code and from the Owner rather than being carried over
 from product altitude. Where the code's answer is wrong, this file says so instead of quietly
 re-deciding it. That difference from the template is deliberate and was the Owner's call.
@@ -49,7 +49,7 @@ re-deciding it. That difference from the template is deliberate and was the Owne
 | Aesthetic direction, wireframes, UI copy | `ui-ux-pro-max`, which chose the "Läsnä" foundations (`prototype/DESIGN_SYSTEM.md`); copy voice and ASCII wireframes have no skill owner and fall to the Owner | that skill owns the format and the judgement. devkit adds one constraint: the values stay in code |
 | Which layout wins | a `/prototype` UI run — N variants on the real route with real data | the mobile row's structure (§6) is the open one, and prose will not settle it |
 
-The vocabulary is `CONTEXT.md`, and two of its rules bind this document directly: the app is **a
+The vocabulary is `GLOSSARY.md`, and two of its rules bind this document directly: the app is **a
 tally sheet, not an academic record**, so no surface may imply it decides a credit — no progress
 bar, no badge, no "14/15" hint; and the UI says **Kurssi** where the API says `Class`, correct in
 both registers.
@@ -101,11 +101,11 @@ One teacher, one Kurssi, in production since November 2025. Every surface below 
      is now on screen at all times with no affordance to manage what it lists. The Owner adopted
      the sidebar knowing that; it is its own spec, and archiving is explicitly out of 0006's scope.
   2. `POST /classes/{id}/students` has no caller. A Student comes into being only as a side effect
-     of logging attendance, which matches `CONTEXT.md`'s per-Class row model and is fine — but it
+     of logging attendance, which matches `GLOSSARY.md`'s per-Class row model and is fine — but it
      means there is no way to add a Student who has not yet attended.
   3. `GET /classes/{id}/attendance`, the raw record list, has no caller. The UI reads `/summary`.
   4. `GET /students/{id}` has no caller.
-  5. **`Class.active` has no screen at all.** `CONTEXT.md` gives it real meaning — it blocks *new*
+  5. **`Class.active` has no screen at all.** `GLOSSARY.md` gives it real meaning — it blocks *new*
      attendance while keeping history editable — and nothing in the client reads or sets it. Flip
      it in the database today and logging starts failing with no screen anywhere explaining why.
 

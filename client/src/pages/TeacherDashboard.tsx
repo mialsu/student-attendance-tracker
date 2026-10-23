@@ -22,7 +22,7 @@
  *   surface for it, invented from mock data.
  * - **The page sub-line** ("Kolme aktiivista kurssia · 63 oppilasta yhteensä"). It serves no user
  *   story, duplicates what the cards already say, and its copy is wrong twice — `active` again,
- *   and *oppilas* where this app's glossary says **opiskelija** (`CONTEXT.md`; `opiskelij*`
+ *   and *oppilas* where this app's glossary says **opiskelija** (`GLOSSARY.md`; `opiskelij*`
  *   appears 35 times in `src/`, `oppila*` zero).
  * - **The per-course icons** (code brackets, a ruler, an atom). Mock data dressed as a field the
  *   schema does not have. One `BookOpen`, as the sidebar already uses for the same rows.

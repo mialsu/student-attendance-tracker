@@ -376,7 +376,7 @@ async def delete_student(
     """
     Delete a student and all associated attendance records (cascade).
 
-    Irreversible, by decision: `CONTEXT.md` calls this app a tally sheet and the school holds
+    Irreversible, by decision: `GLOSSARY.md` calls this app a tally sheet and the school holds
     the credit. Emits one `INFO` log line after the commit carrying the student and class ids
     and the number of attendance records the cascade destroyed -- ids and counts only, never
     the name (ADR-0007, spec 0005 AC-7).
@@ -416,7 +416,7 @@ async def delete_student(
 
     # Logged AFTER the commit, so the line records an act that happened rather than one that
     # was attempted. Ids and a count, never the name: US-6 is the Student's own story --
-    # deletion means what `CONTEXT.md` says it means, so the record of the deletion must not
+    # deletion means what `GLOSSARY.md` says it means, so the record of the deletion must not
     # become the copy of the name that outlives it (ADR-0007).
     log_event(
         logging.INFO,

@@ -7,7 +7,7 @@ The words this service's code, schema, API and conversation all use for the same
 > `INVARIANTS.md`, each naming the enforcer that fails when it is broken. What the Owner left open
 > is marked `_Unresolved_` with the reason, not filled in with a guess.
 
-Format follows the installed `domain-modeling` skill's `CONTEXT-FORMAT.md`, per METHOD.md's reuse
+Format follows the installed `domain-modeling` skill's `GLOSSARY-FORMAT.md`, per METHOD.md's reuse
 rule. This repo and `client-app` describe **one** domain; when they disagree about a word, that
 disagreement is the bug.
 

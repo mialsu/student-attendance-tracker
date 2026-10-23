@@ -4,9 +4,9 @@ How the engineering skills should consume this repo's domain documentation when 
 
 ## Before exploring, read these
 
-- **`CONTEXT-MAP.md`** at the repo root: it points at one `CONTEXT.md` per package. Read each
+- **`GLOSSARY-MAP.md`** at the repo root: it points at one `GLOSSARY.md` per package. Read each
   one relevant to the topic.
-- The per-package **`CONTEXT.md`** it names (`api/CONTEXT.md`, `client/CONTEXT.md`).
+- The per-package **`GLOSSARY.md`** it names (`api/GLOSSARY.md`, `client/GLOSSARY.md`).
 - **`docs/adr/`** for the package you're working in — here that is `api/docs/adr/` and
   `client/docs/adr/`. There are no root-level ADRs.
 - **`api/INVARIANTS.md`** before changing anything in the API service layer — every `INV-n`
@@ -20,17 +20,17 @@ creating them upfront. The `/domain-modeling` skill (reached via `/grill-with-do
 
 ```
 /
-├── CONTEXT-MAP.md
+├── GLOSSARY-MAP.md
 ├── api/
-│   ├── CONTEXT.md
+│   ├── GLOSSARY.md
 │   ├── INVARIANTS.md
 │   └── docs/adr/
 └── client/
-    ├── CONTEXT.md
+    ├── GLOSSARY.md
     └── docs/adr/
 ```
 
-The domain crunch (CLAUDE.md, `/crunch-domain` 2026-09-01) recorded **one bounded context** —
+The domain crunch (AGENTS.md, `/crunch-domain` 2026-09-01) recorded **one bounded context** —
 `User` means exactly one thing. The split above is by deployment package (backend vs frontend),
 not by bounded context; every enforcer is server-side, which is why `client/` has no
 `INVARIANTS.md` by design.
@@ -38,7 +38,7 @@ not by bounded context; every enforcer is server-side, which is why `client/` ha
 ## Use the glossary's vocabulary
 
 When your output names a domain concept (in a spec title, a refactor proposal, a hypothesis, a
-test name), use the term as defined in the relevant `CONTEXT.md`. Don't drift to synonyms the
+test name), use the term as defined in the relevant `GLOSSARY.md`. Don't drift to synonyms the
 glossary explicitly avoids.
 
 If the concept you need isn't in the glossary yet, that's a signal: either you're inventing

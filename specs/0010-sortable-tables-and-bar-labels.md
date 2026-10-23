@@ -133,7 +133,7 @@ neighbours collide. It is a default, tuned from element screenshots at 320, 390 
 question 2). By the layout's arithmetic the plot is about 840 px wide in a 1280 px window (the
 16rem sidebar, the main region's padding, the card's padding and Recharts' default 60 px Y axis
 subtracted) and about 240 px on a 390 px phone: roughly 40 numbered bars on a desktop and 12 on a
-phone. The Kurssi is a weekly workshop (`client/CONTEXT.md`), about one bar a week since November
+phone. The Kurssi is a weekly workshop (`client/GLOSSARY.md`), about one bar a week since November
 2025, so the whole course by day should fit a desktop chart today and outgrow it within months; on
 a phone it does not fit today.
 
@@ -240,7 +240,7 @@ sorting and for range changes. Implementation starts once that branch has merged
 **18. `api/docs/API_REFERENCE.md`'s summary section is rewritten**, which follows from decision 13
 rather than being a separate request. The section documents a response that no longer exists
 (`student_first_name` and `student_last_name`, an unpaginated list, "sorted by last name, then
-first name") and none of `search`, `skip`, `limit`, `sort_by` or `legacy`. `CLAUDE.md` names that
+first name") and none of `search`, `skip`, `limit`, `sort_by` or `legacy`. `AGENTS.md` names that
 file as the API structure the Owner approves changes against, so the new 422 lands in it.
 
 ## Testing Decisions

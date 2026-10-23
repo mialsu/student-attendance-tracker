@@ -7,7 +7,7 @@
 # Seven checks:
 #
 #  1. BANNED COMPOUND IDENTIFIERS. drift-check.sh's vocabulary check splits identifiers into
-#     segments (`pupilName` -> `pupil` + `name`) and compares each segment against CONTEXT.md's
+#     segments (`pupilName` -> `pupil` + `name`) and compares each segment against GLOSSARY.md's
 #     `_Avoid_` list. A multi-word entry therefore never matches — `student_first_name` equals no
 #     single segment — so compound bans are silently dead there. Found by breaking the gate on
 #     purpose during /harness install.
@@ -70,7 +70,7 @@ cd "$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)" || exit 2
 BANNED=$(cat <<'EOT'
 student_(first|last)_name	Student has one normalized `name` column — the first/last split was removed by the Student-entity migration
 [Ss]tudent(First|Last)Name	same: use `name`
-verify_class_access	INV-1 has one check and one name: class_service.verify_class_ownership. `verify_class_access` was a second name for the same rule until spec 0003 deleted it — CONTEXT.md's `_Avoid_` cannot hold it because the segment matcher needs single words
+verify_class_access	INV-1 has one check and one name: class_service.verify_class_ownership. `verify_class_access` was a second name for the same rule until spec 0003 deleted it — GLOSSARY.md's `_Avoid_` cannot hold it because the segment matcher needs single words
 EOT
 )
 
@@ -80,7 +80,7 @@ EOT
 # that fires on the document describing it teaches you to add `drift-ok` to prose, which is how an
 # escape hatch becomes a habit. Only this one file, not all HTML: a template with real code in it
 # should still be judged.
-SKIP='(^|/)(CHANGELOG|README|REVIEW-DEBT|CODING_STANDARDS|CONTEXT|CONTEXT-MAP)\.md$|\.(md|txt|snap|svg|png|jpg|lock)$|(^|/)(venv|htmlcov|__pycache__)/|(^|/)scripts/drift-extra\.sh$|(^|/)BACKLOG\.html$'
+SKIP='(^|/)(CHANGELOG|README|REVIEW-DEBT|CODING_STANDARDS|GLOSSARY|GLOSSARY-MAP)\.md$|\.(md|txt|snap|svg|png|jpg|lock)$|(^|/)(venv|htmlcov|__pycache__)/|(^|/)scripts/drift-extra\.sh$|(^|/)BACKLOG\.html$'
 # Anchored with (^|/) rather than ^: `git diff --name-only` reports paths from the GIT ROOT,
 # which since the 2026-09-03 monorepo merge means `api/alembic/versions/...`. The bare ^ anchor
 # matched nothing from that day until 2026-09-04, so this check reported clean while doing
@@ -215,7 +215,7 @@ if [ -n "$log_lint_keywords" ]; then
   echo "     this so much easier to debug'. The sink rotates by SIZE only, so at this app's"
   echo "     volume a name written today effectively never ages out."
   echo "  ↳ fix: log an id and a COUNT. They answer every question a name would, without making"
-  echo "         a copy that outlives the deletion CONTEXT.md treats as complete. If the field is"
+  echo "         a copy that outlives the deletion GLOSSARY.md treats as complete. If the field is"
   echo "         genuinely not a person, ADD it to ALLOWED_KEYWORDS in scripts/log_lint.py in"
   echo "         THIS commit — an allowlist, so a synonym (\`who=\`, \`search=\`) cannot slip past"
   echo "         a word list. See api/docs/adr/0007-personal-data-in-logs.md and INV-9's row."
