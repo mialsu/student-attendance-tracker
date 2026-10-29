@@ -6,6 +6,47 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 
 <!-- Newest first. -->
 
+## 2026-10-29 — the drift gate synced to devkit 0b08866, and what the sync found
+- **What:** `scripts/drift-check.sh` is devkit's template byte-for-byte again, and
+  `scripts/drift-extra.sh` is folded into `scripts/drift-check.local.sh`'s `local_checks` (the
+  Owner's decision), its seven checks keeping their numbers. Four things surfaced doing it.
+  1. **INV-9's diff gate was false-clean in the hook and in CI, from the day it landed.**
+     `scripts/log_lint.py` read a staged file as `git show :app/x.py` and a CI commit as
+     `<rev>:app/x.py`. Git resolves both from the git root, not from `api/`, so every read failed,
+     the call was skipped and check 5 said clean. It fired only on a bare `just drift` against the
+     working tree, the one way neither the hook nor CI runs it. Spec 0005's AC-6 and AC-22 were
+     proven that way. **FIXED:** the path git is asked for now starts with `./`. Watched:
+     `who=email` staged was clean under the old script and is red now.
+  2. **Check 1 now sees `api/` only.** `drift-extra.sh` diffed without `--relative`, so the api
+     run also judged `client/`, `deployment/` and root files. Inside the template, `added_lines` is
+     scoped to the package. Nothing in `deployment/` or the root is Python, and the client bans its
+     own two compounds, so what is lost is `verify_class_access` written outside `api/`.
+  3. **A glossary line was prose, and the new matcher banned some of it.** `GLOSSARY.md`'s *Class
+     ownership* entry put a paragraph on its `_Avoid_:` line. The old matcher could not match a
+     multi-word term, so this was harmless until today. The new one matches a run of segments, and
+     "a second" fired on two test names. **FIXED** by moving the paragraph off the line.
+     `interval.` on *Timeframe*'s line carried its full stop, so it had never matched. **FIXED** in
+     the follow-up that moved the gate to devkit 0b08866: under eb96900 the template's own comment
+     ("Intervals") fired the moment the ban was live, and 0b08866 stops a project's glossary from
+     policing the gate's own file.
+  4. **The dependency check counted pip-compile's output as manifests.** Run over this package's
+     history it named all 53 compiled runtime packages, 46 of them transitive (`requirements.in`
+     names 7). `local_settings` now
+     points the check at `requirements*.in` instead. Two blind spots stay open, both reported to
+     devkit and not patched here: a `-c` or `-r` line added to a `.in` file reads as a dependency
+     named `-c`, and pyproject's `python_version` (mypy's key) reads as a dependency too.
+- **Where:** `scripts/drift-check.local.sh`, `scripts/log_lint.py` `read_source`, `GLOSSARY.md`.
+- **What green gates do NOT prove here:** that the checks catch anything the plants did not try.
+  Each moved check was planted once under `--cached` and watched going red then green, both
+  check-4 spellings included. The commit message carries the output. The record of what each one
+  was proven against before today is still in specs 0003, 0005 and 0007, the ADRs and this file,
+  and those name `drift-extra.sh`, left as written because each is dated. Spec 0004's AC-12 is
+  still pending and says "`drift-extra.sh` check 4", which now means `drift-check.local.sh`
+  check 4.
+- **Disposition:** 1 and 3 fixed. 2 accepted by the Owner, 2026-10-29: each package's gate
+  polices its own package. 4's two blind spots fixed in devkit 69b1875, synced here; the
+  `requirements*.in` setting stays.
+
 ## 2026-10-09 — a name sort's alphabet is measured, and nothing fails when it changes
 - **What:** spec 0010 slice 2 leaves the summary's name sorts on the database's default collation,
   the Owner's answer to that spec's open question 3. Today that is byte order: `datcollate` is

@@ -62,10 +62,11 @@ This paragraph said no enforcer existed at all until 2026-09-07.
   then write the code. `[script]` (`_Avoid_` words), `[review-only]` (missing terms)
 - `studentFirstName` / `studentLastName` / `student_first_name` are dead vocabulary — the Student
   entity replaced them with a single normalized `name`. They must not return. `[script]`
-  (`npm run drift:extra` — a **separate** enforcer, because `drift-check.sh` matches identifier
-  *segments* and structurally cannot ban a camelCase compound. Found by breaking it on purpose.)
-- `_Avoid_` entries in `GLOSSARY.md` must be **single words**. A compound written there is silently
-  dead. `[review-only]`
+  (`scripts/drift-check.local.sh` check 1, a regex ban written before devkit's vocabulary check
+  could match a compound. Found by breaking it on purpose.)
+- An `_Avoid_` entry in `GLOSSARY.md` may be several words: since devkit's 2026-09-24 template the
+  gate matches it as a run of identifier segments (`student first name` flags `studentFirstName`).
+  Only a term list belongs on an `_Avoid_:` line; prose there becomes banned words. `[script]`
 - `course` / `courseCredit` is legitimate, distinct vocabulary (the per-Student credit flag), not a
   synonym for Class. Deliberately not banned. `[review-only]`
 - A term marked `_Unresolved_:` in `GLOSSARY.md` is open, not settled. Don't cite it as a decision.
@@ -157,8 +158,8 @@ restate them here; two homes for one artifact is the defect that document spends
 - Accessibility: `npm run gate:a11y` (ratchet, baseline 0)
 - Boundaries: `npm run lint:boundaries`
 - Tests: `npm run gate:tests` (ratchet, baseline 0)
-- Drift: `npm run drift`
-- Compound vocabulary + repo-specific checks: `npm run drift:extra`
+- Drift: `npm run drift` (devkit's `drift-check.sh`, byte-identical to its template, running this
+  package's own checks from `scripts/drift-check.local.sh`)
 - Build: `npm run build`
 - All of it: `npm run check`
 - In CI: `.github/workflows/frontend.yml`, with `BASELINE_FROZEN=1`. Its *Gates* job runs each gate

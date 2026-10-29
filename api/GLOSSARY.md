@@ -88,11 +88,13 @@ ones. `INV-1` is worded "associated with" for that reason.
 The relationship that decides whether a Teacher may read or change a Class, its Students or its
 Attendance records (`INV-1`). One function decides it — `class_service.verify_class_ownership` —
 and one query filters by it, `class_service.get_classes_for_teacher`. Nothing else in `app/`
-compares a `teacher_id`; `scripts/drift-extra.sh` check 4 fails a diff that adds such a
+compares a `teacher_id`; `scripts/drift-check.local.sh` check 4 fails a diff that adds such a
 comparison.
-_Avoid_: — see the note below. The banned name is the compound `verify_class_access`, a second
-name this rule carried at three call sites until 2026-09-04 (spec 0003), and compounds are banned
-in `drift-extra.sh` rather than here.
+Banned name, enforced outside this file: the compound `verify_class_access`, a second name this
+rule carried at three call sites until 2026-09-04 (spec 0003). `scripts/drift-check.local.sh`
+check 1 bans it, so it is deliberately not on an `_Avoid_:` line, which the gate reads as a list of
+words: this paragraph sat on one until 2026-10-29, and the multi-word matcher made it ban the
+phrase "a second".
 _Note_: the Owner intends **shared Classes** later, so *ownership* is the current shape of
 *associated with*, not a synonym for it. `INV-1` is worded to survive that change; the point of
 having one site is that the change costs one edit.
@@ -119,7 +121,7 @@ inclusive of their whole day** — the API compares half-open internally (`>= da
 `< date_to + 1 day`) so the index on `timestamp` still applies, but that is a storage detail and
 never the word's meaning. Every figure on the screen describes the timeframe, the summary counts
 included (spec 0008, decision 5).
-_Avoid_: period, interval.
+_Avoid_: period, interval
 (**Not** `span`: it already means an OpenTelemetry span in `app/main.py` and
 `app/core/logging.py`, and banning it would fail any later diff that touches tracing.)
 _Note_: **a day is a Finnish day**, since spec 0009 (2026-09-15). Which zone decides is the
@@ -132,10 +134,12 @@ the client rendered in the browser's zone, and a record logged between local mid
 ## How this file is enforced
 
 - `_Avoid_:` is **machine-checked** by `scripts/drift-check.sh` on every diff.
-- **`_Avoid_` entries must be single words.** The gate splits identifiers into segments
-  (`pupil_name` → `pupil` + `name`) and compares each segment, so a multi-word entry such as
-  `student_first_name` can *never* match and is silently dead here. Compound bans live in
-  `scripts/drift-extra.sh`. This was found by breaking the gate on purpose during install.
+- **An `_Avoid_:` line is a comma-separated list of terms and nothing else.** The gate splits
+  identifiers into segments (`pupil_name` → `pupil` + `name`) and, since devkit's 2026-09-24
+  template, matches a multi-word entry as a run of them, so `student first name` would flag
+  `student_first_name`. Before that a multi-word entry was silently dead, which is why the older
+  compound bans live in `scripts/drift-check.local.sh` check 1. Punctuation stays part of a term:
+  `interval.` with its full stop matched nothing until 2026-10-29.
 - Every `_Avoid_` term was verified to have **zero hits in `app/` and `tests/`** before being added,
   so the list is purely preventive and fires on no current code path.
 - `course` / `course_credit_received` is deliberately absent: it names a real, distinct concept, and

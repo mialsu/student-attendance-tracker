@@ -570,7 +570,7 @@ async def merge_students(
     #
     # The denied-side test is the merge-duplicate case in `tests/test_authorization.py`, and
     # `verify_class_ownership` is still the single site in `app/` that compares a teacher_id
-    # (spec 0003; drift-extra check 4 keeps it that way).
+    # (spec 0003; drift-check.local.sh check 4 keeps it that way).
     await class_service.verify_class_ownership(db, duplicate_student.class_id, teacher)
 
     # Verify both students are in the same class
