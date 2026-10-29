@@ -54,7 +54,6 @@ fi
 
 ./venv/bin/lint-imports
 ./scripts/drift-check.sh --cached
-./scripts/drift-extra.sh --cached
 ./scripts/baseline-guard.sh ruff ./venv/bin/ruff check app tests
 ./scripts/baseline-guard.sh mypy ./venv/bin/mypy
 echo "✓ fast gates green"

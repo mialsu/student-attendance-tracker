@@ -76,7 +76,6 @@ if [ "$run_client" -eq 1 ]; then
   cd client
   echo "▸ boundaries";           npm run --silent lint:boundaries
   echo "▸ drift (staged)";       ./scripts/drift-check.sh --cached
-  echo "▸ drift-extra (staged)"; ./scripts/drift-extra.sh --cached
   echo "▸ typecheck (ratchet)";  npm run --silent gate:typecheck
   # The walk's own config and specs, held to tsconfig.e2e.json. Two seconds, and it closes the
   # hole this list has: the hook enumerates gates one by one and never calls `npm run check`, so a

@@ -254,7 +254,7 @@ async def verify_class_ownership(
     Verify that a teacher owns a specific class.
 
     The one place in `app/` that decides single-class ownership (INV-1). Every other service
-    calls this rather than comparing `teacher_id` itself; `scripts/drift-extra.sh` check 4
+    calls this rather than comparing `teacher_id` itself; `scripts/drift-check.local.sh` check 4
     fails a diff that adds such a comparison anywhere else. See
     `specs/0003-consolidate-inv-1.md`.
 

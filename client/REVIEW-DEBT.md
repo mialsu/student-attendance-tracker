@@ -6,6 +6,32 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 
 <!-- Newest first. -->
 
+## 2026-10-29 — the drift gate synced to devkit 0b08866, and what changed in what it judges
+- **What:** `scripts/drift-check.sh` is devkit's template byte-for-byte again, and
+  `scripts/drift-extra.sh` is folded into `scripts/drift-check.local.sh`'s `local_checks` (the
+  Owner's decision) as check 1. Three things now behave differently.
+  1. **Check 1 sees `client/` only.** `drift-extra.sh` diffed without `--relative`, so it also
+     judged `api/`, `deployment/` and root files. The api bans the same two compounds in its own
+     gate, so what is lost is a compound written in `deployment/` or at the root.
+  2. **Check 9's CSS guard is devkit's, not ours.** Ours counted `--` as a comment only before
+     whitespace, so `--foreground: …;` never read as dead code. The template fixed the same defect
+     differently: in `.css`/`.scss`/`.sass`/`.less`/`.styl` only `//` is a comment. A run of
+     custom properties written outside a stylesheet (an inline `<style>`, a template literal)
+     would now read as commented-out code. Today no tracked file outside a stylesheet has a line
+     starting with `--`.
+  3. **A new dependency needs its name in backticks in an ADR.** The old gate passed every new
+     package as long as any ADR was added in the same diff. `@types/<pkg>` counts as named when
+     `<pkg>` is. Run over this package's history the check names every dependency ever added,
+     because none predates the rule. A version bump keeps the name and does not fire, so it bites
+     only on a genuinely new package.
+- **Where:** `scripts/drift-check.local.sh`, `scripts/drift-check.sh`.
+- **What green gates do NOT prove here:** that check 1 catches anything the plant did not try. It
+  was planted once under `--cached` and watched going red then green, and the commit message
+  carries the output. Specs, ADR-0005 and older entries here still name `drift-extra.sh`, left as
+  written because each is dated.
+- **Disposition:** 1 accepted by the Owner, 2026-10-29: each package's gate polices its own
+  package. 2 accepted pending the Owner. 3 is the template working as intended.
+
 ## 2026-10-01 — Dependabot alerts report 34 in the lockfile, and the two in the bundle are not reached
 - **What:** alerts were turned on today and put 34 open alerts on `client/package-lock.json`: 19
   high, 14 medium, 1 low. The API's one is in its own ledger. Two of these packages are in the

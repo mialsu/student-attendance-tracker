@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """INV-9's diff-time enforcer: what a logger call may carry, and the log's vocabulary.
 
-Called by `scripts/drift-extra.sh` check 5, which owns the messages and the exit code. Split
+Called by `scripts/drift-check.local.sh` check 5, which owns the messages and the exit code. Split
 into its own file because the first version lived in awk over diff text, and that version was
 **false-clean on the shape the leak actually takes** -- adding one keyword line to a logger call
 that already exists. The opener was not in the diff, so there was nothing to open a paren count
@@ -79,8 +79,12 @@ def read_source(path: str, rev: str) -> str | None:
                 return handle.read()
         except OSError:
             return None
-    spec = f"{path}" if rev == ":" else f"{rev}:{path}"
-    spec = f":{path}" if rev == ":" else spec
+    # `./` is load-bearing: git reads a bare `:app/x.py` or `HEAD:app/x.py` from the GIT ROOT, and
+    # this runs from api/, so without it every read failed, returned None, and the call was skipped.
+    # Check 5 was therefore false-clean in the pre-commit hook (`:`) and in CI (a commit) from the
+    # day it landed, and fired only on a bare working-tree run. Found 2026-10-29 by planting
+    # `who=email` and staging it during the harness sync (REVIEW-DEBT.md).
+    spec = f":./{path}" if rev == ":" else f"{rev}:./{path}"
     result = subprocess.run(
         ["git", "show", spec], capture_output=True, text=True, check=False
     )

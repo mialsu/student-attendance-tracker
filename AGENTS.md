@@ -65,8 +65,7 @@ npm run gate:typecheck     # tsc ratchet    — baseline in client/.harness-base
 npm run gate:lint          # eslint ratchet — same file; never hand-edited
 npm run gate:tests         # vitest ratchet — any failure breaks it
 npm run lint:boundaries    # dependency-cruiser: layering, cycles, orphans, test-in-prod
-npm run drift              # devkit drift gate
-npm run drift:extra        # compound-vocabulary bans the segment matcher cannot express
+npm run drift              # devkit drift gate + its local checks (drift-check.local.sh)
 ```
 Pre-commit hook: the **root** `.githooks/pre-commit`, which dispatches on what is staged and runs
 the client set from there (drift staged-only). **husky is gone** — it set `core.hooksPath` too, and
@@ -82,7 +81,7 @@ just lint                  # ruff ratchet — baseline in api/.harness-baseline
 just lint-verbose          # ruff, showing every finding
 just typecheck             # mypy ratchet — same file (ADR-0004)
 just typecheck-verbose     # mypy, showing every finding
-just drift                 # devkit drift gate + drift-extra.sh (vocabulary, alembic edits)
+just drift                 # devkit drift gate + its local checks (drift-check.local.sh)
 just install-hooks         # one-off per clone: core.hooksPath -> .githooks. Prefer
                            # ../scripts/bootstrap.sh — same setting, plus the venv the
                            # gates actually need, and it works without `just`
@@ -133,8 +132,9 @@ Both repos gate in CI, and both deploy from CI. Same gates as the pre-commit hoo
 
 Both set `BASELINE_FROZEN=1` so CI never rewrites `.harness-baseline`, and both check out with
 `fetch-depth: 0` because the drift gate is a *diff* gate — a shallow clone makes it compare nothing
-and report clean, which is a false pass. `scripts/drift-ci.sh` resolves the real range from the
-GitHub event.
+and report clean, which is a false pass. devkit's `scripts/drift-ci.sh` resolves the real range from the
+GitHub event's base, and fails on a base the clone does not hold (a force-push) rather than check
+only the last commit.
 
 **Every push to `main` that passes its gates deploys.** No opt-in switch — that is the Owner's
 explicit choice. Consequence worth knowing: the backend `deploy` job is a rewrite whose first
@@ -226,7 +226,7 @@ denied side at all.
 from the denied side, plus positive controls, and since spec 0003 (2026-09-04) INV-1 has **one**
 enforcement site: neutering it turns the denial tests red, and dropping the list filter's `WHERE`
 is caught on its own by `test_class_list_does_not_leak_another_teachers_class`.
-`scripts/drift-extra.sh` check 4 fails any diff that adds a `teacher_id` comparison in `app/`
+`api/scripts/drift-check.local.sh` check 4 fails any diff that adds a `teacher_id` comparison in `app/`
 outside `class_service.py`.
 
 ### Domain model, crunched 2026-09-01

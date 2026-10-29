@@ -3,7 +3,7 @@
 # sees it (spec 0007). Change a line here, then run `just lock`.
 #
 # `-c requirements.txt` holds every runtime package to the version the image runs, so the suite
-# tests the versions that deploy. scripts/drift-extra.sh check 7 fails a diff in which the two
+# tests the versions that deploy. scripts/drift-check.local.sh check 7 fails a diff in which the two
 # compiled files disagree on one.
 -c requirements.txt
 -r requirements.in

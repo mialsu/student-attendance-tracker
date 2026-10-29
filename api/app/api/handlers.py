@@ -17,9 +17,9 @@ call. So a reader looking for every source of a `denial` line needs this file an
 and nothing else.
 
 The asymmetry is not untidiness -- each is the only mechanism that works where it is used.
-Type identification cannot be forgotten, so INV-1 keeps it and `scripts/drift-extra.sh` check 4
-keeps the single raise site true. But `BadRequestException` is raised at fourteen sites and two
-of them interpolate a Student's name into the message, so type alone would either miss the
+Type identification cannot be forgotten, so INV-1 keeps it and `scripts/drift-check.local.sh`
+check 4 keeps the single raise site true. But `BadRequestException` is raised at fourteen sites
+and two of them interpolate a Student's name into the message, so type alone would either miss the
 denials or leak a name. There, opt-in labelling is what makes the silent refusals silent by
 construction. `app/core/exceptions.py` carries the same reasoning at the other end.
 
@@ -45,7 +45,7 @@ from app.core.logging import log_event
 # INV-1's rule id, carried on the line so a reader greps for the rule rather than for a status
 # code. `ForbiddenException` is raised in exactly ONE place in `app/` --
 # `class_service.verify_class_ownership` -- which is what makes this label exact rather than a
-# guess from the status code. Spec 0003 consolidated it there, and `scripts/drift-extra.sh`
+# guess from the status code. Spec 0003 consolidated it there, and `scripts/drift-check.local.sh`
 # check 4 fails a diff that adds a teacher_id comparison anywhere else.
 INV_1 = "INV-1"
 

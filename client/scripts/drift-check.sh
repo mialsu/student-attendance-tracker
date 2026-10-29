@@ -15,31 +15,56 @@
 # test the intended remedy is a REVIEW-DEBT.md entry, not drift-ok.
 #
 # Sensitivity: the vocabulary check matches whole identifier SEGMENTS (clientId -> client + id),
-# so it catches `createPurchase` without flagging `runtime`, `overrun`, or `setWindowFlags`. It
+# and a multi-word banned term as a RUN of them (clientRef -> client + ref, which flags
+# client_ref and clientRefId but not `ref`), so it catches `createPurchase` without
+# flagging `runtime`, `overrun`, or `setWindowFlags`. It
 # still errs toward catching: a missed synonym silently forks the project's language (expensive),
 # a false positive costs one `drift-ok` (cheap). If it is noisy, suspect GLOSSARY.md first — an
 # `_Avoid_` list should hold domain synonyms, not general programming words.
 #
 # Checks: vocabulary drift, unconfessed suppressions, undeclared dependencies, stray lockfiles,
 # hand-edited generated files, oversized new files, invariants with no enforcer, accessibility
-# rules with no enforcer, and blocks of commented-out code.
+# rules with no enforcer, blocks of commented-out code, deliberate ceilings that name no
+# upgrade path or arrive with no confession, token VALUES living in a markdown file, a regenerated
+# ERD left out of the commit, and a diagram caption citing code that is not there.
 #
-# Tunables (env): MAX_NEW_FILE_LINES, LEDGER, ADR_DIR, MIN_TERM_LEN, POLICE_STRINGS,
-#                 MIN_COMMENTED_BLOCK.
+# Tunables (env, or drift-check.local.sh): MAX_NEW_FILE_LINES, MAX_NEW_TEST_FILE_LINES, LEDGER,
+#                 ADR_DIR, MIN_TERM_LEN, POLICE_STRINGS, MIN_COMMENTED_BLOCK, DRIFT_ROOT, ERD_CMD.
+#
+# THIS FILE IS NOT EDITED IN A PROJECT. Every project carries it byte-identical to devkit's
+# template; what is the project's own lives beside it in `drift-check.local.sh`, which this file
+# sources when it exists: the tunables above, `DEVKIT_GATE` (the devkit commit this copy came
+# from), a `local_settings` function to extend the patterns, and a `local_checks` function for the
+# checks only this project needs. A fix found in a project goes back to devkit's template and
+# comes out again through `/harness sync`; edited in place, the copies drift from the template and
+# from each other, which is how four projects came to differ by 64 to 299 lines (2026-10-29).
 
 set -uo pipefail
 
-# Anchor on THIS package, not on the git root. They were the same directory while client-app was
-# its own repository; in the monorepo the git root is one level up and every relative path below
-# (./scripts/*, .harness-baseline, src/) silently pointed at nothing.
-cd "$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)" || exit 2
-# Every `git diff` below carries `--relative` because the cd above is only half the fix:
-# `git ls-files` reports paths relative to the cwd, `git diff` reports them from the GIT
-# ROOT. Checks that fed a diff path back to git matched nothing and reported clean. It is a
-# NO-OP when the cwd is the git root, so this stays compatible with devkit's template.
+# The gate's own file, as an absolute path taken BEFORE the cd below changes what a relative $0
+# points at. Check 6 waives its size cap for this one file.
+case "$0" in /*) SELF="$0" ;; *) SELF="$PWD/$0" ;; esac
+LOCAL="${SELF%/*}/drift-check.local.sh"
+# shellcheck source=/dev/null
+[ -f "$LOCAL" ] && . "$LOCAL"
 
+# DRIFT_ROOT=package polices only the package this copy sits in (`<pkg>/scripts/drift-check.sh`
+# polices `<pkg>/`), for a monorepo whose packages each carry their own gate; the default is the
+# whole repo. Every `git diff` below carries `--relative`, a NO-OP at the git root. In a package it
+# is what keeps the gate working: `git ls-files` reports paths relative to the cwd while `git diff`
+# reports them from the GIT ROOT, so every check that took a path from a diff and handed it back to
+# git matched nothing and printed clean. Found the hard way on 2026-09-04.
+if [ "${DRIFT_ROOT:-repo}" = "package" ]; then
+  cd "${SELF%/*}/.." || exit 2
+else
+  cd "$(git rev-parse --show-toplevel)" || exit 2
+fi
 
 MAX_NEW_FILE_LINES="${MAX_NEW_FILE_LINES:-400}"
+# A test file's length tracks the surface it covers, not muddled responsibilities, so a project may
+# give tests a looser cap. Not an exemption: the default is the same cap. Found in the attendance
+# tracker, whose convention is one test file per service.
+MAX_NEW_TEST_FILE_LINES="${MAX_NEW_TEST_FILE_LINES:-$MAX_NEW_FILE_LINES}"
 LEDGER="${LEDGER:-REVIEW-DEBT.md}"
 ADR_DIR="${ADR_DIR:-docs/adr}"
 MIN_TERM_LEN="${MIN_TERM_LEN:-3}"
@@ -66,8 +91,16 @@ if ! git rev-parse --verify -q HEAD >/dev/null 2>&1; then
   echo "drift-check: no commits yet — diffing against the empty tree (everything counts as new)."
 fi
 
+# Every check below reads `git diff` through a pipe, so a range git cannot take (a bad revision, or
+# `a...b` with no merge base after a history-replacing push) printed `fatal:` and then "clean". A
+# range nothing can be checked against is a failure, not a pass. Found by sitesmith's issue #14.
+if ! git diff --relative --name-only "${RANGE[@]}" >/dev/null; then
+  echo "drift-check: git cannot diff the range (${RANGE[*]}); nothing was checked." >&2
+  exit 2
+fi
+
 # Files whose CONTENT this gate does not police (prose, locks, generated, vendored, snapshots).
-SKIP_CONTENT='(^|/)(CHANGELOG|README|REVIEW-DEBT|CODING_STANDARDS|GLOSSARY|GLOSSARY-MAP)\.md$|\.(md|txt|snap|svg|png|jpg|lock)$|(^|/)(vendor|node_modules|dist|build|\.venv)/|-lock\.(json|yaml)$|(^|/)(go\.sum|yarn\.lock|bun\.lockb)$|\.min\.|\.gen\.[a-z]+$|(^|/)drizzle/|(^|/)openapi\.json$|(^|/)schema\.d\.ts$'
+SKIP_CONTENT='(^|/)(CHANGELOG|README|REVIEW-DEBT|CODING_STANDARDS|GLOSSARY|GLOSSARY-MAP|CONTEXT|CONTEXT-MAP)\.md$|\.(md|txt|snap|svg|png|jpg|lock)$|(^|/)(vendor|node_modules|dist|build|\.venv)/|-lock\.(json|yaml)$|(^|/)(go\.sum|yarn\.lock|bun\.lockb)$|\.min\.|\.gen\.[a-z]+$|(^|/)drizzle/|(^|/)openapi\.json$|(^|/)schema\.d\.ts$'
 # Files that are not yours to edit by hand (only through their generator), and that never change
 # as a byproduct of normal work: vendored code, build output, an applied migration.
 GENERATED='(^|/)(vendor|node_modules|dist|build)/|\.generated\.|(^|/)(migrations|drizzle)/|_pb2?\.py$|\.pb\.go$|\.g\.dart$|\.freezed\.dart$'
@@ -80,6 +113,9 @@ REGENERATED='\.gen\.[a-z]+$|(^|/)openapi\.json$|(^|/)schema\.d\.ts$|(^|/)drizzle
 MANIFESTS='(^|/)(package\.json|pyproject\.toml|requirements[^/]*\.txt|go\.mod|Cargo\.toml|Gemfile|composer\.json|pubspec\.yaml|[^/]+\.csproj|build\.gradle(\.kts)?)$'
 # Suppressions and silenced tests.
 HATCHES='TODO|FIXME|HACK|XXX|@ts-ignore|@ts-expect-error|eslint-disable|type:[[:space:]]*ignore|#[[:space:]]*noqa|#nosec|nolint|pytest\.mark\.skip|(it|test|describe|context)\.(skip|only)\(|^[[:space:]]*(xit|xdescribe|fit|fdescribe)\(|t\.Skip\(|#\[ignore\]'  # drift-ok: this line IS the pattern definition
+
+# The project's own extensions to the patterns above (`SKIP_CONTENT="<its fixtures>|$SKIP_CONTENT"`).
+declare -F local_settings >/dev/null && local_settings
 
 violations=0
 say() { printf '%s\n' "$*"; }
@@ -102,7 +138,7 @@ added_files() { { git diff --relative --diff-filter=A --name-only "${RANGE[@]}";
 
 # path<TAB>lineno<TAB>content, for every ADDED line in the range (untracked files: every line).
 added_lines() {
-  git diff --relative --unified=0 "${RANGE[@]}" -- "$@" | awk '
+  git diff --relative --unified=0 "${RANGE[@]}" | awk '
     /^\+\+\+ /{ f=substr($0,5); sub(/^b\//,"",f); next }
     /^@@ /{ if (match($0, /\+[0-9]+/)) n = substr($0, RSTART+1, RLENGTH-1) + 0; next }
     /^\+/{ print f "\t" n "\t" substr($0,2); n++; next }
@@ -120,7 +156,24 @@ added_sizes() {
   done <<<"$UNTRACKED"
 }
 # Added lines in files this gate polices, minus any line the author exempted.
-policed_lines() { added_lines | awk -F'\t' -v skip="$SKIP_CONTENT" '$1 !~ skip' | grep -v 'drift-ok'; }
+# Regexes reach awk through ENVIRON, never -v: awk processes backslash escapes in a -v assignment,
+# so `\.md$` arrived as `.md$` (any character, then md) and gawk warned on every run. Found at
+# prep-planner's bootstrap, 2026-10-20, when check.sh step 3 had been reporting the gate BROKEN.
+# The gate's own file is devkit's, byte-identical in every project and policed by devkit's
+# check.sh, so a project's GLOSSARY.md must not reach into its prose: a word one project bans is
+# plain English in the template, and every sync would trip on it. Found by sitesmith's first sync,
+# whose glossary bans `extension`. Matched by inode, as check 6 does, so another file that happens
+# to share the name is still policed.
+# Every `grep -v 'drift-ok'` here carries -a: GNU grep reads a line that is not valid UTF-8 (a Latin-1
+# file) as binary and drops it, so that line escaped every content check. Found at prep-planner's
+# sync, 2026-10-29, on its Latin-1 Fineli fixtures.
+SELF_PATH=""
+while IFS= read -r f; do
+  [ "$f" -ef "$SELF" ] && { SELF_PATH="$f"; break; }
+done < <(git ls-files --cached --others --exclude-standard -- '*drift-check.sh')
+policed_lines() {
+  added_lines | SKIP="$SKIP_CONTENT" SELFP="$SELF_PATH" awk -F'\t' '$1 !~ ENVIRON["SKIP"] && $1 != ENVIRON["SELFP"]' | grep -av 'drift-ok'
+}
 loc()  { printf '%s:%s' "$(cut -f1 <<<"$1")" "$(cut -f2 <<<"$1")"; }
 body() { cut -f3- <<<"$1"; }
 
@@ -133,7 +186,9 @@ while IFS= read -r ctx; do
   [ -f "$ctx" ] || continue
   terms+="$(sed -n 's/^_Avoid_:[[:space:]]*//p' "$ctx" | tr ',' '\n' \
             | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' | grep -Ev '^(<.*>)?$')"$'\n'
-done < <(git ls-files | grep -E '(^|/)GLOSSARY\.md$')
+# GLOSSARY.md since mattpocock-skills 1.3.1 renamed it; GLOSSARY.md is still read for projects
+# bootstrapped before that, so the gate never silently goes blind on an older repo.
+done < <(git ls-files | grep -E '(^|/)(GLOSSARY|CONTEXT)\.md$')
 terms="$(printf '%s' "$terms" | awk -v m="$MIN_TERM_LEN" 'length($0)>=m' | sort -fu)"
 
 if [ -n "$terms" ] && [ -n "$LINES" ]; then
@@ -141,12 +196,24 @@ if [ -n "$terms" ] && [ -n "$LINES" ]; then
   # while runtime / overrun / lockstep / setWindowFlags do NOT match run / step / flag. Plurals
   # count only for terms of 5+ chars, so `flag` never flags Qt's `Flags` but `purchase` catches
   # `purchases`.
+  #
+  # A banned word is ITSELF an identifier, so it is split the same way and matched as a run of
+  # CONSECUTIVE segments: a two-word term becomes [client, ref] and flags clientRef, client_ref,
+  # ClientRefs and clientRefId, while leaving `ref` and `clientName` alone.
+  # Storing the term whole instead left every multi-word entry in a glossary permanently inert:
+  # segment `client` can never equal key `clientref`, so the check printed clean forever and the
+  # words most likely to fork a domain's language — a two-word concept's synonym is naturally
+  # itself two words — were exactly the ones that could not fire. Found at tekstiilikierto on
+  # 2026-09-24 by probing the gate rather than reading it: 30 of that project's 80 banned words
+  # had never been able to match. The longest run wins, so a 3-segment term reports itself
+  # rather than the 2-segment term nested inside it.
+  #
   hits="$(printf '%s\n' "$LINES" | awk -F'\t' -v terms="$terms" -v SQ="'" -v police="$POLICE_STRINGS" '
   function seglist(id, out,    i,c,prev,nxt,cur,k,isup,prevlow,nxtlow) {
     k=0; cur="";
     for (i=1; i<=length(id); i++) {
       c = substr(id,i,1);
-      if (c=="_" || c=="-") { if (cur!="") { out[++k]=tolower(cur); cur="" } ; continue }
+      if (c=="_" || c=="-" || c==" ") { if (cur!="") { out[++k]=tolower(cur); cur="" } ; continue }
       isup    = (c ~ /[A-Z]/);
       prev    = (i>1) ? substr(id,i-1,1) : "";
       nxt     = (i<length(id)) ? substr(id,i+1,1) : "";
@@ -158,17 +225,40 @@ if [ -n "$terms" ] && [ -n "$LINES" ]; then
     if (cur!="") out[++k]=tolower(cur);
     return k;
   }
-  function banned(seg,   sing) {
-    if (seg in BAN) return seg;
-    if (length(seg) > 1 && substr(seg,length(seg)) == "s") {
-      sing = substr(seg,1,length(seg)-1);
-      if ((sing in BAN) && length(sing) >= 5) return sing;
+  function banned(seg, k, start,   L, max, key, j, last, sing) {
+    max = k - start + 1; if (max > MAXSEG) max = MAXSEG;
+    for (L = max; L >= 1; L--) {
+      key = seg[start];
+      for (j = start+1; j < start+L; j++) key = key SEP seg[j];
+      if (key in BAN) return BANDISP[key];
+      last = seg[start+L-1];
+      if (length(last) > 1 && substr(last,length(last)) == "s") {
+        sing = substr(last,1,length(last)-1);
+        key = seg[start];
+        for (j = start+1; j < start+L-1; j++) key = key SEP seg[j];
+        if (L > 1) key = key SEP sing; else key = sing;
+        # The 5-char floor counts LETTERS, not separators, so a one-segment term keeps exactly
+        # its old behaviour: `flag` still ignores `Flags`, `purchase` still catches `purchases`.
+        if ((key in BAN) && length(key) - (L-1) >= 5) return BANDISP[key];
+      }
     }
     return "";
   }
   BEGIN {
+    # SEP is a space: seglist emits only [A-Za-z0-9] runs, so it cannot occur inside a segment.
+    SEP = " "; MAXSEG = 1;
     n = split(terms, T, "\n");
-    for (i=1;i<=n;i++) { t=tolower(T[i]); sub(/^[ \t]+/,"",t); sub(/[ \t]+$/,"",t); if (t!="") BAN[t]=1 }
+    for (i=1;i<=n;i++) {
+      t=T[i]; sub(/^[ \t]+/,"",t); sub(/[ \t]+$/,"",t);
+      if (t=="") continue;
+      kb = seglist(t, B);                               # NOT tolower()d first: seglist needs the case
+      if (kb == 0) continue;
+      key = B[1];
+      for (j=2;j<=kb;j++) key = key SEP B[j];
+      BAN[key]=1; BANDISP[key]=t;                       # BANDISP reports the GLOSSARY.md spelling
+      if (kb > MAXSEG) MAXSEG = kb;
+      delete B;
+    }
   }
   {
     rest=$3; found=""; delete SEEN;
@@ -186,7 +276,7 @@ if [ -n "$terms" ] && [ -n "$LINES" ]; then
       rest = substr(rest, RSTART+RLENGTH);
       k = seglist(id, S);
       for (j=1;j<=k;j++) {
-        b = banned(S[j]);
+        b = banned(S, k, j);
         if (b != "") { if (!(id in SEEN)) { SEEN[id]=1; found = found (found==""?"":" ") id "(" b ")" } break }
       }
       delete S;
@@ -223,39 +313,66 @@ fi
 # key far better than a denylist of key names — and a version *bump* shows the same name on both
 # sides of the diff, so only genuinely NEW names survive.
 #
-# The name is cut at the first version operator. The cut class carried only ["':= ] until
-# 2026-09-04, which is enough for JSON ("pkg": "^1.0") and for a pinned pip line (pkg==1.0) and
-# WRONG for everything else: `pkg>=1.0` cut at the `=` left `pkg>` with the operator attached, and
-# the charset filter below then dropped it. Every requirement in this project uses `>=`, so the
-# check saw none of them. `<>~!` and `[` are now in the class too — the last one for extras, since
-# `uvicorn[standard]>=0.24.0` otherwise survives as `uvicorn[standard]` and fails the same filter.
-# Verified against all 22 requirement lines here plus JSON, scoped-JSON and pyproject shapes.
+# The name is cut at the first version operator. The cut class was ["':= ] until 2026-09-04, which
+# handles JSON ("pkg": "^1.0") and a pinned pip line (pkg==1.0) and NOTHING else: `pkg>=1.0` cut at
+# the `=` left `pkg>` with the operator still attached, and the charset filter below then dropped
+# it — so in any project pinning with `>=`, which is most Python projects, this check silently saw
+# no dependencies at all. `[` is in the class for the same reason one level up: extras like
+# `uvicorn[standard]>=0.24.0` otherwise survive as `uvicorn[standard]` and fail the same filter.
+# Verified by instantiating this template in a scratch repo and watching it go from clean to red.
+# A pip option line (`-r base.in`, `-c constraints.txt`) names a file, not a package, and mypy's
+# `python_version` in pyproject.toml is a setting; both read as dependencies until the attendance
+# tracker's sync, 2026-10-29.
 dep_names() {                   # dep_names <manifest> <+|->
   git diff --relative --unified=0 "${RANGE[@]}" -- "$1" \
-    | grep "^[$2]" | grep -Ev '^[-+]{3}' | grep -v 'drift-ok' \
+    | grep "^[$2]" | grep -Ev '^[-+]{3}' | grep -av 'drift-ok' \
     | { if printf '%s' "$1" | grep -q 'requirements'; then cat; \
         else grep -E '[0-9]+\.[0-9]+|"\*"|latest|\{'; fi; } \
-    | sed 's/^.//; s/^[[:space:]]*//; s/^["'"'"']//' | sed 's/["'"'"':=<>~![ ].*$//' \
+    | sed 's/^.//; s/^[[:space:]]*//; s/^["'"'"']//' | grep -v '^-' | sed 's/["'"'"':=<>~![ ].*$//' \
     | grep -E '^[A-Za-z0-9@._/-]+$' \
-    | grep -Eiv '^(version|name|description|license|author|authors|readme|repository|keywords|main|types|type|private|files|exports|scripts|engines|node|npm|packageManager|requires-python|python|edition|go|rust-version|module|require|tool|project|package|lib|bin|workspace|features|profile|target|(dev-|build-|optional|peer|dev|Dev|Peer|Optional|Build)?[dD]ependenc(y|ies)|dependency-groups|build-system|plugins|resolutions|overrides)$' \
+    | grep -Eiv '^(version|name|description|license|author|authors|readme|repository|keywords|main|types|type|private|files|exports|scripts|engines|node|npm|packageManager|requires-python|python|python_version|edition|go|rust-version|module|require|tool|project|package|lib|bin|workspace|features|profile|target|(dev-|build-|optional|peer|dev|Dev|Peer|Optional|Build)?[dD]ependenc(y|ies)|dependency-groups|build-system|plugins|resolutions|overrides)$' \
     | sort -u
 }
-adr_added="$(added_files | grep -E "^$ADR_DIR/")"
+# Each new name must appear IN BACKTICKS in some file under $ADR_DIR (`postgres` in ADR-0003), so a
+# prose mention ("PostgreSQL holds the data") never counts. Until 2026-10-21 this check passed every
+# new dependency as long as ANY file was added under $ADR_DIR in the same diff, so one unrelated ADR
+# waved through all of them, and an amendment to an existing ADR (a modification) satisfied nothing.
+# Found at prep-planner's ticket 1, when `postgres`, already decided in ADR-0003, failed the gate.
+# --cached reads the staged ADRs, so an unstaged edit cannot vouch for a staged dependency.
+# `@types/<pkg>` is <pkg>'s typings, not a decision of its own, so it counts as named when <pkg> is
+# (`@types/scope__name` types `@scope/name`). Found in sitesmith, whose ADR names `react` and every
+# new site then failed on `@types/react`.
+adr_names() {                   # adr_names <dep>: true when `<dep>` appears in an ADR
+  local typed="$1"
+  case "$1" in
+    @types/*__*) typed="@${1#@types/}"; typed="${typed/__//}" ;;
+    @types/*)    typed="${1#@types/}" ;;
+  esac
+  if [ "${RANGE[0]}" = "--cached" ]; then
+    git grep -qF --cached -e "\`$1\`" -e "\`$typed\`" -- "$ADR_DIR"
+  else
+    grep -rqF -e "\`$1\`" -e "\`$typed\`" "$ADR_DIR" 2>/dev/null
+  fi
+}
 while IFS= read -r m; do
   [ -n "$m" ] || continue
   new="$(comm -23 <(dep_names "$m" '+') <(dep_names "$m" '-'))"
-  if [ -n "$new" ] && [ -z "$adr_added" ]; then
-    report "dependency — $m gained a dependency with no ADR" \
+  undocumented="$(while IFS= read -r d; do [ -n "$d" ] && ! adr_names "$d" && printf '%s\n' "$d"; done <<<"$new")"
+  if [ -n "$undocumented" ]; then
+    report "dependency — $m gained a dependency no ADR names" \
             "rebuilding/absorbing what you already have, undocumented" \
-            "add an ADR in $ADR_DIR saying what it replaces and what you rejected (PRINCIPLES #3, #7)"
-    say "     $m  →  $(printf '%s' "$new" | paste -sd' ' -)"
+            "name it in backticks in an ADR in $ADR_DIR, saying what it replaces and what you rejected (PRINCIPLES #3, #7)"
+    say "     $m  →  $(printf '%s' "$undocumented" | paste -sd' ' -)"
   fi
 done < <(changed | grep -E "$MANIFESTS")
 
 # --- 4. a lockfile that moved on its own ------------------------------------
 check_lock() {                  # check_lock <lock-regex> <manifest-regex> <manifest-name>
-  printf '%s\n' "$CHANGED" | grep -qE "$1" || return 0
-  printf '%s\n' "$CHANGED" | grep -qE "(^|/)$2$" && return 0
+  # Here-strings, not `printf | grep -q`: grep -q exits at its first match, and with pipefail a
+  # change list past the pipe buffer then fails the pipe (SIGPIPE), which read as "no lockfile
+  # changed" and skipped this check (sitesmith's issue #14).
+  grep -qE "$1" <<<"$CHANGED" || return 0
+  grep -qE "(^|/)$2$" <<<"$CHANGED" && return 0
   report "lockfile — the lock for $3 changed but $3 didn't" \
           "reformatting generated or vendored files: touch them only through their generator" \
           "regenerate it from the manifest, or revert it"
@@ -278,13 +395,24 @@ if [ -n "$hand_edited" ]; then
 fi
 
 # --- 6. an oversized new file ----------------------------------------------
+# The gate's own file is waived. Every project vendors it and it is longer than the cap, so check 6
+# flagged it in every project on the commit that added it. Found at sitesmith on 2026-09-28 by
+# running the gate over its bootstrap commit. The match is by inode (`-ef` against SELF), so a
+# second big file named drift-check.sh is still caught, and so is a vendored copy checked by a
+# different copy of the gate. The waiver covers the size cap alone; the content checks still police
+# this file.
 while IFS=$'\t' read -r add path; do
   [ -n "${path:-}" ] || continue
   printf '%s\n' "$path" | grep -Eq "$SKIP_CONTENT" && continue
-  if [ "$add" -gt "$MAX_NEW_FILE_LINES" ]; then
-    report "size — new file is $add lines (cap $MAX_NEW_FILE_LINES)" \
+  [ "$path" -ef "$SELF" ] && continue
+  cap="$MAX_NEW_FILE_LINES"; knob=MAX_NEW_FILE_LINES
+  if grep -Eq '(^|/)(tests?|__tests__)/|[._-](test|spec)\.[a-z]+$|(^|/)test_[^/]+\.py$' <<<"$path"; then
+    cap="$MAX_NEW_TEST_FILE_LINES"; knob=MAX_NEW_TEST_FILE_LINES
+  fi
+  if [ "$add" -gt "$cap" ]; then
+    report "size — new file is $add lines (cap $cap)" \
             "backend/layer-only progress: a file this big is usually several modules in a trench coat" \
-            "split it at a real seam, or raise MAX_NEW_FILE_LINES with a reason in CODING_STANDARDS.md"
+            "split it at a real seam, or raise $knob with a reason in CODING_STANDARDS.md"
     say "     $path"
   fi
 done < <(added_sizes)
@@ -302,7 +430,7 @@ while IFS= read -r rec; do
             "name the test/constraint that fails when it is violated, or tag it [review-only] and confess it"
     say "     ${row:0:110}"
   fi
-done < <(added_lines | awk -F'\t' '$1 ~ /(^|\/)INVARIANTS\.md$/ && $3 ~ /^[[:space:]]*\|[[:space:]]*INV-[0-9]/' | grep -v 'drift-ok')
+done < <(added_lines | awk -F'\t' '$1 ~ /(^|\/)INVARIANTS\.md$/ && $3 ~ /^[[:space:]]*\|[[:space:]]*INV-[0-9]/' | grep -av 'drift-ok')
 
 # --- 8. an accessibility rule with no enforcer ------------------------------
 # Check 7 aimed at the surface instead of the domain. DESIGN.md is prose, so an A11Y row promising
@@ -318,7 +446,7 @@ while IFS= read -r rec; do
             "tag it [lint]/[test]/[live] with the real gate, or say [review-only] honestly and confess it"
     say "     ${row:0:110}"
   fi
-done < <(added_lines | awk -F'\t' '$1 ~ /(^|\/)DESIGN\.md$/ && $3 ~ /^[[:space:]]*\|[[:space:]]*A11Y-[0-9]/' | grep -v 'drift-ok')
+done < <(added_lines | awk -F'\t' '$1 ~ /(^|\/)DESIGN\.md$/ && $3 ~ /^[[:space:]]*\|[[:space:]]*A11Y-[0-9]/' | grep -av 'drift-ok')
 
 # --- 9. a block of commented-out code ---------------------------------------
 # The cheapest dead code to prevent, and the one an agent produces most: the old version left
@@ -326,17 +454,12 @@ done < <(added_lines | awk -F'\t' '$1 ~ /(^|\/)DESIGN\.md$/ && $3 ~ /^[[:space:]
 # greps, confuses the next reader, and nothing ever deletes it. A single commented line is a note;
 # a RUN of them that parses as code is a deletion someone did not finish. Doc comments (///, //!,
 # /** */, jsdoc continuations, #! and #[...]) are excluded, and the body must look like code, so
-# prose in a comment block does not fire. Exempt a deliberate block by putting drift-ok on any of
+# prose in a comment block does not fire. Stylesheets are a special case: `--` opens a custom
+# property and `#` an id selector, so in .css/.scss/.sass/.less/.styl only `//` counts as a comment
+# token. Without that, three consecutive CSS variables read as an unfinished deletion — which is
+# every design-token block and every Tailwind `@theme`. Found at tekstiilikierto's bootstrap,
+# 2026-09-23. Exempt a deliberate block by putting drift-ok on any of
 # its lines: that splits the run in two, and both halves fall under the threshold.
-#
-# `--` counts as a comment token ONLY when followed by whitespace, which is how SQL and Lua write
-# one. Without that guard every CSS custom property is a false positive: `--foreground: 176 61% 19%;`
-# parses as a comment whose body ends in `;`, so four consecutive tokens read as an unfinished
-# deletion. It cost a clean run on 2026-09-07, when src/index.css's token block was rewritten for
-# variant A and check 9 reported all seven of its groups. Added lines are what this check reads, so
-# a file that was already committed never triggered it.
-# NOTE: the same bug is in api/scripts/drift-check.sh and in devkit's template — reported, not
-# fixed from here.
 while IFS=$'\t' read -r path start count first; do
   [ -n "${path:-}" ] || continue
   report "dead code — $count consecutive commented-out lines at $path:$start" \
@@ -353,7 +476,9 @@ done < <(printf '%s\n' "$LINES" | awk -F'\t' -v min="$MIN_COMMENTED_BLOCK" '
     s = txt; sub(/^[[:space:]]+/, "", s)
     if (s ~ /^(\/\/\/|\/\/!|\/\*|\*|#!|#\[)/) {
       code = 0                                        # doc comment or attribute, never a deletion
-    } else if (s ~ /^(\/\/|#)/ || s ~ /^--([[:space:]]|$)/) {   # drift-ok: the comment tokens themselves
+    } else if (path ~ /\.(css|scss|sass|less|styl)$/ && s !~ /^\/\//) {
+      code = 0                                        # stylesheet: -- opens a custom property and # an id selector, neither is a comment
+    } else if (s ~ /^(\/\/|#|--)/) {                  # drift-ok: the comment tokens themselves
       b = s
       sub(/^(\/\/|#|--)[[:space:]]*/, "", b)          # drift-ok: same
       sub(/[[:space:]]+$/, "", b)
@@ -366,6 +491,146 @@ done < <(printf '%s\n' "$LINES" | awk -F'\t' -v min="$MIN_COMMENTED_BLOCK" '
   }
   END { flush() }
 ')
+
+# --- 10. a deliberate ceiling with no way out, or no confession -------------
+# A simplification that is correct today and has a known limit is a decision worth making
+# (PRINCIPLES #3). The marker is what keeps it a decision rather than a surprise: a grep for the
+# token is the standing list of corners this repo has knowingly cut. Two ways it decays, so two
+# branches. A marker naming no upgrade path is the pseudo-artifact of checks 7 and 8 one altitude
+# down — it reads like a bounded choice and states no bound. A marker with no ledger entry is the
+# defect check 2 catches: the confession deferred until it is lost. The upgrade line gets 3 lines
+# of slack so a wrapped comment block still passes, and the tokens are passed INTO awk rather than
+# written inside it, so only the two definition lines below need exempting from the gate this repo
+# runs on itself.
+ceil_re='CEILING:'                              # drift-ok: this line IS the pattern definition
+up_re='Upgrade:'                                # drift-ok: same
+if [ -n "$LINES" ]; then
+  ceilings="$(printf '%s\n' "$LINES" | grep -F "$ceil_re")"
+  if [ -n "$ceilings" ]; then
+    if ! grep -qxF "$LEDGER" <<<"$CHANGED"; then
+      report "ceiling — a deliberate ceiling landed without a confession" \
+              "deferring the confession: a corner cut on purpose is still a corner nobody else knows about" \
+              "add the entry to $LEDGER in THIS commit, with its Ceiling line (PRINCIPLES #5)"
+      while IFS= read -r h; do say "     $(loc "$h")  →  $(body "$h" | sed 's/^[[:space:]]*//' | cut -c1-100)"; done <<<"$ceilings"
+    fi
+    while IFS= read -r rec; do
+      [ -n "$rec" ] || continue
+      report "ceiling — the marker at $(loc "$rec") names no way out" \
+              "a standard with no enforcer: a ceiling with no upgrade path is an excuse wearing a convention" \
+              "add the upgrade line under it, naming what has to change and when that becomes necessary"
+      say "     $(body "$rec" | sed 's/^[[:space:]]*//' | cut -c1-110)"
+    done < <(printf '%s\n' "$LINES" | awk -F'\t' -v c="$ceil_re" -v u="$up_re" '
+      { if (index($3, u)) up[$1 ":" ($2 + 0)] = 1
+        if (index($3, c)) { n++; cp[n] = $1; cl[n] = $2 + 0; ct[n] = $3 } }
+      END {
+        for (i = 1; i <= n; i++) {
+          found = 0
+          for (d = 0; d <= 3; d++) if (up[cp[i] ":" (cl[i] + d)]) found = 1
+          if (!found) print cp[i] "\t" cl[i] "\t" ct[i]
+        }
+      }
+    ')
+  fi
+fi
+
+# --- 11. token values living in a markdown file -----------------------------
+# DESIGN.md records WHERE the tokens live; the VALUES live in code, because a token table in prose
+# beside tokens in code is two implementations of one thing — they drift, and then both are suspect
+# (ANTI-PATTERNS: two formats for one artifact).
+#
+# Two ways that line gets crossed, so two triggers. `ui-ux-pro-max --design-system --persist` writes
+# a whole tree of them (design-system/<slug>/MASTER.md plus its page overrides); its own SKILL.md
+# says not to persist unverified output, and METHOD.md's reuse table says devkit never does.
+# The likelier crossing needs no skill at all: an agent filling DESIGN.md in with a tidy palette
+# table, because a table looks like diligence.
+#
+# Trigger B demands BOTH a custom-property name AND a value literal on the same table row. The name
+# alone is ordinary prose — devkit's own reuse table names `--persist` and `--space-*`, and DESIGN.md
+# is meant to be able to say the tokens are called `--color-*`. It is the name carrying its VALUE
+# that duplicates the code. Three rows, not one, so a token quoted while explaining a decision
+# stays legal and a TABLE does not. Value forms come from real `--persist` output: `#1E40AF` in a
+# colour row, `4px` / `0.25rem` in a spacing row. Intervals like {3,8} are avoided so this reads the
+# same under mawk as under gawk.
+PERSISTED_DS='(^|/)design-system/[^/]+/(MASTER\.md|pages/[^/]+\.md)$'
+ds_tok='\-\-[a-z][a-z0-9-]*'                                   # drift-ok: this line IS the pattern
+ds_val='#[0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f]|[0-9](px|rem|em)'   # drift-ok: same
+while IFS= read -r f; do
+  [ -n "$f" ] || continue
+  report "tokens — $f is a persisted design system" \
+          "two formats for one artifact: its token table is a second home for values that live in code" \
+          "delete it; take --design-system as a READ and keep the values in the token file (METHOD.md)"
+done < <(added_files | grep -E "$PERSISTED_DS")
+
+while IFS= read -r rec; do
+  [ -n "$rec" ] || continue
+  report "tokens — $(cut -f2 <<<"$rec") carries $(cut -f1 <<<"$rec") token/value rows" \
+          "two formats for one artifact: a token table in prose drifts from the tokens in code" \
+          "move the values to the token file in code, and cite its PATH here instead"
+done < <(added_lines | grep -av 'drift-ok' | DS_TOK="$ds_tok" DS_VAL="$ds_val" awk -F'\t' '
+    BEGIN { t = ENVIRON["DS_TOK"]; v = ENVIRON["DS_VAL"] }
+    $1 ~ /\.md$/ && $3 ~ /^[[:space:]]*\|/ && $3 ~ t && $3 ~ v { c[$1]++ }
+    END { for (f in c) if (c[f] >= 3) print c[f] "\t" f }')
+
+# --- 12. a regenerated ERD left out of the commit ---------------------------
+# The ERD is a SNAPSHOT of whatever declares the schema (METHOD.md, Diagrams), so the project's own
+# test already fails when the two disagree — but that test reads the WORKING TREE. It passes on a
+# regenerated file the commit then leaves behind, and the commit carries a diagram of a schema that
+# no longer exists. So this fires on that gap itself, whatever the schema's source: a SQL migration,
+# an ORM's schema file, a document store's collection config. A trigger on the source's paths was
+# the first version, and fires on every edit to a file that holds more than the schema.
+# Only at a commit: a range is committed trees, where the snapshot test reads what the commit
+# carries. Inert until the project has an ERD.
+ERD_DOC='(^|/)schema\.gen\.md$'
+if [ "${RANGE[*]}" = "--cached" ]; then
+  while IFS= read -r erd; do
+    [ -n "$erd" ] || continue
+    report "schema — $erd was regenerated but the change is not staged" \
+            "trusting status over code: the snapshot test passed on a file this commit leaves out" \
+            "stage it, or run ${ERD_CMD:-the ERD command} first if the schema changed"
+  done < <({ git diff --relative --name-only; git ls-files --others --exclude-standard; } | grep -E "$ERD_DOC" | sort -u)
+fi
+
+# --- 13. a diagram caption naming code that is not there --------------------
+# A diagram earns its place by pointing at the real thing, and the first part to rot is the path:
+# a folder is renamed and the picture keeps citing the old one, confidently. Every diagram caption
+# carries a `**Code:**` line listing what it describes, in backticks; a listed path that is not in
+# the repo fails here. Prose cannot be checked and the drawing cannot be checked, but this can — it
+# is the enforceable half of the caption contract (METHOD.md, Diagrams).
+# Only tokens that look like paths are tested: a backticked command or identifier is left alone.
+# The field must OPEN its line (a blockquote marker is allowed), so prose that mentions the caption
+# contract in passing is not a caption. devkit's own METHOD.md tripped the first version this way.
+# It reads EVERY caption in the repo on every run, not only the lines a diff adds: a rename touches
+# no caption, so a check on added lines never saw the rot it exists for (found in sitesmith). At a
+# commit it reads the index, since that is what the commit carries.
+CAPTION='^[[:space:]]*(>[[:space:]]*)?\*\*Code:\*\*'
+if [ "${RANGE[*]}" = "--cached" ]; then
+  captions() { git grep --cached -n -E "$CAPTION" -- '*.md'; }
+  in_repo()  { [ -n "$(git ls-files --cached -- "$1")" ]; }
+else
+  captions() { git grep -n -E "$CAPTION" -- '*.md'; }
+  in_repo()  { [ -e "$1" ]; }
+fi
+while IFS= read -r rec; do
+  [ -n "$rec" ] || continue
+  where="$(cut -d: -f1-2 <<<"$rec")"
+  while IFS= read -r token; do
+    [ -n "$token" ] || continue
+    case "$token" in
+      */*) ;;
+      *.ts|*.tsx|*.js|*.jsx|*.mjs|*.cjs|*.sql|*.sh|*.md|*.json|*.yaml|*.yml|*.css|*.py|*.go|*.rs|*.prisma) ;;
+      *) continue ;;
+    esac
+    in_repo "${token%/}" && continue
+    report "caption — $where cites $token, which is not in the repo" \
+            "the pseudo-artifact: a diagram whose caption points at code that moved" \
+            "fix the path, or redraw the diagram for where the code actually is"
+  done < <(cut -d: -f3- <<<"$rec" | grep -oE '`[^`]+`' | tr -d '`')
+done < <(captions | grep -av 'drift-ok')
+
+# --- the project's own checks ----------------------------------------------
+# `local_checks` in drift-check.local.sh, with `report`, `changed`, `added_lines` and the rest of
+# the helpers above in reach. A check that would serve every project belongs in this file instead.
+declare -F local_checks >/dev/null && local_checks
 
 # --- verdict ---------------------------------------------------------------
 say ""

@@ -1,55 +1,55 @@
 #!/usr/bin/env bash
-# drift-ci.sh — run the drift gates over the range CI actually needs to police.
+# drift-ci.sh — run the drift gate in CI, over the commits the event actually brought.
 #
-# WHY THIS EXISTS. drift-check.sh is a DIFF gate. Run with no arguments it compares the working tree
-# against HEAD — which, on a clean CI checkout, is nothing at all, so it reports "clean" no matter
-# what was pushed. That is a false pass at the exact moment the gate is supposed to be load-bearing.
-# This resolves the real range from the GitHub event and passes it through.
+# drift-check.sh is a DIFF gate. With no range it compares the working tree with HEAD, which on a
+# clean CI checkout is nothing, so it says clean whatever was pushed. Every project then wrote its
+# own range logic into its workflow, three different ways, two of which quietly narrowed to the
+# last commit when the base was missing (2026-10-29). This is that logic, once.
 #
-# Range resolution, in order:
-#   pull_request      -> origin/<base>...HEAD   (everything the branch adds)
-#   push              -> <event.before>...HEAD  (the commits this push introduced)
-#   force push / new branch / workflow_dispatch -> HEAD~1...HEAD
-#   root commit       -> <empty tree>...HEAD    (every line counts as new)
+# Usage (in a workflow, after a checkout with `fetch-depth: 0`):
+#   scripts/drift-ci.sh "${{ github.event.pull_request.base.sha || github.event.before }}"
+#   scripts/drift-ci.sh --print <base>     # print the resolved range only; for testing
 #
-# Usage: scripts/drift-ci.sh          # resolve and run
-#        scripts/drift-ci.sh --print  # print the resolved range only (for testing)
+# The range, from the base the workflow passes. A commit in this clone (a pull request's base, a
+# push's before) checks everything since it. No base, or the all-zero sha of a new branch, checks
+# the last commit; on a root commit, every line counts as new. A base NOT in this clone fails: a
+# force-push leaves `before` unreachable, and checking only the last commit instead would pass
+# whatever the rewritten history added, so rerun the workflow by hand, which checks the last
+# commit. A shallow clone fails too, since no range can be trusted without the history.
+#
+# THIS FILE IS NOT EDITED IN A PROJECT. Like drift-check.sh, every project carries it byte-identical
+# to devkit's template, and `/harness sync` brings both back together. It calls the drift-check.sh
+# beside it, so a monorepo package's copy runs that package's gate.
 
 set -uo pipefail
-# Anchor on THIS package, not on the git root. They were the same directory while client-app was
-# its own repository; in the monorepo the git root is one level up and every relative path below
-# (./scripts/*, .harness-baseline, src/) silently pointed at nothing.
-cd "$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)" || exit 2
 
-resolve_range() {
-  if [ "${GITHUB_EVENT_NAME:-}" = "pull_request" ] && [ -n "${GITHUB_BASE_REF:-}" ]; then
-    git fetch --no-tags --quiet origin "$GITHUB_BASE_REF" >/dev/null 2>&1 || true
-    if git rev-parse --verify -q "origin/${GITHUB_BASE_REF}" >/dev/null 2>&1; then
-      printf 'origin/%s...HEAD' "$GITHUB_BASE_REF"; return
-    fi
-    echo "drift-ci: WARNING base ref '$GITHUB_BASE_REF' not fetchable; falling back." >&2
-  fi
+case "$0" in /*) SELF="$0" ;; *) SELF="$PWD/$0" ;; esac
+GATE="${SELF%/*}/drift-check.sh"
 
-  local before="${GITHUB_EVENT_BEFORE:-}"
-  if [ -n "$before" ] \
-     && [ "$before" != "0000000000000000000000000000000000000000" ] \
-     && git cat-file -e "${before}^{commit}" >/dev/null 2>&1; then
-    printf '%s...HEAD' "$before"; return
-  fi
+PRINT=0
+[ "${1:-}" = "--print" ] && { PRINT=1; shift; }
+BASE="${1:-}"
 
-  if git rev-parse --verify -q 'HEAD~1' >/dev/null 2>&1; then
-    printf 'HEAD~1...HEAD'; return
-  fi
+fail() { echo "drift-ci: $1" >&2; exit 2; }
 
-  printf '%s...HEAD' "$(git hash-object -t tree /dev/null)"
-}
+if [ "$(git rev-parse --is-shallow-repository 2>/dev/null)" = "true" ]; then
+  fail "this is a shallow clone, so no range can be checked; check out with fetch-depth: 0"
+fi
 
-RANGE="$(resolve_range)"
+case "$BASE" in
+  ""|0000000000000000000000000000000000000000)
+    if git rev-parse --verify -q 'HEAD~1' >/dev/null 2>&1; then
+      RANGE="HEAD~1...HEAD"
+    else
+      RANGE="$(git hash-object -t tree /dev/null)...HEAD"
+    fi ;;
+  *)
+    git cat-file -e "${BASE}^{commit}" 2>/dev/null \
+      || fail "the base $BASE is not in this clone (a force-push?), so nothing was checked; rerun the workflow by hand to check the last commit"
+    RANGE="$BASE...HEAD" ;;
+esac
 
-if [ "${1:-}" = "--print" ]; then printf '%s\n' "$RANGE"; exit 0; fi
+if [ "$PRINT" = 1 ]; then printf '%s\n' "$RANGE"; exit 0; fi
 
 echo "drift-ci: range = $RANGE"
-rc=0
-./scripts/drift-check.sh "$RANGE" || rc=1
-[ -x ./scripts/drift-extra.sh ] && { ./scripts/drift-extra.sh "$RANGE" || rc=1; }
-exit "$rc"
+exec bash "$GATE" "$RANGE"

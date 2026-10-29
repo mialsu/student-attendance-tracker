@@ -1,7 +1,8 @@
 # What the API needs to RUN, and the reason for every constraint. requirements.txt is compiled from
 # this file and is never edited by hand: change a line here, then run `just lock` (spec 0007,
 # ADR-0010). The image installs requirements.txt alone, so a package that only tests or lints
-# belongs in requirements-dev.in, and scripts/drift-extra.sh check 6 refuses the known ones here.
+# belongs in requirements-dev.in, and scripts/drift-check.local.sh check 6 refuses the known ones
+# here.
 #
 # A version moves only when a pull request moves it (ADR-0009). Dependabot recompiles the lock
 # monthly; `./scripts/lock.sh --upgrade-package NAME` moves one package by hand. The floors below

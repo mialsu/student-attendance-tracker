@@ -86,7 +86,7 @@ Enforced by `[tool.importlinter]` in `pyproject.toml`; each contract was proven 
 ## Data & migrations
 
 - An **applied** alembic migration is history. Never edit one in place; write a new one.
-  `[script]` (`scripts/drift-extra.sh`)
+  `[script]` (`scripts/drift-check.local.sh` check 2)
 - Model change → `just migrate-create "message"`, then read the generated migration before
   applying it. Autogenerate misses table renames and constraint changes. `[review-only]`
 - `datetime` values are timezone-aware. Naive `datetime.now()` / `strptime` without `%z` is a
@@ -97,9 +97,11 @@ Enforced by `[tool.importlinter]` in `pyproject.toml`; each contract was proven 
 
 - Every domain concept is named with its `GLOSSARY.md` term. `[script]` (`_Avoid_` words)
 - `student_first_name` / `studentFirstName` are dead vocabulary — the Student entity replaced them
-  with a single normalized `name`. `[script]` (`scripts/drift-extra.sh`, a **separate** enforcer
-  because `drift-check.sh` matches identifier *segments* and cannot ban a compound)
-- `_Avoid_` entries in `GLOSSARY.md` must be **single words**, or they are silently dead.
+  with a single normalized `name`. `[script]` (`scripts/drift-check.local.sh` check 1, a regex ban
+  written before devkit's vocabulary check could match a compound)
+- An `_Avoid_` entry in `GLOSSARY.md` may be several words: since devkit's 2026-09-24 template the
+  gate matches it as a run of identifier segments (`verify class access` flags `verifyClassAccess`).
+  Only a term list belongs on an `_Avoid_:` line; prose there becomes banned words.
   `[review-only]`
 - This repo and `client-app` describe one domain. A word that disagrees between them is a bug.
   `[review-only]`
@@ -141,8 +143,8 @@ Raising a number in `.harness-baseline` gets the same treatment. `[review-only]`
 - Dependencies are declared in `requirements.in` (what runs in the image) and `requirements-dev.in`
   (the suite and the gates). `requirements.txt` and `requirements-dev.txt` are compiled from them by
   `just lock` and never edited by hand: every line exact, the two agreeing on every runtime
-  package, and no test or lint tool in the runtime lock (ADR-0010). `[script]` drift-extra checks
-  6 and 7
+  package, and no test or lint tool in the runtime lock (ADR-0010). `[script]` drift-check.local.sh
+  checks 6 and 7
 - `pyproject.toml` holds tool config and deliberately declares no `[project]` table.
   `[review-only]`
 
@@ -151,7 +153,8 @@ Raising a number in `.harness-baseline` gets the same treatment. `[review-only]`
 - Lint: `just lint` (ratchet, baseline in `.harness-baseline`) / `just lint-verbose`
 - Types: `just typecheck` (mypy ratchet, same file, ADR-0004) / `just typecheck-verbose`
 - Boundaries: `just boundaries`
-- Drift: `just drift` (devkit's `drift-check.sh` + this repo's `drift-extra.sh`)
+- Drift: `just drift` (devkit's `drift-check.sh`, byte-identical to its template, running this
+  package's own checks from `scripts/drift-check.local.sh`)
 - Tests: `just test` (needs `TEST_DATABASE_URL`)
 - Fast set (pre-commit): `just check-fast`
 - Everything: `just check`

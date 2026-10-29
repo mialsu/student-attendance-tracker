@@ -80,16 +80,18 @@ _Planned_: **shared Classes** — two Teachers on one Class — alongside indivi
 ## How this file is enforced
 
 - `_Avoid_:` is **machine-checked** by `scripts/drift-check.sh` on every diff.
-- **`_Avoid_` entries must be single words.** The gate splits each identifier into segments
-  (`pupilName` → `pupil` + `name`) and compares each segment against the list, so a camelCase
-  compound like `studentFirstName` can *never* match and is silently dead if you write it here.
-  This was found by breaking the gate on purpose during install. Verified working entries fire like
+- **An `_Avoid_:` line is a comma-separated list of terms and nothing else.** The gate splits each
+  identifier into segments (`pupilName` → `pupil` + `name`) and, since devkit's 2026-09-24
+  template, matches a multi-word entry as a run of them, so `student first name` would flag
+  `studentFirstName`. Before that a camelCase compound written here was silently dead, found by
+  breaking the gate on purpose during install. Verified working entries fire like
   `src/api/students.ts:57 -> pupilName(pupil)`.
 - Every `_Avoid_` term was verified to have **zero hits in `src/`** before being added, so the list
   is purely preventive and fires on no current code path.
-- **Compound identifiers are enforced separately** by `scripts/drift-extra.sh`, because the segment
-  matcher structurally cannot express them. That is where `studentFirstName` / `studentLastName`
-  live — the vocabulary the Student-entity migration replaced with a single `name`.
+- **Compound identifiers are enforced separately** by `scripts/drift-check.local.sh` check 1,
+  written when the segment matcher could not express them. That is where `studentFirstName` /
+  `studentLastName` live — the vocabulary the Student-entity migration replaced with a single
+  `name`.
 - `course` / `courseCredit` is deliberately absent: it names a real, distinct concept, and the
   segment matcher would fire on all 27 of its legitimate uses. A banned word whose every hit is
   legitimate is a glossary bug, not a code bug.

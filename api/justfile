@@ -128,13 +128,13 @@ typecheck-verbose:
 boundaries:
     ./venv/bin/lint-imports
 
-# Drift gate (devkit) + this repo's extra checks.
+# Drift gate: devkit's drift-check.sh, which runs this package's own checks from
+# scripts/drift-check.local.sh (the former drift-extra.sh, folded in on 2026-10-29).
 # `range` is passed straight through: the pre-commit hook calls this with `--cached` so it judges
 # the STAGED diff, while a bare `just drift` judges HEAD. One recipe, so the hook and the gate set
 # cannot drift apart -- they did, before 2026-09-02, and the hook silently ran a shorter list.
 drift range="":
     ./scripts/drift-check.sh {{range}}
-    ./scripts/drift-extra.sh {{range}}
 
 # The FAST gate set — what the pre-commit hook runs. No database, no network, ~10 seconds.
 # `typecheck` was added 2026-09-02 (ADR-0004); before that this comment said there was no Python

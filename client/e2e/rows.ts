@@ -217,7 +217,8 @@ export const SUGGESTIONS: StudentAutocomplete[] = [
  * **required**. The API stopped sending those with the Student-entity migration, and a fixture
  * carrying empty strings for them would teach the walk a contract the server no longer has.
  *
- * `Omit` was the first attempt and `scripts/drift-extra.sh` rejected it — correctly, since a text
+ * `Omit` was the first attempt and the compound ban (then `scripts/drift-extra.sh`, now
+ * `scripts/drift-check.local.sh` check 1) rejected it — correctly, since a text
  * matcher cannot tell using a banned identifier from excluding one by name. `Pick` states the same
  * thing by naming only what is sent, so the gate needs no exemption. That those fields are
  * non-optional in `src/api/types.ts` at all is a type lie about live responses; it is in

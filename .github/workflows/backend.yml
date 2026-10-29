@@ -79,10 +79,13 @@ jobs:
       - name: Boundaries (import-linter)
         run: lint-imports
 
+      # devkit's drift-ci.sh turns the base into the range: none checks the last commit, and one this
+      # clone does not hold (a force-push) fails rather than check less. The package's own checks
+      # run inside the gate, from scripts/drift-check.local.sh.
       - name: Drift + repo-specific checks
         env:
-          GITHUB_EVENT_BEFORE: ${{ github.event.before }}
-        run: ./scripts/drift-ci.sh
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: ./scripts/drift-ci.sh "$BASE"
 
       - name: Lint (ruff ratchet)
         run: ./scripts/baseline-guard.sh ruff ruff check app tests
