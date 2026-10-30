@@ -110,6 +110,13 @@ async def populated_class(db, test_class):
             BUDGET_AUTOCOMPLETE,
         ),
         ("attendance_list", "/api/classes/{cid}/attendance?limit=100", BUDGET_ATTENDANCE_LIST),
+        # Spec 0011 AC-8: the day range adds WHERE terms to the two queries already paid for,
+        # never a query of its own.
+        (
+            "attendance_list_ranged",
+            "/api/classes/{cid}/attendance?limit=100&date_from=2000-01-01&date_to=2099-12-31",
+            BUDGET_ATTENDANCE_LIST,
+        ),
         ("summary", "/api/classes/{cid}/attendance/summary?limit=25", BUDGET_SUMMARY),
         # Spec 0010 slice 2: one row per sort key, generated from the set the route accepts, so a
         # key added there is under this ceiling without anyone remembering to list it here. The

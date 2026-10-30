@@ -27,6 +27,9 @@ CLASS_SCOPED_ROUTES = [
     ("PUT", "/api/classes/{class_id}", {"name": "Renamed By An Intruder"}),
     ("DELETE", "/api/classes/{class_id}", None),
     ("GET", "/api/classes/{class_id}/attendance", None),
+    # A day range is no way around INV-1 either: specs/0011-list-attendance-local-days.md
+    # retyped these two parameters, so the ranged list call is attacked on its own.
+    ("GET", "/api/classes/{class_id}/attendance?date_from=2026-03-01&date_to=2026-03-31", None),
     ("GET", "/api/classes/{class_id}/attendance/summary", None),
     # Revealing legacy students is the same read as the summary itself, so it is refused
     # the same way. Without this row, the parameter added by
@@ -174,6 +177,7 @@ async def test_class_list_does_not_leak_another_teachers_class(
 POSITIVE_CONTROL_ROUTES = [
     "/api/classes/{class_id}",
     "/api/classes/{class_id}/attendance",
+    "/api/classes/{class_id}/attendance?date_from=2026-03-01&date_to=2026-03-31",
     "/api/classes/{class_id}/attendance/summary",
     "/api/classes/{class_id}/attendance/summary?legacy=true",
     "/api/classes/{class_id}/attendance/statistics",
