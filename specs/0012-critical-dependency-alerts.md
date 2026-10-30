@@ -1,7 +1,8 @@
 # Spec 0012 — the two critical Dependabot alerts: certifi bumped, python-jose replaced
 
 **Status:** shaped 2026-10-30 from issue #38, one decision taken by the Owner (replace python-jose,
-ADR-0012). Two slices, neither started. `ready-for-agent`.
+ADR-0012). **Closed 2026-10-30:** both slices shipped as one PR, #42 (`c0e4858`), and deployed the
+same day; AC-1 – AC-10 all MET.
 **Weight:** Standard
 **Domain dial:** on (project-wide); moves no invariant. Slice 2 changes the code that authenticates
 every request, so `INV-1` is re-run, not re-specified (AC-7)
@@ -141,6 +142,12 @@ Bump `certifi` through the lock (slice 1). Replace `python-jose` with `PyJWT` in
 | AC-8 | MET | Live: uvicorn for the new build (`e60e326`, port 8701) and for the old build (`d0cf57d` worktree, python-jose 3.5.0, port 8702), one throwaway database `qa_ac8` on the 5439 server, one `SECRET_KEY`. New build: signup 201, login 200, `/me` 200, refresh 200 with a rotated cookie, `/me` with the refreshed token 200, rotated-out cookie 401, password change 204, pre-change cookie 401, old password 401, new password 200, logout 204, refresh after logout 401. Cross-build: a refresh cookie from the old build's login refreshes on the new build (200), and the new access token works on `/me` (200). The old build's access token also works on the new `/me`. Rollback direction: a cookie from the new build refreshes on the old build (200). Both server logs show only passlib's trapped bcrypt-version traceback, which both builds print, and the expected denials. The orphan `cryptography`/`cffi`/`pycparser`/`six` in `api/venv` played no part: the clean-venv check under AC-4 has none of them |
 | AC-9 | MET | ADR-0012 `Status:` "implemented 2026-10-30 by spec 0012 slice 2". `api/REVIEW-DEBT.md`'s 2026-10-01 `ecdsa` entry: "closed 2026-10-30 by spec 0012 slice 2". `api/README.md:12` "JWT (PyJWT)". The `pyproject.toml` mypy comment no longer names jose. Spec 0011's `Status:` says merged as #40 (`b8655ad`). Remaining `git grep -i jose` hits are history or this change's own record (ADR-0012, REVIEW-DEBT, `requirements.in`'s reason, this spec, `test_security.py`) plus two outside AC-9's list: `api/docs/adr/0004-mypy-type-gate.md:25`, a dated decision left as written, and `BACKLOG.html:613`, an open "your call" row for a decision ADR-0012 has taken, filed to the builder |
 | AC-10 | NOT CHECKED | post-merge |
+
+**AC-10, checked 2026-10-30 after #42 merged as `c0e4858`. Spec verdict: MET** (AC-1 – AC-10).
+
+| # | Verdict | Evidence |
+|---|---|---|
+| AC-10 | MET | The backend workflow on `c0e4858` passed gates, tests, security and the Hetzner deploy; `/health` returned `healthy`. `gh api …/dependabot/alerts` reads all six as `fixed`: #71, #73 (`certifi`), #52, #54 (`python-jose`), #1, #46 (`ecdsa`). #38 got the comment listing what remains: 56 open alerts, 26 high. Production also refused a token with a bad signature and one with `alg: none` on `/api/auth/me` (401 both), and the Owner logged in with their own account after the deploy |
 
 ## Spec Deltas
 
