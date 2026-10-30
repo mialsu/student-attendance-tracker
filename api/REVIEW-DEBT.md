@@ -6,6 +6,22 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 
 <!-- Newest first. -->
 
+## 2026-10-30 — PyJWT warns about a short HMAC key and accepts it; production's key length is unchecked
+- **What:** PyJWT 2.15.1, pinned in both locks since spec 0012 slice 2, raises
+  `InsecureKeyLengthWarning` on encode and on decode when the HMAC key is under 32 bytes, and signs
+  and verifies with it anyway. Refusal needs `enforce_minimum_key_length`, which defaults to off
+  and this API does not set. CI's `SECRET_KEY` (`test-secret-key-for-ci`, `.github/workflows/backend.yml`)
+  is 22 bytes, so CI warns and stays green; `tests/test_security.py` signs with the same key and
+  shows the warning in every run.
+- **Why it is open:** the length of production's `SECRET_KEY` has not been checked. It lives only
+  on the server, and only the Owner can read it there. If it is under 32 bytes, PyJWT accepts it
+  and logs the warning on every token.
+- **Where:** `app/core/security.py`, the server's `.env`, `.github/workflows/backend.yml`.
+- **What green tests do NOT prove here:** anything about production's key. CI's key is short by
+  the Owner's choice (spec 0012, Spec Deltas 2026-10-30), and neither the warning nor the key is
+  silenced or changed.
+- **Disposition:** open, for the Owner: check production's key length on the server.
+
 ## 2026-10-30 — `docs/architecture.md` is at the repo root, where neither drift gate can reach it
 - **What:** the new system and deploy diagrams live at `../docs/architecture.md`, and nothing
   gates their captions. Both copies of the drift gate set `DRIFT_ROOT=package` and run from their

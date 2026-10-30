@@ -132,3 +132,10 @@ Bump `certifi` through the lock (slice 1). Replace `python-jose` with `PyJWT` in
 ## Spec Deltas
 
 *(Dated entries, added as the build teaches us the spec was wrong.)*
+
+**2026-10-30 — open question 1 answered: PyJWT warns about a short key and accepts it.** PyJWT
+2.15.1, the version both locks pin, raises `InsecureKeyLengthWarning` on encode and on decode for an
+HMAC key under 32 bytes and does not refuse it (`enforce_minimum_key_length` defaults to off). CI's
+22-byte `SECRET_KEY` therefore stays green with the warning. The Owner decided CI's key stays as it
+is. Production's key length is unchecked and only the Owner can check it on the server; that is
+open in `api/REVIEW-DEBT.md`, 2026-10-30, *PyJWT warns about a short HMAC key and accepts it*.
