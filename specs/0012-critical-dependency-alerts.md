@@ -121,6 +121,14 @@ Bump `certifi` through the lock (slice 1). Replace `python-jose` with `PyJWT` in
 
 *(Filled by `/verify-live`.)*
 
+**Slice 1 (certifi), verified 2026-10-30 by dev-qa at `220e6af`. Slice verdict: MET** (AC-1, AC-2).
+
+| # | Verdict | Evidence |
+|---|---|---|
+| AC-1 | MET | `git diff 745dee0 220e6af --stat` touches only `api/requirements.txt` and `api/requirements-dev.txt`, one line each: `certifi==2026.7.22` → `certifi==2026.10.23`. `api/venv` has certifi 2026.10.23 installed. The advisory (GHSA-6q48-6c7w-9gw2, read with `gh api /advisories/...`) names one root, `emSign ECC Root CA - G3`. The 2026.7.22 bundle (from `pip download`) holds 121 certs and 4 emSign roots: G1, ECC G3, C1, ECC C3. The 2026.10.23 bundle holds 118 certs and 1 emSign root, `emSign Root CA - G1`, which the advisory does not name. G3 is gone. C1 and ECC C3 are gone too, although the advisory does not name them either: of the four emSign roots in 2026.7.22, only G1 remains in 2026.10.23. The API makes no outbound TLS call that would need them. Drift check 7: `./scripts/drift-check.sh 745dee0..220e6af` → clean, exit 0 |
+| AC-2 | MET | dev-qa reran it rather than relying on the builder's run: `just check` on the 5439 test database, `api/venv/bin` first on PATH → exit 0, `581 passed, 26 warnings in 514.11s`, `✓ all gates green`. `api/.harness-baseline` is byte-identical before and after the run, and `git diff 745dee0 HEAD -- api/.harness-baseline` is empty |
+| AC-10 | NOT CHECKED | post-merge; not slice 1's to verify yet |
+
 ## Spec Deltas
 
 *(Dated entries, added as the build teaches us the spec was wrong.)*
