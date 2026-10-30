@@ -79,9 +79,14 @@ cut (`/confess`), read first by any architecture or review session, dispositione
   `just check` inherits it. `just check-fast` calls `./venv/bin/...` and does not.
 - **Why it is not fixed here:** spec 0011 is a docs-and-API slice, and this is the justfile. Hit
   once during its build.
-- **What the green tests do not prove:** nothing false passes. The failure is loud, but it looks
-  like a broken dependency rather than a missing `source venv/bin/activate`.
-- **Disposition:** open.
+- **What the green tests do not prove:** this entry said nothing false passes. That was wrong: a
+  `pytest` that is on PATH but is not the venv's can exit 0. In a clone with no venv and a decoy
+  `pytest` first on PATH, `just test` ran the decoy and reported success.
+- **Disposition:** fixed 2026-10-30 on branch `fix/just-check-venv-path`. The justfile exports PATH
+  with its own `venv/bin` first, so every bare `pytest`, `uvicorn`, `alembic` and `python` in a
+  recipe is the venv's, and the four test recipes depend on a private `_venv` recipe that refuses
+  to run, naming `just install`, when `venv/bin/pytest` is missing. Shown both ways: with no
+  `pytest` on PATH at all `just check` passes, and with no venv the decoy no longer runs.
 
 ## 2026-10-29 — the drift gate synced to devkit 0b08866, and what the sync found
 - **What:** `scripts/drift-check.sh` is devkit's template byte-for-byte again, and

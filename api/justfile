@@ -1,9 +1,23 @@
 # Student Attendance Tracker API - Justfile
 # Run 'just --list' to see all available commands
 
+# This package's own venv comes first on every recipe's PATH, so a bare `pytest`, `uvicorn`,
+# `alembic` or `python` is the venv's whether or not the shell activated it. With no venv the
+# lookup falls through to whatever else is on PATH, which is why the test recipes also need `_venv`.
+export PATH := justfile_directory() / "venv/bin" + ":" + env_var("PATH")
+
 # Default recipe (runs when you just type 'just')
 default:
     @just --list
+
+# Refuse to run the suite on some other pytest: a system one dies at conftest's imports with an
+# error that looks like a broken dependency, not a missing venv (api/REVIEW-DEBT.md, 2026-10-30).
+[private]
+_venv:
+    @if [ ! -x ./venv/bin/pytest ]; then \
+        echo "api/venv/bin/pytest not found. Create the venv first: just install"; \
+        echo "  (or ../scripts/bootstrap.sh, which also sets the hooks and the client)"; exit 1; \
+    fi
 
 # Install dependencies in virtual environment: the runtime lock plus the suite and the gates
 # (requirements-dev.txt, spec 0007). The image installs requirements.txt alone.
@@ -37,7 +51,7 @@ test-db-down:
 
 # Run all tests. Requires TEST_DATABASE_URL to be set — the fixtures DROP tables, so the target
 # database is named explicitly and never guessed from a default port (see tests/conftest.py).
-test:
+test: _venv
     @if [ -z "${TEST_DATABASE_URL:-}" ]; then \
         echo "TEST_DATABASE_URL is not set. These tests create and DROP tables."; \
         echo "  eval \"$(just test-db-up)\"    # throwaway database on port 5439"; \
@@ -46,16 +60,16 @@ test:
     pytest -v
 
 # Run tests with coverage report
-test-cov:
+test-cov: _venv
     pytest --cov=app --cov-report=html --cov-report=term
     @echo "✓ Coverage report generated in htmlcov/index.html"
 
 # Run specific test file
-test-file file:
+test-file file: _venv
     pytest {{file}} -v
 
 # Run fast tests (skip slow ones)
-test-fast:
+test-fast: _venv
     pytest -v -m "not slow"
 
 # Apply database migrations
