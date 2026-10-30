@@ -6,6 +6,44 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 
 <!-- Newest first. -->
 
+## 2026-10-30 — `docs/architecture.md` is at the repo root, where neither drift gate can reach it
+- **What:** the new system and deploy diagrams live at `../docs/architecture.md`, and nothing
+  gates their captions. Both copies of the drift gate set `DRIFT_ROOT=package` and run from their
+  own package, so check 13 — a `**Code:**` caption citing a path that is not in the repo — reads
+  `api/**/*.md` from here and `client/**/*.md` from there, and never the root. The root
+  pre-commit dispatcher agrees: it runs gates only when something under `api/`, `deployment/` or
+  `client/` is staged, so a commit touching only root documents runs nothing at all. That is not
+  new (`specs/`, `AGENTS.md` and `docs/agents/` have always been outside both gates), but a
+  diagram is the first root document whose rot a gate could have caught.
+- **Why it is not fixed here:** the fix is a third copy of the gate at the repo root, and
+  devkit's default `DRIFT_ROOT=repo` would then police `api/` and `client/` a second time, with
+  every root-level `.md` — `AGENTS.md`, every spec — newly subject to checks nobody has run over
+  them. That is a workflow change for every commit in the repository, and it is the Owner's call,
+  not a side effect of adding a diagram.
+- **What the green tests do not prove:** that `docs/architecture.md`'s captions still point at
+  code that exists. Every path in it was checked by hand on 2026-10-30 and all of them resolved;
+  the next rename is unguarded. `api/docs/schema.gen.md` is inside the gate's reach and both
+  check 12 and check 13 were watched failing on it.
+- **Disposition:** open — a root gate, or a `DRIFT_PATHS`-style narrowing in devkit's template.
+
+## 2026-10-30 — the ERD reads the migrations, the suite reads the models, and nothing compares them
+- **What:** `docs/schema.gen.md` is introspected from `alembic upgrade head` on an empty
+  database, which is what production runs. `tests/conftest.py` builds its schema with
+  `Base.metadata.create_all` from `app/models/`, which is not. Nothing in the repository compares
+  the two: `alembic check` is not wired into any gate, and until `tests/test_schema_doc.py` landed
+  nothing exercised the migration chain at all.
+- **Measured 2026-10-30:** `alembic check` against a freshly migrated database reports **no new
+  upgrade operations** — the models and the migrations agree today. That is a reading, not a
+  guarantee.
+- **Why it is not fixed here:** a drift gate between the two is a new gate, and which gates exist
+  is the Owner's decision. The machinery is already there — the same throwaway database
+  `render_from_migrations` creates, plus `alembic check` — so it is roughly ten lines in
+  `tests/test_schema_doc.py` whenever it is wanted.
+- **What the green tests do not prove:** that the schema the suite runs against is the schema
+  production has. If the two drift, the diagram stays right about production, the tests stay
+  green against something else, and nothing says so.
+- **Disposition:** open.
+
 ## 2026-10-30 — a reversed range is 200 on the list endpoint and 422 on `/statistics`
 - **What:** `date_from` later than `date_to` returns `200` with no items from
   `GET /classes/{id}/attendance`, and `422 "date_from must not be later than date_to"` from

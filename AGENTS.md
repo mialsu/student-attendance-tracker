@@ -330,6 +330,7 @@ student-attendance-tracker/          ONE repository, github.com/mialsu (since 20
 ├── deployment/                      compose, nginx, SSL and backup scripts, plus the
 │   ├── local/  production/ scripts/ operational notes that go with them
 ├── .github/workflows/               backend.yml · frontend.yml · security.yml
+├── docs/architecture.md             what runs where, and the deploy; docs/agents/ beside it
 ├── AGENTS.md  CLAUDE.md  GLOSSARY-MAP.md  BACKLOG.html  README.md
 ```
 
@@ -432,6 +433,13 @@ commit ships the whole deployable unit.
    - Multi-backend setup documentation (host multiple projects on same VM)
 
 4. **Documentation**
+   - What runs where, and the deploy flow, drawn (`docs/architecture.md`). Every diagram in this
+     repository is Mermaid inside the document that owns its subject, carries a caption naming the
+     code it describes, and is generated from its source wherever one exists (devkit METHOD.md,
+     *Diagrams*). **The tables are generated:** `api/docs/schema.gen.md` is introspected from the
+     migrations by `cd api && eval "$(just test-db-up)" && just erd`, never written by hand.
+     `api/tests/test_schema_doc.py` fails when it and `api/alembic/versions/` disagree, and drift
+     check 12 fails a commit that regenerates it and leaves it out.
    - API reference with examples (`api/docs/API_REFERENCE.md`)
    - Testing guides (`api/docs/TESTING_GUIDE.md`, `api/docs/TEST_QUICK_START.md`)
    - Decisions with their rejected alternatives (`api/docs/adr/`, `client/docs/adr/`)

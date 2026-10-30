@@ -13,6 +13,11 @@
 # The devkit commit drift-check.sh was copied from: `/harness sync`'s base.
 DEVKIT_GATE=69b1875
 
+# The command that rewrites docs/schema.gen.md, named in check 12's advice so the fix is the next
+# thing you type rather than something to go and look up. It needs a database: the generator
+# creates a throwaway one on the TEST_DATABASE_URL server, migrates it, reads it and drops it.
+ERD_CMD='eval "$(just test-db-up)" && just erd'
+
 # Police api/ only, from api/ (devkit's template, DRIFT_ROOT). Every relative path in this package
 # (./venv/bin/ruff, .harness-baseline, app/, tests/) assumes this directory, not the git root.
 DRIFT_ROOT=package
