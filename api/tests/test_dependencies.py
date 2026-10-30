@@ -77,7 +77,7 @@ class TestGetCurrentUser:
     async def test_get_current_user_token_missing_email(self, db: AsyncSession):
         """Test with token missing email (sub claim)."""
         from app.core.security import create_access_token as _create_token
-        from jose import jwt
+        import jwt
         from datetime import datetime, timedelta, timezone
         from app.config import settings
 
