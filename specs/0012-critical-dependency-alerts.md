@@ -152,3 +152,9 @@ HMAC key under 32 bytes and does not refuse it (`enforce_minimum_key_length` def
 22-byte `SECRET_KEY` therefore stays green with the warning. The Owner decided CI's key stays as it
 is. Production's key length is unchecked and only the Owner can check it on the server; that is
 open in `api/REVIEW-DEBT.md`, 2026-10-30, *PyJWT warns about a short HMAC key and accepts it*.
+
+**2026-10-30 — one PR, not two (Implementation Decision 1).** The Owner merged the two slices into
+one pull request from `fix/0012-pyjwt`. Both slices were verified and reviewed together, and slice
+2's branch was cut from slice 1's, so it already contained every slice 1 commit. A separate slice 1
+PR would only have been merged and then rebased away. `fix/0012-critical-dependency-alerts` gets
+no PR. AC-10 is checked once, after this one PR merges, for all six alerts.
