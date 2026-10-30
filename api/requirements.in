@@ -25,7 +25,9 @@ asyncpg>=0.29.0
 alembic>=1.12.0
 
 # Auth & Security
-python-jose[cryptography]>=3.3.0
+# PyJWT makes and verifies every token, HS256 only (app/core/security.py). It replaced python-jose,
+# whose critical algorithm-confusion advisory has no fix and which pulled in ecdsa (ADR-0012).
+PyJWT>=2.10.0
 passlib[bcrypt]>=1.7.4
 bcrypt>=4.0.0,<5.0.0  # 4.x for passlib compatibility
 python-multipart>=0.0.6

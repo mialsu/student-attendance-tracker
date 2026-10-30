@@ -615,9 +615,11 @@ client/scripts/drift-extra.sh:34 &mdash; the check that would ban them in a new 
           fixed version exists. It arrives with <code>python-jose</code>. This API signs HS256 only, so
           nothing reaches it today; it becomes real only if <code>ALGORITHM</code> is ever set to an
           ES* value. PyJWT in place of <code>python-jose</code> removes it, a change to the one module
-          that makes tokens</td>
+          that makes tokens. <strong>Fixed 30 Oct:</strong> the Owner chose replacement (ADR-0012), and
+          spec 0012 put PyJWT in <code>python-jose</code>&rsquo;s place; <code>ecdsa</code> left both locks
+          with it</td>
         <td class="where">api/REVIEW-DEBT.md, 1 Oct &mdash; app/core/security.py</td>
-        <td class="st"><span class="chip hold">your call</span></td>
+        <td class="st"><span class="chip done">fixed 30 Oct</span></td>
       </tr>
       <tr>
         <td><strong>react-router 7 and vite 6 are majors Dependabot never proposes.</strong> Each fixes

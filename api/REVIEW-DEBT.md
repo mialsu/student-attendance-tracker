@@ -6,6 +6,22 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 
 <!-- Newest first. -->
 
+## 2026-10-30 — PyJWT warns about a short HMAC key and accepts it; production's key length is unchecked
+- **What:** PyJWT 2.15.1, pinned in both locks since spec 0012 slice 2, raises
+  `InsecureKeyLengthWarning` on encode and on decode when the HMAC key is under 32 bytes, and signs
+  and verifies with it anyway. Refusal needs `enforce_minimum_key_length`, which defaults to off
+  and this API does not set. CI's `SECRET_KEY` (`test-secret-key-for-ci`, `.github/workflows/backend.yml`)
+  is 22 bytes, so CI warns and stays green; `tests/test_security.py` signs with the same key and
+  shows the warning in every run.
+- **Why it is open:** the length of production's `SECRET_KEY` has not been checked. It lives only
+  on the server, and only the Owner can read it there. If it is under 32 bytes, PyJWT accepts it
+  and logs the warning on every token.
+- **Where:** `app/core/security.py`, the server's `.env`, `.github/workflows/backend.yml`.
+- **What green tests do NOT prove here:** anything about production's key. CI's key is short by
+  the Owner's choice (spec 0012, Spec Deltas 2026-10-30), and neither the warning nor the key is
+  silenced or changed.
+- **Disposition:** open, for the Owner: check production's key length on the server.
+
 ## 2026-10-30 — `docs/architecture.md` is at the repo root, where neither drift gate can reach it
 - **What:** the new system and deploy diagrams live at `../docs/architecture.md`, and nothing
   gates their captions. Both copies of the drift gate set `DRIFT_ROOT=package` and run from their
@@ -153,8 +169,9 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 - **Where:** `requirements.txt` (`ecdsa`, transitive), `app/core/security.py`.
 - **What green tests do NOT prove here:** that nobody sets `ALGORITHM` to an ES* value. Nothing
   refuses one, and that is the configuration under which this alert becomes real.
-- **Disposition:** open, for the Owner. Accept it with the reason above, or replace `python-jose`
-  (which brings `ecdsa`) with PyJWT, a change to the one module that makes tokens.
+- **Disposition:** closed 2026-10-30 by spec 0012 slice 2. The Owner chose replacement (ADR-0012):
+  PyJWT makes and verifies every token, and `ecdsa` left both locks with `python-jose`. GitHub
+  marks the alert fixed only once that change merges (spec 0012, AC-10).
 
 ## 2026-10-01 — ADR-0009 overrode spec 0007's pinning decision, and never cited it
 - **What:** on 2026-09-11 the Owner decided in `specs/0007-operational-gaps.md` how dependencies

@@ -22,20 +22,14 @@ bcrypt==4.3.0
     # via
     #   -r requirements.in
     #   passlib
-certifi==2026.7.22
+certifi==2026.10.23
     # via requests
-cffi==2.1.1
-    # via cryptography
 charset-normalizer==3.5.2
     # via requests
 click==8.5.0
     # via uvicorn
-cryptography==50.0.2
-    # via python-jose
 dnspython==2.8.0
     # via email-validator
-ecdsa==0.19.2
-    # via python-jose
 email-validator==2.3.0
     # via -r requirements.in
 fastapi==0.142.2
@@ -112,12 +106,6 @@ protobuf==7.36.2
     # via
     #   googleapis-common-protos
     #   opentelemetry-proto
-pyasn1==0.6.4
-    # via
-    #   python-jose
-    #   rsa
-pycparser==3.0
-    # via cffi
 pydantic==2.13.5
     # via
     #   -r requirements.in
@@ -127,22 +115,18 @@ pydantic-core==2.46.5
     # via pydantic
 pydantic-settings==2.15.0
     # via -r requirements.in
+pyjwt==2.15.1
+    # via -r requirements.in
 python-dotenv==1.2.3
     # via
     #   pydantic-settings
     #   uvicorn
-python-jose==3.5.0
-    # via -r requirements.in
 python-multipart==0.0.32
     # via -r requirements.in
 pyyaml==6.0.3
     # via uvicorn
 requests==2.34.2
     # via opentelemetry-exporter-otlp-proto-http
-rsa==4.9.1
-    # via python-jose
-six==1.17.0
-    # via ecdsa
 sqlalchemy==2.0.54
     # via
     #   -r requirements.in
