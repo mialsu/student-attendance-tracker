@@ -81,6 +81,16 @@ migrate-status:
 migrate-history:
     alembic history
 
+# It creates a throwaway database on the TEST_DATABASE_URL server, runs `alembic upgrade head`
+# into it the way the deploy job does, reads what that produced and drops it again — the database
+# in the URL is only connected to in order to issue CREATE/DROP DATABASE, and is never written to.
+#   eval "$(just test-db-up)" && just erd
+# tests/test_schema_doc.py fails when the committed diagram and the migrations disagree, and this
+# is the command that answers it. The file is generated: never edit it by hand.
+# Redraw docs/schema.gen.md from the migrations (devkit METHOD.md, Diagrams)
+erd:
+    ./venv/bin/python scripts/erd.py
+
 # Authorized by database access, not by a role (ADR-0003): it runs wherever DATABASE_URL points
 # at the database you mean.
 # Issue a registration code for an email address, valid 24 hours
