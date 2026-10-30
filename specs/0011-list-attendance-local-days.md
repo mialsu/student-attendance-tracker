@@ -138,3 +138,21 @@ None. #39 settled the shape, and the Owner accepted the 422 contract change in i
 ## Spec Deltas
 
 *(Dated entries, added as the build teaches us the spec was wrong.)*
+
+**2026-10-30 — the `date_from` mechanism was misstated; the defect stands where it matters.** The
+Problem Statement says asyncpg reads a naive `datetime` as UTC. It reads it as the **process's**
+local time: the encoder calls `obj.astimezone(utc)` (`asyncpg/pgproto/codecs/datetime.pyx`), and a
+naive `astimezone` assumes the system zone. On a developer machine set to `Europe/Helsinki` a bare
+`date_from` therefore lands on local midnight by accident, and AC-1 is green against the old code.
+Under `TZ=UTC` — what CI and the production container run, since no `TZ` is set in the
+`Dockerfile`, either compose file or `backend.yml` — AC-1 is red 2/2. AC-1's "watched failing" is
+recorded as a `TZ=UTC pytest …` run. After the fix no naive `datetime` reaches the query, so the
+test passes under any zone. Found by the builder's red run.
+
+**2026-10-30 — AC-2's "watched failing" is shown through a nonzero time, because no midnight
+spelling separates old from new.** Every input that stays valid after the fix (`D`, `DT00:00:00Z`,
+`+02:00`, `+03:00`) already gives the named day through `.date()`, so AC-2 is green against the old
+code 8/8 under both zones. The `.date()` defect needs a nonzero time (CI's `21:13:51Z`), which the
+fix refuses with 422. AC-2's test stays as the post-fix contract; its red evidence is AC-5 red
+against the old code plus a pinned repro of the CI case (a `Z` instant at 21:13 dropping the record
+at that instant), both recorded in the build handoff. Found by the builder's red run.
