@@ -6,6 +6,29 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 
 <!-- Newest first. -->
 
+## 2026-10-30 — a reversed range is 200 on the list endpoint and 422 on `/statistics`
+- **What:** `date_from` later than `date_to` returns `200` with no items from
+  `GET /classes/{id}/attendance`, and `422 "date_from must not be later than date_to"` from
+  `GET /classes/{id}/attendance/statistics`. `get_attendance_statistics` checks the order and
+  `list_attendance_for_class` does not. That was true before spec 0011 and is still true after it.
+- **Why it is not fixed here:** spec 0011 moved the two boundaries and its AC-6 claims only that
+  the endpoints return the same boundary rows, which they do. Refusing a reversed range is a
+  behaviour change of its own that spec 0011 did not ask for. Found by QA on 2026-10-30.
+- **What the green tests do not prove:** that the two endpoints read `date_from`/`date_to` by
+  one rule, which spec 0011's US-6 asks for. They agree on every range a caller would mean, and
+  disagree on the one that is a mistake.
+- **Disposition:** open, for a later spec.
+
+## 2026-10-30 — `just test` runs whatever `pytest` is first on the PATH
+- **What:** the `test` recipe calls bare `pytest`, so without an activated venv it runs a system
+  pytest, which dies at `tests/conftest.py`'s import on `No module named 'opentelemetry'` (exit 4).
+  `just check` inherits it. `just check-fast` calls `./venv/bin/...` and does not.
+- **Why it is not fixed here:** spec 0011 is a docs-and-API slice, and this is the justfile. Hit
+  once during its build.
+- **What the green tests do not prove:** nothing false passes. The failure is loud, but it looks
+  like a broken dependency rather than a missing `source venv/bin/activate`.
+- **Disposition:** open.
+
 ## 2026-10-29 — the drift gate synced to devkit 0b08866, and what the sync found
 - **What:** `scripts/drift-check.sh` is devkit's template byte-for-byte again, and
   `scripts/drift-extra.sh` is folded into `scripts/drift-check.local.sh`'s `local_checks` (the
@@ -1685,6 +1708,13 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 - **Where:** `API_REFERENCE.md`, `docs/API_REFERENCE.md`
 - **Disposition:** open. Noticed while fixing the 7-vs-30 drift; deleting one and leaving a pointer
   is a two-minute job that was left alone because it is not this audit's subject.
+- **2026-10-30 — still open, and it bit again.** Spec 0011's review found `api/API_REFERENCE.md`
+  still documenting the list endpoint's dates as ISO 8601 instants, which the endpoint now refuses
+  with 422. Git has no edit to that copy since the `e135227` subtree merge, and no document links
+  to it; `docs/API_REFERENCE.md` is the one the project cites. Spec 0011 patched only its own lines
+  there (the list endpoint's `date_from`/`date_to` and its date-range curl), word for word from
+  `docs/API_REFERENCE.md`, and left the rest as it was. Deleting the copy is the Owner's call.
+  Recommendation: delete it.
 
 ## 2026-09-02 — the Dockerfile copies the whole build context, and this entry was itself owed
 - **What:** `Dockerfile:25` is `COPY . .` and there is **no `.dockerignore`**. Whatever sits in the

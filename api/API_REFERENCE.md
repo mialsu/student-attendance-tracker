@@ -825,8 +825,10 @@ Authorization: Bearer <access_token>
 - `skip` (optional): Number of records to skip (default: 0)
 - `limit` (optional): Maximum records to return (1-500, default: 100)
 - `student_name` (optional): Filter by student name (case-insensitive, partial match)
-- `date_from` (optional): Filter by start date (ISO 8601 format)
-- `date_to` (optional): Filter by end date (ISO 8601 format)
+- `date_from` (optional): First day to include (`YYYY-MM-DD`), inclusive. A local day
+  (`APP_TIMEZONE`, default Europe/Helsinki), not a UTC one
+- `date_to` (optional): Last day to include (`YYYY-MM-DD`), inclusive of that whole local day. A
+  time of day such as `T23:59:59Z` on either parameter is refused with 422 (ADR-0011)
 - `legacy` (optional): Include legacy students (default: None/false excludes them)
 
 **Response (200 OK):**
@@ -998,8 +1000,8 @@ curl -X GET "http://localhost:8000/api/classes/{class_id}/attendance?legacy=true
 curl -X GET "http://localhost:8000/api/classes/{class_id}/attendance?student_name=john&limit=50" \
   -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
 
-# Date range filter
-curl -X GET "http://localhost:8000/api/classes/{class_id}/attendance?date_from=2025-10-01T00:00:00Z&date_to=2025-10-31T23:59:59Z" \
+# Date range filter: the whole of October, 1st and 31st included, in local days
+curl -X GET "http://localhost:8000/api/classes/{class_id}/attendance?date_from=2025-10-01&date_to=2025-10-31" \
   -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
 ```
 
