@@ -423,15 +423,15 @@ class TestListAttendanceForClass:
         db.add_all([old_record, new_record])
         await db.commit()
 
-        # Filter from 5 days ago
-        cutoff = datetime.now(timezone.utc) - timedelta(days=5)
+        # Filter from 5 days ago -- a day name, since spec 0011
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=5)).date()
         records, total = await attendance_service.list_attendance_for_class(
             db, test_class.id, test_user, date_from=cutoff
         )
 
         # Should only have new record
-        assert len(records) >= 1
-        assert all(r.timestamp >= cutoff for r in records)
+        assert [r.student.name for r in records] == ["New Record"]
+        assert total == 1
 
     async def test_list_attendance_filter_by_date_to(
         self, db: AsyncSession, test_class: Class, test_user: User
@@ -468,15 +468,15 @@ class TestListAttendanceForClass:
         db.add_all([past_record, recent_record])
         await db.commit()
 
-        # Filter up to 5 days ago
-        cutoff = datetime.now(timezone.utc) - timedelta(days=5)
+        # Filter up to 5 days ago -- a day name, since spec 0011
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=5)).date()
         records, total = await attendance_service.list_attendance_for_class(
             db, test_class.id, test_user, date_to=cutoff
         )
 
         # Should only have past record
-        assert len(records) >= 1
-        assert all(r.timestamp <= cutoff for r in records)
+        assert [r.student.name for r in records] == ["Past Record"]
+        assert total == 1
 
     async def test_list_attendance_ordered_by_timestamp_desc(
         self, db: AsyncSession, test_class: Class, test_user: User

@@ -87,7 +87,7 @@ class TestListAttendance:
         """Test filtering attendance by date range."""
         from urllib.parse import quote
         
-        today = datetime.now(timezone.utc)
+        today = datetime.now(timezone.utc).date()
         yesterday = today - timedelta(days=1)
         tomorrow = today + timedelta(days=1)
         
@@ -776,8 +776,8 @@ class TestDateFiltering:
             },
         )
 
-        # Filter from 5 days ago
-        cutoff = datetime.now(timezone.utc) - timedelta(days=5)
+        # Filter from 5 days ago -- a day name, since spec 0011
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=5)).date()
         response = await client.get(
             f"/api/classes/{test_class.id}/attendance?date_from={quote(cutoff.isoformat())}",
             headers=auth_headers,
@@ -819,8 +819,8 @@ class TestDateFiltering:
             },
         )
 
-        # Filter up to 5 days ago
-        cutoff = datetime.now(timezone.utc) - timedelta(days=5)
+        # Filter up to 5 days ago -- a day name, since spec 0011
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=5)).date()
         response = await client.get(
             f"/api/classes/{test_class.id}/attendance?date_to={quote(cutoff.isoformat())}",
             headers=auth_headers,
@@ -837,13 +837,19 @@ class TestDateFiltering:
     async def test_filter_by_both_dates(
         self, client: AsyncClient, auth_headers: dict, test_class: Class, db
     ):
-        """Test filtering with both date_from and date_to."""
+        """Test filtering with both date_from and date_to.
+
+        Spec 0011 AC-4: pinned dates, not the clock. Built from `datetime.now()` this failed only
+        when the suite started in the last two or three hours of the UTC day -- CI on `main` at
+        21:13Z on 2026-10-29 -- because `date_to` then named a different day than the instant it
+        carried. 12:00Z is 14:00 or 15:00 local, so every record sits mid-day.
+        """
         from urllib.parse import quote
 
         # Create records at different times via API
-        base_date = datetime.now(timezone.utc)
+        base_date = datetime(2026, 3, 20, 12, 0, tzinfo=timezone.utc)
 
-        for i in range(15):  # 0 to 14 days ago
+        for i in range(15):  # 0 to 14 days before the 20th
             await client.post(
                 f"/api/classes/{test_class.id}/attendance",
                 headers=auth_headers,
@@ -853,9 +859,9 @@ class TestDateFiltering:
                 },
             )
 
-        # Filter for days 5-10
-        date_from = base_date - timedelta(days=10)
-        date_to = base_date - timedelta(days=5)
+        # Filter for days 5-10: the 10th to the 15th
+        date_from = (base_date - timedelta(days=10)).date()
+        date_to = (base_date - timedelta(days=5)).date()
 
         response = await client.get(
             f"/api/classes/{test_class.id}/attendance"
@@ -882,8 +888,9 @@ class TestListEndDayIsWhole:
     rather than in spec 0008, because this spec rewrites the same comparison for the timezone and
     leaving the two endpoints on different rules is the defect it exists to end.
 
-    The parameter stays typed `datetime` -- no surface exposes it and spec 0009 has no reason to
-    change the contract. Only the end boundary moved.
+    Spec 0009 kept the parameter typed `datetime`; spec 0011 made both of the list endpoint's
+    dates `date`, so the request below names the day plainly. `TestListReadsLocalDays` covers
+    the other spellings and the start of the day.
     """
 
     async def _log(self, client, auth_headers, class_id, name: str, instant: str):
@@ -910,8 +917,9 @@ class TestListEndDayIsWhole:
 
         response = await client.get(
             f"/api/classes/{test_class.id}/attendance"
-            f"?date_from=2026-04-10T00:00:00%2B03:00&date_to=2026-04-10T00:00:00%2B03:00"
-        , headers=auth_headers)
+            "?date_from=2026-04-10&date_to=2026-04-10",
+            headers=auth_headers,
+        )
 
         assert response.status_code == 200, response.text
         names = sorted(r["student_name"] for r in response.json()["items"])
@@ -919,6 +927,130 @@ class TestListEndDayIsWhole:
             "date_to must cover its whole local day: 'Last Second' is 23:59:59 on the 10th and "
             "'Next Day' is 00:00 on the 11th."
         )
+
+
+# Spec 0011 — one local day per case, at both DST offsets: the record 30 minutes into the day,
+# the one 30 minutes before it, the last half hour of it, and the first half hour after it.
+LIST_DAY_CASES = [
+    pytest.param(
+        "2026-01-15",
+        "2026-01-14T22:30:00Z",  # 2026-01-15 00:30 local
+        "2026-01-14T21:30:00Z",  # 2026-01-14 23:30 local
+        "2026-01-15T21:30:00Z",  # 2026-01-15 23:30 local
+        "2026-01-15T22:30:00Z",  # 2026-01-16 00:30 local
+        id="winter +02",
+    ),
+    pytest.param(
+        "2026-07-15",
+        "2026-07-14T21:30:00Z",
+        "2026-07-14T20:30:00Z",
+        "2026-07-15T20:30:00Z",
+        "2026-07-15T21:30:00Z",
+        id="summer +03",
+    ),
+]
+
+
+@pytest.mark.asyncio
+class TestListReadsLocalDays:
+    """Spec 0011 — both of the list endpoint's dates name a local day, by the statistics rule.
+
+    `date_from` was an instant compared raw, so a bare day parsed to a naive midnight that asyncpg
+    reads as UTC, and the first two or three local hours of the day it named were dropped.
+    `date_to` read its wall-clock fields in whatever offset the caller wrote. Both are `date` now
+    and both bounds go through `_local_midnight`, the half-open rule `/statistics` uses.
+
+    Every case runs in January (+02) and July (+03), so a hardcoded offset fails one of them.
+    """
+
+    async def _log(self, client, auth_headers, class_id, name: str, instant: str):
+        response = await client.post(
+            f"/api/classes/{class_id}/attendance",
+            headers=auth_headers,
+            json={"student_name": name, "timestamp": instant},
+        )
+        assert response.status_code == 201, response.text
+
+    async def _names(self, client, auth_headers, class_id, **params) -> list[str]:
+        response = await client.get(
+            f"/api/classes/{class_id}/attendance", headers=auth_headers, params=params
+        )
+        assert response.status_code == 200, response.text
+        return sorted(r["student_name"] for r in response.json()["items"])
+
+    # AC-1, AC-3
+    @pytest.mark.parametrize("local_day,first,before,last,after", LIST_DAY_CASES)
+    async def test_date_from_includes_the_first_hours_of_its_local_day(
+        self, client, auth_headers, test_class, local_day, first, before, last, after
+    ):
+        await self._log(client, auth_headers, test_class.id, "First Hour", first)
+        await self._log(client, auth_headers, test_class.id, "Day Before", before)
+
+        names = await self._names(client, auth_headers, test_class.id, date_from=local_day)
+
+        assert names == ["First Hour"]
+
+    # AC-2, AC-3. Every spelling of midnight names the same day; the offset is not a time zone.
+    @pytest.mark.parametrize(
+        "spelling", ["{}", "{}T00:00:00Z", "{}T00:00:00+02:00", "{}T00:00:00+03:00"]
+    )
+    @pytest.mark.parametrize("local_day,first,before,last,after", LIST_DAY_CASES)
+    async def test_date_to_includes_its_whole_local_day_in_any_offset(
+        self, client, auth_headers, test_class, local_day, first, before, last, after, spelling
+    ):
+        await self._log(client, auth_headers, test_class.id, "Last Hour", last)
+        await self._log(client, auth_headers, test_class.id, "Day After", after)
+
+        names = await self._names(
+            client, auth_headers, test_class.id, date_to=spelling.format(local_day)
+        )
+
+        assert names == ["Last Hour"]
+
+    # AC-5
+    @pytest.mark.parametrize("param", ["date_from", "date_to"])
+    async def test_a_time_of_day_is_refused_rather_than_truncated(
+        self, client, auth_headers, test_class, param
+    ):
+        response = await client.get(
+            f"/api/classes/{test_class.id}/attendance",
+            headers=auth_headers,
+            params={param: "2026-04-10T23:59:59Z"},
+        )
+
+        assert response.status_code == 422, response.text
+
+    # AC-6
+    @pytest.mark.parametrize("local_day,first,before,last,after", LIST_DAY_CASES)
+    async def test_the_list_and_statistics_agree_on_the_same_named_range(
+        self, client, auth_headers, test_class, local_day, first, before, last, after
+    ):
+        for name, instant in [
+            ("First Hour", first),
+            ("Day Before", before),
+            ("Last Hour", last),
+            ("Day After", after),
+        ]:
+            await self._log(client, auth_headers, test_class.id, name, instant)
+        params = {"date_from": local_day, "date_to": local_day}
+
+        listed = await client.get(
+            f"/api/classes/{test_class.id}/attendance", headers=auth_headers, params=params
+        )
+        stats = await client.get(
+            f"/api/classes/{test_class.id}/attendance/statistics",
+            headers=auth_headers,
+            params=params,
+        )
+
+        assert listed.status_code == 200, listed.text
+        assert stats.status_code == 200, stats.text
+        assert sorted(r["student_name"] for r in listed.json()["items"]) == [
+            "First Hour",
+            "Last Hour",
+        ]
+        assert listed.json()["total"] == stats.json()["total_records"] == 2
+        assert [row["date"] for row in stats.json()["daily_stats"]] == [local_day]
 
 
 class TestAttendancePermissions:

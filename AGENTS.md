@@ -12,6 +12,12 @@ Domain profile: **web**, domain dial **on** (see *Domain model, crunched 2026-09
 - Never push, open a PR, deploy, publish, or release without the Owner's explicit go. Local
   commits are fine; anything that leaves this machine is an explicit keystroke. Here that matters
   twice: **every push to `main` that passes its gates deploys to production** (see *CI/CD*).
+
+  **Standing grant (Owner, 2026-10-30) — review PRs:** an agent leading a slice (the crew's
+  architect) may push that slice's own topic branch and open its pull request against `main` once
+  the slice's QA verdicts and code review are in, with the body in `/pr`'s shape. Nothing else
+  leaves under this grant: never push `main` or another branch, never force-push, never merge,
+  close or approve a PR. Merging is the Owner's keystroke.
 - Never spend money, add API keys, or send anything to a real external recipient without asking.
 - Never run a destructive command on shared or irreplaceable state.
 - **Never sign a commit, PR, or issue as an agent.** No `Co-Authored-By:` trailer naming a model

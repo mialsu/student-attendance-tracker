@@ -70,8 +70,8 @@ async def list_attendance_for_class(
     skip: int = 0,
     limit: int = 100,
     student_name: str | None = None,
-    date_from: datetime | None = None,
-    date_to: datetime | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
 ) -> tuple[list[AttendanceRecord], int]:
     """
     List attendance records for a class with optional filters.
@@ -83,8 +83,8 @@ async def list_attendance_for_class(
         skip: Number of records to skip
         limit: Maximum number of records
         student_name: Filter by student name (case-insensitive, partial match)
-        date_from: Filter by start date
-        date_to: Filter by end date
+        date_from: Optional first local day to include, inclusive
+        date_to: Optional last local day to include, inclusive of that whole day
 
     Returns:
         Tuple of (list of attendance records, total count)
@@ -114,17 +114,18 @@ async def list_attendance_for_class(
 
     # Apply date filters.
     #
-    # `date_to` names a DAY, and the whole of it counts. It compared `<=` against a `datetime`
-    # until spec 0009, so an end date parsed to midnight and silently dropped every record of the
-    # day it named. The bound is now the start of the following local day, exclusive -- the same
-    # half-open rule `get_attendance_statistics` uses, so the two endpoints read the parameter
-    # identically. The type stays `datetime` because no surface exposes these two and changing
-    # the contract was not spec 0009's business; only the end boundary moved.
-    if date_from:
-        base_query = base_query.where(AttendanceRecord.timestamp >= date_from)
-    if date_to:
+    # Both dates name a local DAY, by the half-open rule `get_attendance_statistics` uses, so the
+    # two endpoints read `date_from`/`date_to` identically (spec 0011, ADR-0011). Until then both
+    # were `datetime` and read as two different things: `date_from` was compared raw, so a bare
+    # day became a naive midnight that asyncpg reads in the process's own zone -- UTC in the
+    # container -- dropping the first hours of the day; `date_to` took the calendar day in
+    # whatever offset the caller wrote. Typed `date`, a time of day is refused with a 422 rather
+    # than silently discarded.
+    if date_from is not None:
+        base_query = base_query.where(AttendanceRecord.timestamp >= _local_midnight(date_from))
+    if date_to is not None:
         base_query = base_query.where(
-            AttendanceRecord.timestamp < _local_midnight(date_to.date() + timedelta(days=1))
+            AttendanceRecord.timestamp < _local_midnight(date_to + timedelta(days=1))
         )
 
     # Get total count
@@ -504,8 +505,9 @@ async def get_attendance_statistics(
     # The timeframe is half-open internally -- `>= date_from`, `< date_to + 1 day` -- so the index
     # on `timestamp` is still usable, while `date_to` stays inclusive of its whole day as a teacher
     # reads it. Comparing `func.date(timestamp)` on both sides would read more directly and give up
-    # that index; a `datetime` parameter would inherit `list_attendance_for_class`'s trap, where an
-    # end date parses to midnight and silently drops that day (spec 0008, decisions 3 and 4).
+    # that index; a `datetime` parameter would inherit the trap `list_attendance_for_class` had
+    # until spec 0011, where an end date parses to midnight and silently drops that day (spec
+    # 0008, decisions 3 and 4).
     if date_from is not None:
         where_conditions.append(AttendanceRecord.timestamp >= _local_midnight(date_from))
     if date_to is not None:

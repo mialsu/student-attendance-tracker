@@ -1,6 +1,6 @@
 """Attendance API endpoints - Track student attendance."""
 
-from datetime import date, datetime
+from datetime import date
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, status
@@ -92,8 +92,12 @@ async def list_attendance(
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(100, ge=1, le=500, description="Maximum number of records"),
     student_name: str | None = Query(None, description="Filter by student name (partial match)"),
-    date_from: datetime | None = Query(None, description="Filter by start date"),
-    date_to: datetime | None = Query(None, description="Filter by end date"),
+    date_from: date | None = Query(
+        None, description="First day to include (YYYY-MM-DD), inclusive"
+    ),
+    date_to: date | None = Query(
+        None, description="Last day to include (YYYY-MM-DD), inclusive of that whole day"
+    ),
 ) -> PaginatedAttendanceResponse:
     """
     List attendance records for a class with pagination.
@@ -109,8 +113,8 @@ async def list_attendance(
         skip: Pagination offset
         limit: Maximum records (1-500)
         student_name: Optional name filter
-        date_from: Optional start date
-        date_to: Optional end date
+        date_from: Optional first day to include, inclusive
+        date_to: Optional last day to include, inclusive of that whole day
 
     Returns:
         Paginated response with items, total count, skip, and limit
@@ -118,6 +122,7 @@ async def list_attendance(
     Raises:
         404: If class not found
         403: If user doesn't own the class
+        422: If date_from or date_to carries a time of day
     """
     records, total = await attendance_service.list_attendance_for_class(
         db,

@@ -201,3 +201,14 @@ clearing the OTel variables restores CI's environment and the file passes 12/12.
 found on resuming.** In this repo the `Status:` line is the triage label
 (`docs/agents/triage-labels.md`), so the spec went on advertising itself as work an agent could
 pick up. Corrected to closed, in the form spec 0006 uses.
+
+**2026-10-30 — decision 4 is reversed by [spec 0011](0011-list-attendance-local-days.md): the
+list endpoint's two dates are `date` now, and both go through `_local_midnight`.** Moving only the
+end bound and keeping the type left the two ends reading different things. `date_from` stayed an
+instant compared raw, so a bare day became a naive midnight that asyncpg reads in the process's
+zone, which is UTC in CI and in the container, dropping the first two or three local hours. And
+`date_to.date()` took the calendar day in whatever offset the caller wrote, so US-7 ("both
+endpoints read `date_to` the same way") was not met. It surfaced as
+`tests/test_attendance.py::TestDateFiltering::test_filter_by_both_dates` failing CI on `main` at
+21:13Z on 2026-10-29 (issue #39). Decision 4 above stays as written, because it is what was
+decided then. ADR-0011 records the reversal and its rejected alternatives.

@@ -562,28 +562,48 @@ Authorization: Bearer <access_token>
 - `skip` (optional): Number of records to skip (default: 0)
 - `limit` (optional): Maximum records to return (1-500, default: 100)
 - `student_name` (optional): Filter by student name (case-insensitive, partial match)
-- `date_from` (optional): Filter by start date (ISO 8601 format)
-- `date_to` (optional): Filter by end date (ISO 8601 format)
-- `legacy` (optional): Include legacy students (default: None/false excludes them)
+- `date_from` (optional): First day to include (`YYYY-MM-DD`), inclusive. A local day
+  (`APP_TIMEZONE`, default Europe/Helsinki), not a UTC one
+- `date_to` (optional): Last day to include (`YYYY-MM-DD`), inclusive of that whole local day. A
+  time of day such as `T23:59:59Z` on either parameter is refused with 422 (ADR-0011)
 
 **Response (200 OK):**
 ```json
-[
-  {
-    "id": "123e4567-e89b-12d3-a456-426614174000",
-    "class_id": "123e4567-e89b-12d3-a456-426614174000",
-    "student_first_name": "John",
-    "student_last_name": "Doe",
-    "timestamp": "2025-10-26T14:30:00Z",
-    "created_at": "2025-10-26T14:30:05Z"
-  }
-]
+{
+  "items": [
+    {
+      "id": "123e4567-e89b-12d3-a456-426614174000",
+      "class_id": "123e4567-e89b-12d3-a456-426614174000",
+      "timestamp": "2025-10-26T14:30:00Z",
+      "created_at": "2025-10-26T14:30:05Z",
+      "student": {
+        "id": "123e4567-e89b-12d3-a456-426614174001",
+        "name": "John Doe",
+        "course_credit_received": false
+      },
+      "student_first_name": "John",
+      "student_last_name": "Doe",
+      "student_name": "John Doe",
+      "total_attendance": null,
+      "quantity_created": null
+    }
+  ],
+  "total": 1,
+  "skip": 0,
+  "limit": 100
+}
 ```
+
+Newest first. `student_first_name` and `student_last_name` are deprecated, so use `student.name`.
+`total_attendance` and `quantity_created` are always `null` on this endpoint.
 
 **Errors:**
 - `401 Unauthorized`: Invalid or missing token
 - `403 Forbidden`: You don't own this class
 - `404 Not Found`: Class not found
+- `422 Unprocessable Entity`: a parameter fails validation: `date_from` or `date_to` is not a day
+  or carries a time of day, `skip` or `limit` is out of range or not an integer, or `class_id` is
+  not a UUID
 
 ---
 
@@ -726,20 +746,16 @@ production's `postgres:17.11-alpine`; spec 0010's open question 3 records the ch
 
 ### List Attendance Records
 ```bash
-# All records (excludes legacy students by default)
+# All records
 curl -X GET http://localhost:8000/api/classes/{class_id}/attendance \
-  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
-
-# Include legacy students (first attendance > 5 years ago)
-curl -X GET "http://localhost:8000/api/classes/{class_id}/attendance?legacy=true" \
   -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
 
 # With filters
 curl -X GET "http://localhost:8000/api/classes/{class_id}/attendance?student_name=john&limit=50" \
   -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
 
-# Date range filter
-curl -X GET "http://localhost:8000/api/classes/{class_id}/attendance?date_from=2025-10-01T00:00:00Z&date_to=2025-10-31T23:59:59Z" \
+# Date range filter: the whole of October, 1st and 31st included, in local days
+curl -X GET "http://localhost:8000/api/classes/{class_id}/attendance?date_from=2025-10-01&date_to=2025-10-31" \
   -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
 ```
 
