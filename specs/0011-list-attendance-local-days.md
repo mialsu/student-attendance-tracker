@@ -2,7 +2,7 @@
 
 **Status:** shaped 2026-10-30 from issue #39, which the Owner wrote and which carries the
 analysis, the criteria and the rejected alternatives. One slice, **built and verified 2026-10-30**
-(all nine criteria MET); in review as a PR, not yet merged.
+(all nine criteria MET); merged as #40 (`b8655ad`).
 **Weight:** Standard
 **Domain dial:** on (project-wide); moves no invariant. `INV-1` is re-asserted on the endpoint
 whose parameters change (AC-7)

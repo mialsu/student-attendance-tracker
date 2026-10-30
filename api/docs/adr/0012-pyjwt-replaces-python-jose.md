@@ -1,6 +1,6 @@
 # ADR-0012 — PyJWT replaces python-jose
 
-**Status:** accepted 2026-10-30 by the Owner; not yet implemented. Spec 0012 slice 2 builds it.
+**Status:** accepted 2026-10-30 by the Owner; implemented 2026-10-30 by spec 0012 slice 2.
 
 ## Context
 

@@ -9,7 +9,7 @@ FastAPI backend for the Student Attendance Tracker application.
 - **Database**: PostgreSQL 17
 - **ORM**: SQLAlchemy 2.0 (async)
 - **Migrations**: Alembic
-- **Auth**: JWT (python-jose)
+- **Auth**: JWT (PyJWT)
 - **Testing**: pytest + httpx
 
 ## Setup

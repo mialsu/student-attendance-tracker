@@ -153,8 +153,9 @@ cut (`/confess`), read first by any architecture or review session, dispositione
 - **Where:** `requirements.txt` (`ecdsa`, transitive), `app/core/security.py`.
 - **What green tests do NOT prove here:** that nobody sets `ALGORITHM` to an ES* value. Nothing
   refuses one, and that is the configuration under which this alert becomes real.
-- **Disposition:** open, for the Owner. Accept it with the reason above, or replace `python-jose`
-  (which brings `ecdsa`) with PyJWT, a change to the one module that makes tokens.
+- **Disposition:** closed 2026-10-30 by spec 0012 slice 2. The Owner chose replacement (ADR-0012):
+  PyJWT makes and verifies every token, and `ecdsa` left both locks with `python-jose`. GitHub
+  marks the alert fixed only once that change merges (spec 0012, AC-10).
 
 ## 2026-10-01 — ADR-0009 overrode spec 0007's pinning decision, and never cited it
 - **What:** on 2026-09-11 the Owner decided in `specs/0007-operational-gaps.md` how dependencies
