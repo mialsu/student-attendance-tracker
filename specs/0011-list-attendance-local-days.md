@@ -1,7 +1,8 @@
 # Spec 0011 — the attendance list reads both of its dates as local days
 
-**Status:** `ready-for-agent`, shaped 2026-10-30 from issue #39, which the Owner wrote and which
-carries the analysis, the criteria and the rejected alternatives. One slice.
+**Status:** shaped 2026-10-30 from issue #39, which the Owner wrote and which carries the
+analysis, the criteria and the rejected alternatives. One slice, **built and verified 2026-10-30**
+(all nine criteria MET); in review as a PR, not yet merged.
 **Weight:** Standard
 **Domain dial:** on (project-wide); moves no invariant. `INV-1` is re-asserted on the endpoint
 whose parameters change (AC-7)
@@ -133,7 +134,27 @@ None. #39 settled the shape, and the Owner accepted the 422 contract change in i
 
 ## Verification status
 
-*(Filled by QA, per criterion, when the slice is verified.)*
+**2026-10-30 — slice 1 verified, all nine criteria MET.** AC-1 – AC-8 on `0d8e621`; AC-9 on
+`eb4348c`, which changed only docs and `REVIEW-DEBT.md` (`git diff 0d8e621 eb4348c -- api/app
+api/tests` is empty). Everything ran under `TZ=UTC`, the zone CI and production run. The live runs
+used `uvicorn` against a throwaway database, with two Teachers signed up through the API, and OLD
+(the app code from `118a0d6`) side by side with NEW.
+
+| AC | Verdict | Evidence |
+|---|---|---|
+| AC-1 | MET | live `date_from=2026-01-15`: NEW keeps 00:30 local, OLD drops it. Tests red 2/2 on the old app code under `TZ=UTC` (`assert [] == ['First Hour']`), and green on it under Helsinki, as the first delta says |
+| AC-2 | MET | live: `D`, `DT00:00:00Z`, `+02:00`, `+03:00` all give the whole local day in both seasons. The CI case `…T21:13:51Z` is now 422; on the old code it dropped its own record (`assert 5 == 6`, builder's pinned replay) |
+| AC-3 | MET | mutation: a fixed `+02` fails exactly the 6 summer cases, and a fixed `+03` exactly the 6 winter cases |
+| AC-4 | MET | pinned to 2026-03-20T12:00Z, 6 of 15. No clock read in the test or the function. Not run at a pinned 21:13Z wall clock (no faketime installed) |
+| AC-5 | MET | live: a time of day on either end gives 422 `date_from_datetime_inexact`; OLD gave 200 and truncated. Red 2/2 on the old code |
+| AC-6 | MET | live D..D: the list gives [First, Last], and `/statistics` gives `total_records=2`. On OLD they disagreed |
+| AC-7 | MET | live: a second Teacher gets 403 with and without a range, and the owner's ranged control returns all rows. New ranged rows in `test_authorization.py` pass |
+| AC-8 | MET | `attendance_list_ranged` passes under `BUDGET_ATTENDANCE_LIST` |
+| AC-9 | MET | both reference copies' curl, run live, returns October with both edge half-hours across the DST change; the old instant form gives 422. The response example's keys equal a live response's. Every documented 422 case returns 422. The debt entries match `git log` and the `justfile` |
+
+`just check` under `TZ=UTC` on `0d8e621`: 580 passed, all gates green. Review: one blocking finding
+(the stale `api/API_REFERENCE.md` still carried the old curl), fixed in `eb4348c`; the re-review
+passed with no findings.
 
 ## Spec Deltas
 
