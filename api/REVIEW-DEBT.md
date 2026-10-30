@@ -429,6 +429,13 @@ cut (`/confess`), read first by any architecture or review session, dispositione
   rule the statistics endpoint uses. Its parameters stay typed `datetime`: no surface exposes
   them and the contract had no reason to change. Watched failing first:
   `tests/test_attendance.py::TestListEndDayIsWhole` is red against the old `<=`.
+- **2026-10-30 — that CLOSED disposition was partial; spec 0011 finishes it.** Only the end
+  bound moved. `date_from` was still compared raw, so a bare day became a naive midnight that
+  asyncpg reads in the process's zone (UTC in CI and in the container), dropping the first two or
+  three local hours. `date_to.date()` read the day in the caller's offset, which made
+  `test_filter_by_both_dates` fail CI on `main` at 21:13Z on 2026-10-29 (issue #39). Both
+  parameters are `date` now, and both go through `_local_midnight`
+  ([spec 0011](../specs/0011-list-attendance-local-days.md), ADR-0011).
 
 ## 2026-09-15 — "Läsnäoloja yhteensä" will drop once on deploy, and that is the accepted cost
 - **What:** `get_attendance_statistics` computed `total_records` and `total_students` over **all**
